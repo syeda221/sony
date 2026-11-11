@@ -291,6 +291,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/vendor/{vendor}/ledger', [VendorController::class, 'ledger'])->middleware('permission:vendors.view')->name('vendor.ledger');
     Route::get('/vendor/{vendor}/balance', [VendorController::class, 'getVendorBalance'])->name('vendor.balance');
     Route::get('/vendor/{vendor}/ledger-json', [VendorController::class, 'getVendorLedgerJson'])->name('vendor.ledger.json');
+    Route::post('/vendor/{vendor}/incentive-settle', [VendorController::class, 'settleIncentive'])->name('vendor.incentive.settle');
 
     // Warehouse Routes
     Route::get('/warehouses/get/', [WarehouseController::class, 'getWarehouses'])->name('warehouses.get');

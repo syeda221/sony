@@ -430,11 +430,44 @@
                                 <label class="rv-label">Mobile</label>
                                 <input type="text" name="tel" id="tel" class="rv-input" style="background: #f1f5f9;" readonly>
                             </div>
-                             <div class="col-2">
-        <label class="rv-label">Current Balance</label>
-        <div id="balanceDisplay" class="balance-badge balance-dr p-2 text-center" style="width:100%;">20000.00 Dr</div>
-        <input type="hidden" id="openingBal">
-    </div>
+                            <div class="col-2">
+                                <label class="rv-label">Current Balance</label>
+                                <div id="balanceDisplay" class="balance-badge balance-dr p-2 text-center" style="width:100%;">20000.00 Dr</div>
+                                <input type="hidden" id="openingBal">
+                            </div>
+                        </div>
+
+                        {{-- Vendor Incentive Claim Options (Shown only when Party Type == Vendor) --}}
+                        <div class="col-12 mt-1 mb-3" id="vendorIncentiveOptionBox" style="display: none;">
+                            <div class="p-2.5 rounded-3 border d-flex align-items-center justify-content-between flex-wrap gap-2" style="background: #f8fafc; border-color: #cbd5e1 !important;">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <span class="fw-bold text-dark small"><i class="fas fa-coins text-warning me-1"></i> Receipt Purpose:</span>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input incentive-radio" type="radio" name="incentive_type" id="inc_general" value="" checked>
+                                        <label class="form-check-label small fw-semibold text-secondary" for="inc_general">General / Advance Refund</label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input incentive-radio" type="radio" name="incentive_type" id="inc_backup" value="backup">
+                                        <label class="form-check-label small fw-bold text-success" for="inc_backup">
+                                            <i class="fas fa-shield-alt me-1"></i> Backup Claim Payout
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input incentive-radio" type="radio" name="incentive_type" id="inc_annual" value="annual">
+                                        <label class="form-check-label small fw-bold text-primary" for="inc_annual">
+                                            <i class="fas fa-bullseye me-1"></i> Annual Rebate Payout
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1.5" id="badgeBackupClaim" style="display: none; font-size: 11px;">
+                                        Pending Backup Claim: <strong id="valBackupClaim">Rs. 0.00</strong>
+                                    </span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1.5" id="badgeAnnualClaim" style="display: none; font-size: 11px;">
+                                        Pending Annual Rebate: <strong id="valAnnualClaim">Rs. 0.00</strong>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Payment Rows -->
@@ -645,10 +678,22 @@
 
             // Header Party Type Change → Reset & Clear
             $('#partyType').on('change', function() {
+                let pType = $(this).val();
                 $('#partyId').val(null).trigger('change');
                 $('#tel').val('');
                 updateBalance(0);
+
+                if (pType === 'vendor') {
+                    $('#vendorIncentiveOptionBox').slideDown(150);
+                } else {
+                    $('#vendorIncentiveOptionBox').slideUp(150);
+                    $('#inc_general').prop('checked', true);
+                    $('#badgeBackupClaim, #badgeAnnualClaim').hide();
+                }
             });
+
+            window.lastVendorBackupClaim = 0;
+            window.lastVendorAnnualClaim = 0;
 
             // Party selected → load details & update balance
             $('#partyId').on('select2:select', function(e) {
@@ -659,9 +704,37 @@
                 let bal = parseFloat(item.closing_balance) || 0;
                 updateBalance(bal);
 
-                // Auto-set remarks
+                let pType = $('#partyType').val();
                 let partyName = item.customer_name || item.name || item.title || '';
-                if (!$('#remarks').val() && partyName) {
+
+                if (pType === 'vendor' && item.id) {
+                    $.get('/voucher-balance/vendor/' + item.id, function(res) {
+                        window.lastVendorBackupClaim = parseFloat(res.backup_balance) || 0;
+                        window.lastVendorAnnualClaim = parseFloat(res.annual_balance) || 0;
+
+                        if (window.lastVendorBackupClaim > 0) {
+                            $('#valBackupClaim').text('Rs. ' + window.lastVendorBackupClaim.toFixed(2));
+                            $('#badgeBackupClaim').show();
+                        } else {
+                            $('#badgeBackupClaim').hide();
+                        }
+
+                        if (window.lastVendorAnnualClaim > 0) {
+                            $('#valAnnualClaim').text('Rs. ' + window.lastVendorAnnualClaim.toFixed(2));
+                            $('#badgeAnnualClaim').show();
+                        } else {
+                            $('#badgeAnnualClaim').hide();
+                        }
+                    });
+                }
+
+                // Auto-set remarks
+                let currentMode = $('input[name="incentive_type"]:checked').val();
+                if (currentMode === 'backup') {
+                    $('#remarks').val('Backup Incentive Claim Payout from ' + partyName);
+                } else if (currentMode === 'annual') {
+                    $('#remarks').val('Annual Rebate Claim Payout from ' + partyName);
+                } else if (partyName) {
                     $('#remarks').val('Receipt from ' + partyName);
                 }
             });
@@ -669,6 +742,31 @@
             $('#partyId').on('select2:clear', function() {
                 $('#tel').val('');
                 updateBalance(0);
+                window.lastVendorBackupClaim = 0;
+                window.lastVendorAnnualClaim = 0;
+                $('#badgeBackupClaim, #badgeAnnualClaim').hide();
+            });
+
+            $(document).on('change', '.incentive-radio', function() {
+                let mode = $(this).val();
+                let partyText = $('#partyId').find('option:selected').text().trim();
+                let partyName = (partyText && !partyText.includes('Select Party')) ? partyText : 'Vendor';
+
+                if (mode === 'backup') {
+                    $('#remarks').val('Backup Incentive Claim Payout from ' + partyName);
+                    let availBackup = window.lastVendorBackupClaim || 0;
+                    if (availBackup > 0 && (!$('.amount:first').val() || parseFloat($('.amount:first').val()) === 0)) {
+                        $('.amount:first').val(availBackup.toFixed(2)).trigger('input');
+                    }
+                } else if (mode === 'annual') {
+                    $('#remarks').val('Annual Rebate Claim Payout from ' + partyName);
+                    let availAnnual = window.lastVendorAnnualClaim || 0;
+                    if (availAnnual > 0 && (!$('.amount:first').val() || parseFloat($('.amount:first').val()) === 0)) {
+                        $('.amount:first').val(availAnnual.toFixed(2)).trigger('input');
+                    }
+                } else {
+                    $('#remarks').val('Receipt from ' + partyName);
+                }
             });
 
             function updateBalance(bal) {

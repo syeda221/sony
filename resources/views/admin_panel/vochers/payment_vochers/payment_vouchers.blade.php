@@ -349,8 +349,22 @@
                                     </tr>
                                 </tbody>
                                 <tfoot>
+                                    <tr id="pvGrossRow" style="display: none;">
+                                        <td colspan="2" class="text-end fw-bold text-muted" style="font-size: 0.9rem;">Gross Bill Amount to Settle:</td>
+                                        <td>
+                                            <input type="text" class="pv-input text-end fw-bold" id="pvGrossBillDisplay" readonly value="0.00" style="background: #f8fafc; font-size: 0.95rem;">
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                    <tr id="pvOffsetRow" style="display: none;">
+                                        <td colspan="2" class="text-end fw-bold text-success" style="font-size: 0.9rem;">Less Claims Deducted:</td>
+                                        <td>
+                                            <input type="text" class="pv-input text-end fw-bold text-success" id="pvClaimsOffsetDisplay" readonly value="-0.00" style="background: #f0fdf4; border-color: #86efac; font-size: 0.95rem;">
+                                        </td>
+                                        <td></td>
+                                    </tr>
                                     <tr>
-                                        <td colspan="2" class="text-end fw-bold" style="font-size: 1rem;">Total Amount:</td>
+                                        <td colspan="2" class="text-end fw-bold" style="font-size: 1rem;" id="pvTotalAmountLabel">Net Cash / Bank to Pay:</td>
                                         <td>
                                             <input type="text" name="total_amount"
                                                 class="pv-input text-end fw-bold" id="totalAmount" readonly
@@ -360,6 +374,54 @@
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+
+                        {{-- Vendor Claim Offset / Deduction Box --}}
+                        <div class="card border-0 shadow-sm mt-3 p-3 rounded-3" id="pvClaimAdjustmentCard" style="display: none; background: #f8fafc; border-left: 4px solid #4f46e5 !important;">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <span class="fw-bold text-dark fs-6">
+                                    <i class="fas fa-hand-holding-usd text-primary me-1"></i> Adjust / Offset Vendor Claims Against Bill
+                                </span>
+                                <small class="text-muted">Deduct available claims from gross payable to reduce actual cash payout</small>
+                            </div>
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-5">
+                                    <div class="p-2 border rounded bg-white">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label class="form-check-label fw-bold text-success small mb-0" for="chkAdjustBackup">
+                                                <input class="form-check-input me-1 chk-claim-adj" type="checkbox" id="chkAdjustBackup">
+                                                <i class="fas fa-shield-alt me-1"></i> Backup Claim
+                                            </label>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle small font-monospace" id="pvAvailBackupText">Avail: Rs. 0.00</span>
+                                        </div>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light text-muted">Deduct Rs.</span>
+                                            <input type="number" step="any" min="0" name="adjust_backup_amount" id="inputAdjustBackup" class="form-control text-end fw-bold text-success claim-adj-input" placeholder="0.00" value="0" disabled>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
+                                    <div class="p-2 border rounded bg-white">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label class="form-check-label fw-bold text-primary small mb-0" for="chkAdjustAnnual">
+                                                <input class="form-check-input me-1 chk-claim-adj" type="checkbox" id="chkAdjustAnnual">
+                                                <i class="fas fa-bullseye me-1"></i> Annual Rebate
+                                            </label>
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle small font-monospace" id="pvAvailAnnualText">Avail: Rs. 0.00</span>
+                                        </div>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light text-muted">Deduct Rs.</span>
+                                            <input type="number" step="any" min="0" name="adjust_annual_amount" id="inputAdjustAnnual" class="form-control text-end fw-bold text-primary claim-adj-input" placeholder="0.00" value="0" disabled>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="p-2 border rounded text-center bg-white">
+                                        <small class="text-muted d-block" style="font-size: 11px;">Total Claims Offset</small>
+                                        <strong class="text-danger fs-6" id="pvTotalClaimsDeductedDisplay">-Rs. 0.00</strong>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <button type="button" class="btn btn-pv-add mt-3" id="addNewRow">
@@ -483,13 +545,103 @@
                 }
             });
 
+            window.pvAvailBackup = 0;
+            window.pvAvailAnnual = 0;
+
+            // Check vendor claims when party changes
+            $(document).on('change', '.rowParty', function() {
+                checkVendorClaims();
+            });
+
+            function checkVendorClaims() {
+                let vendorId = null;
+                $('.rowParty').each(function() {
+                    let $r = $(this).closest('tr');
+                    let t = $r.find('.rowType').val();
+                    let v = $(this).val();
+                    if (t === 'vendor' && v) {
+                        vendorId = v;
+                        return false;
+                    }
+                });
+
+                if (vendorId) {
+                    $.get('/voucher-balance/vendor/' + vendorId, function(res) {
+                        window.pvAvailBackup = parseFloat(res.backup_balance) || 0;
+                        window.pvAvailAnnual = parseFloat(res.annual_balance) || 0;
+
+                        if (window.pvAvailBackup > 0 || window.pvAvailAnnual > 0) {
+                            $('#pvClaimAdjustmentCard').slideDown(150);
+                            $('#pvAvailBackupText').text('Avail: Rs. ' + window.pvAvailBackup.toFixed(2));
+                            $('#pvAvailAnnualText').text('Avail: Rs. ' + window.pvAvailAnnual.toFixed(2));
+                        } else {
+                            resetClaimAdjustment();
+                        }
+                    });
+                } else {
+                    resetClaimAdjustment();
+                }
+            }
+
+            function resetClaimAdjustment() {
+                $('#pvClaimAdjustmentCard').slideUp(150);
+                $('#chkAdjustBackup, #chkAdjustAnnual').prop('checked', false);
+                $('#inputAdjustBackup, #inputAdjustAnnual').prop('disabled', true).val('0');
+                window.pvAvailBackup = 0;
+                window.pvAvailAnnual = 0;
+                calculateTotal();
+            }
+
+            // Checkbox Toggle Listeners
+            $(document).on('change', '#chkAdjustBackup', function() {
+                if ($(this).is(':checked')) {
+                    $('#inputAdjustBackup').prop('disabled', false).val(window.pvAvailBackup > 0 ? window.pvAvailBackup.toFixed(2) : '0');
+                } else {
+                    $('#inputAdjustBackup').prop('disabled', true).val('0');
+                }
+                calculateTotal();
+            });
+
+            $(document).on('change', '#chkAdjustAnnual', function() {
+                if ($(this).is(':checked')) {
+                    $('#inputAdjustAnnual').prop('disabled', false).val(window.pvAvailAnnual > 0 ? window.pvAvailAnnual.toFixed(2) : '0');
+                } else {
+                    $('#inputAdjustAnnual').prop('disabled', true).val('0');
+                }
+                calculateTotal();
+            });
+
+            $(document).on('input', '.claim-adj-input', function() {
+                calculateTotal();
+            });
+
             // Totals
             function calculateTotal() {
-                let total = 0;
+                let gross = 0;
                 $('.amount').each(function() {
-                    total += parseFloat($(this).val()) || 0;
+                    gross += parseFloat($(this).val()) || 0;
                 });
-                $('#totalAmount').val(total.toFixed(2));
+
+                let backupAdj = $('#chkAdjustBackup').is(':checked') ? (parseFloat($('#inputAdjustBackup').val()) || 0) : 0;
+                let annualAdj = $('#chkAdjustAnnual').is(':checked') ? (parseFloat($('#inputAdjustAnnual').val()) || 0) : 0;
+                let totalOffset = backupAdj + annualAdj;
+
+                if (totalOffset > 0) {
+                    $('#pvGrossRow').show();
+                    $('#pvOffsetRow').show();
+                    $('#pvGrossBillDisplay').val('Rs. ' + gross.toFixed(2));
+                    $('#pvClaimsOffsetDisplay').val('-Rs. ' + totalOffset.toFixed(2));
+                    $('#pvTotalClaimsDeductedDisplay').text('-Rs. ' + totalOffset.toFixed(2));
+                    let netPay = Math.max(0, gross - totalOffset);
+                    $('#totalAmount').val(netPay.toFixed(2));
+                    $('#pvTotalAmountLabel').text('Net Cash / Bank to Pay:');
+                } else {
+                    $('#pvGrossRow').hide();
+                    $('#pvOffsetRow').hide();
+                    $('#pvTotalClaimsDeductedDisplay').text('-Rs. 0.00');
+                    $('#totalAmount').val(gross.toFixed(2));
+                    $('#pvTotalAmountLabel').text('Total Amount:');
+                }
             }
             $(document).on('input', '.amount', function() {
                 calculateTotal();

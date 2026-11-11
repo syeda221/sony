@@ -2752,6 +2752,12 @@ class ReportingController extends Controller
         $vendorId = $request->vendor_id;
         $start = $request->start_date ?: '2000-01-01';
         $end = $request->end_date ?: date('Y-m-d');
+        $ledgerType = $request->ledger_type ?: 'main'; // 'main', 'backup', 'annual'
+
+        // Handle Incentive Ledgers: Backup or Annual
+        if ($ledgerType === 'backup' || $ledgerType === 'annual') {
+            return $this->fetch_vendor_incentive_ledger($vendorId, $ledgerType, $start, $end);
+        }
 
         $balanceService = app(\App\Services\BalanceService::class);
 
@@ -2938,6 +2944,118 @@ class ReportingController extends Controller
             'closing_balance' => $ledgerData['closing_balance'] ?? $ledgerData['opening_balance'],
             'transactions' => $transactions,
             'combined_ledger' => $combinedLedger,
+            'report_period' => "$start to $end",
+        ]);
+    }
+
+    protected function fetch_vendor_incentive_ledger($vendorId, string $type, string $start, string $end)
+    {
+        $balanceService = app(\App\Services\BalanceService::class);
+
+        if (!$vendorId || $vendorId === 'all') {
+            // All Vendors
+            $opening = (float) (\App\Models\VendorIncentiveLedger::where('type', $type)
+                ->where('date', '<', $start)
+                ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as balance')
+                ->value('balance') ?? 0);
+
+            $records = \App\Models\VendorIncentiveLedger::with(['vendor', 'purchase'])
+                ->where('type', $type)
+                ->whereBetween('date', [$start, $end])
+                ->orderBy('date')
+                ->orderBy('id')
+                ->get();
+
+            $runningBalance = $opening;
+            $totalDebit = 0;
+            $totalCredit = 0;
+
+            $transactions = $records->map(function ($row) use (&$runningBalance, &$totalDebit, &$totalCredit, $type) {
+                $debit = (float) $row->debit;
+                $credit = (float) $row->credit;
+                $totalDebit += $debit;
+                $totalCredit += $credit;
+                $runningBalance += ($debit - $credit);
+
+                $formattedDate = $row->date ? $row->date->format('d-M-Y') : '-';
+                $sortDate = $row->date ? $row->date->format('Y-m-d') : '-';
+                $invoiceUrl = $row->purchase_id ? route('purchase.invoice', $row->purchase_id) : null;
+                $ref = $row->reference_no ?: ($row->purchase_id ? 'PUR-' . $row->purchase_id : '-');
+
+                return [
+                    'sort_date'         => $sortDate,
+                    'date'              => $formattedDate,
+                    'invoice'           => $ref,
+                    'invoice_no'        => $ref,
+                    'invoice_url'       => $invoiceUrl,
+                    'vendor_invoice_no' => null,
+                    'source_type'       => $row->entry_type,
+                    'description'       => $row->notes ?: ($row->entry_type === 'claim' ? ($type === 'backup' ? 'Backup Incentive Claim' : 'Annual Rebate Claim') : 'Payout / Adjustment Settlement'),
+                    'vendor_name'       => $row->vendor->name ?? 'Unknown',
+                    'debit'             => $debit,
+                    'credit'            => $credit,
+                    'balance'           => $runningBalance,
+                    'entry_type'        => $row->entry_type,
+                ];
+            });
+
+            return response()->json([
+                'vendor' => (object)['name' => 'All Vendors'],
+                'ledger_type' => $type,
+                'is_both' => false,
+                'linked_customer' => null,
+                'opening_balance' => $opening,
+                'closing_balance' => $runningBalance,
+                'total_debit' => $totalDebit,
+                'total_credit' => $totalCredit,
+                'transactions' => $transactions,
+                'combined_ledger' => null,
+                'report_period' => "$start to $end",
+            ]);
+        }
+
+        // Single Vendor
+        $vendor = \App\Models\Vendor::find($vendorId);
+        if (!$vendor) {
+            return response()->json(['error' => 'Vendor not found'], 400);
+        }
+
+        $ledgerData = $balanceService->getVendorIncentiveLedger($vendorId, $type, $start, $end);
+
+        $transactions = collect($ledgerData['transactions'])->map(function ($row) use ($vendor, $type) {
+            $formattedDate = $row['date'] ? \Carbon\Carbon::parse($row['date'])->format('d-M-Y') : '-';
+            $sortDate = $row['date'] ? \Carbon\Carbon::parse($row['date'])->format('Y-m-d') : '-';
+            $invoiceUrl = !empty($row['purchase_id']) ? route('purchase.invoice', $row['purchase_id']) : null;
+            $ref = $row['reference_no'] ?: ($row['purchase_id'] ? 'PUR-' . $row['purchase_id'] : '-');
+
+            return [
+                'sort_date'         => $sortDate,
+                'date'              => $formattedDate,
+                'invoice'           => $ref,
+                'invoice_no'        => $ref,
+                'invoice_url'       => $invoiceUrl,
+                'vendor_invoice_no' => null,
+                'source_type'       => $row['entry_type'],
+                'description'       => $row['description'],
+                'vendor_name'       => $vendor->name,
+                'debit'             => (float) $row['debit'],
+                'credit'            => (float) $row['credit'],
+                'balance'           => (float) $row['balance'],
+                'entry_type'        => $row['entry_type'],
+            ];
+        });
+
+        return response()->json([
+            'vendor' => $vendor,
+            'ledger_type' => $type,
+            'is_both' => false,
+            'linked_customer' => null,
+            'opening_balance' => $ledgerData['opening_balance'],
+            'closing_balance' => $ledgerData['closing_balance'],
+            'total_debit' => $ledgerData['total_claims'],
+            'total_credit' => $ledgerData['total_settled'],
+            'transactions' => $transactions,
+            'combined_ledger' => null,
             'report_period' => "$start to $end",
         ]);
     }

@@ -526,18 +526,146 @@ class VendorController extends Controller
     }
 
     /**
-     * Show vendor ledger (journal-based).
+     * Show vendor ledger (journal-based) with Multi-Ledger Support (Main, Backup, Annual).
      */
     public function ledger($vendorId)
     {
         $vendor = Vendor::findOrFail($vendorId);
         $startDate = request('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = request('end_date', now()->endOfMonth()->format('Y-m-d'));
+        $activeTab = request('tab', 'main'); // 'main', 'backup', 'annual'
         
         $balanceService = app(\App\Services\BalanceService::class);
         $ledgerData = $balanceService->getVendorLedger($vendorId, $startDate, $endDate);
+
+        // Backup Ledger Data
+        $backupData = $balanceService->getVendorIncentiveLedger($vendorId, 'backup', $startDate, $endDate);
+        // Annual Ledger Data
+        $annualData = $balanceService->getVendorIncentiveLedger($vendorId, 'annual', $startDate, $endDate);
+
+        // Overall Balances
+        $mainBalance = $balanceService->getVendorBalance($vendorId);
+        $backupBalance = $balanceService->getVendorIncentiveBalance($vendorId, 'backup');
+        $annualBalance = $balanceService->getVendorIncentiveBalance($vendorId, 'annual');
+
+        $cashAccounts = \App\Models\Account::whereHas('head', function($q) {
+            $q->whereIn('name', ['Cash', 'Bank']);
+        })->where('status', 1)->orderBy('title')->get();
+        if ($cashAccounts->isEmpty()) {
+            $cashAccounts = \App\Models\Account::where('status', 1)->orderBy('title')->get();
+        }
         
-        return view('admin_panel.vendors.ledger', $ledgerData);
+        return view('admin_panel.vendors.ledger', array_merge($ledgerData, [
+            'activeTab' => $activeTab,
+            'backupData' => $backupData,
+            'annualData' => $annualData,
+            'mainBalance' => $mainBalance,
+            'backupBalance' => $backupBalance,
+            'annualBalance' => $annualBalance,
+            'cashAccounts' => $cashAccounts,
+        ]));
+    }
+
+    /**
+     * Settle Vendor Incentive (Backup or Annual Claim) via Cash/Bank or Main Ledger Adjustment
+     */
+    public function settleIncentive(Request $request, $vendorId)
+    {
+        $validated = $request->validate([
+            'claim_type' => 'required|in:backup,annual',
+            'settlement_type' => 'required|in:cash_bank,adjust_payable',
+            'amount' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'account_id' => 'nullable|required_if:settlement_type,cash_bank|exists:accounts,id',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $vendor = Vendor::findOrFail($vendorId);
+        $amount = (float) $validated['amount'];
+        $claimType = $validated['claim_type'];
+        $settlementType = $validated['settlement_type'];
+        $date = $validated['date'];
+        $notes = $validated['notes'] ?? '';
+
+        DB::transaction(function () use ($vendor, $amount, $claimType, $settlementType, $date, $notes, $validated) {
+            $typeLabel = $claimType === 'backup' ? 'Backup Incentive' : 'Annual Rebate';
+            $refNo = 'SET-' . strtoupper($claimType[0]) . '-' . time();
+
+            // 1. Record in vendor_incentive_ledgers (Credit reduces the claim receivable)
+            \App\Models\VendorIncentiveLedger::create([
+                'vendor_id' => $vendor->id,
+                'purchase_id' => null,
+                'type' => $claimType,
+                'entry_type' => $settlementType === 'cash_bank' ? 'received' : 'adjusted',
+                'date' => $date,
+                'reference_no' => $refNo,
+                'debit' => 0,
+                'credit' => $amount,
+                'account_id' => $settlementType === 'cash_bank' ? $validated['account_id'] : null,
+                'admin_or_user_id' => auth()->id() ?? 1,
+                'notes' => ($settlementType === 'cash_bank' ? "Cash/Bank Payout received" : "Adjusted against Vendor Main Payable Bill") . ($notes ? " - {$notes}" : ""),
+            ]);
+
+            // 2. Accounting Posting
+            $balanceService = app(\App\Services\BalanceService::class);
+            $apId = $balanceService->getAccountsPayableId();
+
+            if ($settlementType === 'adjust_payable') {
+                // Adjust against Vendor Payable:
+                // Reduces vendor debt (Debit Accounts Payable / Vendor)
+                $journalService = app(\App\Services\JournalEntryService::class);
+                $journalService->recordEntry(
+                    $vendor,
+                    $apId,
+                    $amount, // Debit AP (decreases payable)
+                    0,       // Credit 0
+                    "{$typeLabel} Settlement Offset against Payable (Ref: {$refNo})" . ($notes ? " - {$notes}" : ""),
+                    $date,
+                    $vendor
+                );
+
+                // Update Legacy Vendor Ledger
+                $lastEntry = \App\Models\VendorLedger::where('vendor_id', $vendor->id)
+                    ->lockForUpdate()
+                    ->orderBy('id', 'desc')
+                    ->first();
+                $prevBal = $lastEntry ? (float)$lastEntry->closing_balance : 0;
+                $newBal = $prevBal - $amount;
+
+                \App\Models\VendorLedger::updateOrCreate(
+                    ['vendor_id' => $vendor->id],
+                    [
+                        'admin_or_user_id' => auth()->id() ?? 1,
+                        'previous_balance' => $prevBal,
+                        'closing_balance' => $newBal,
+                        'opening_balance' => $lastEntry ? $lastEntry->opening_balance : 0,
+                    ]
+                );
+            } else {
+                // Cash / Bank payout received:
+                // Debit Cash/Bank Account (Money in)
+                $journalService = app(\App\Services\JournalEntryService::class);
+                $journalService->recordEntry(
+                    $vendor,
+                    $validated['account_id'],
+                    $amount, // Debit Cash/Bank
+                    0,       // Credit 0
+                    "{$typeLabel} Payout Received from Vendor {$vendor->name} (Ref: {$refNo})" . ($notes ? " - {$notes}" : ""),
+                    $date,
+                    $vendor
+                );
+            }
+        });
+
+        if (request()->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Incentive claim settled successfully.',
+            ]);
+        }
+
+        return redirect()->route('vendor.ledger', ['vendor' => $vendorId, 'tab' => $claimType])
+            ->with('success', 'Incentive claim settled successfully.');
     }
 
     /**

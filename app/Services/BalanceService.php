@@ -845,4 +845,87 @@ class BalanceService
 
         return "{$formatted} {$suffix}";
     }
+
+    /**
+     * Get vendor incentive ledger entries for a date range (Backup or Annual)
+     */
+    public function getVendorIncentiveLedger(int $vendorId, string $type, string $startDate, string $endDate): array
+    {
+        $vendor = \App\Models\Vendor::find($vendorId);
+        if (!$vendor) {
+            return [
+                'vendor' => null,
+                'type' => $type,
+                'opening_balance' => 0,
+                'closing_balance' => 0,
+                'total_claims' => 0,
+                'total_settled' => 0,
+                'transactions' => collect([])
+            ];
+        }
+
+        // Calculate opening balance before $startDate
+        // In incentive ledgers: Debit = Claim Accrued (+), Credit = Paid/Settled (-)
+        $opening = \App\Models\VendorIncentiveLedger::where('vendor_id', $vendorId)
+            ->where('type', $type)
+            ->where('date', '<', $startDate)
+            ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as balance')
+            ->value('balance') ?? 0;
+
+        $openingBalance = (float) $opening;
+
+        $records = \App\Models\VendorIncentiveLedger::where('vendor_id', $vendorId)
+            ->where('type', $type)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get();
+
+        $runningBalance = $openingBalance;
+        $totalClaims = 0;
+        $totalSettled = 0;
+
+        $transactions = $records->map(function ($row) use (&$runningBalance, &$totalClaims, &$totalSettled) {
+            $debit = (float) $row->debit;
+            $credit = (float) $row->credit;
+            $totalClaims += $debit;
+            $totalSettled += $credit;
+            $runningBalance += ($debit - $credit);
+
+            return [
+                'id' => $row->id,
+                'date' => $row->date ? $row->date->format('Y-m-d') : null,
+                'reference_no' => $row->reference_no,
+                'entry_type' => $row->entry_type,
+                'description' => $row->notes ?: ($row->entry_type === 'claim' ? 'Claim accrued' : 'Settlement payout/adjustment'),
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => $runningBalance,
+                'purchase_id' => $row->purchase_id,
+            ];
+        });
+
+        return [
+            'vendor' => $vendor,
+            'type' => $type,
+            'opening_balance' => $openingBalance,
+            'closing_balance' => $runningBalance,
+            'total_claims' => $totalClaims,
+            'total_settled' => $totalSettled,
+            'transactions' => $transactions,
+        ];
+    }
+
+    /**
+     * Get vendor current incentive balance (Backup or Annual)
+     */
+    public function getVendorIncentiveBalance(int $vendorId, string $type): float
+    {
+        $bal = \App\Models\VendorIncentiveLedger::where('vendor_id', $vendorId)
+            ->where('type', $type)
+            ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as balance')
+            ->value('balance') ?? 0;
+
+        return (float) $bal;
+    }
 }

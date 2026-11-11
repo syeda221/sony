@@ -25,13 +25,28 @@ class Vendor extends Model
         'area'
     ];
 
-      
     public function linkedCustomer()
     {
         return $this->belongsTo(Customer::class, 'linked_customer_id');
     }
+
     public function ledger()
     {
         return $this->hasOne(VendorLedger::class);
+    }
+
+    public function incentiveLedgers()
+    {
+        return $this->hasMany(VendorIncentiveLedger::class, 'vendor_id');
+    }
+
+    public function backupLedgers()
+    {
+        return $this->hasMany(VendorIncentiveLedger::class, 'vendor_id')->where('type', 'backup');
+    }
+
+    public function annualLedgers()
+    {
+        return $this->hasMany(VendorIncentiveLedger::class, 'vendor_id')->where('type', 'annual');
     }
 }

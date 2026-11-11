@@ -9,11 +9,15 @@ class PurchaseItem extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'price'         => 'decimal:2',
-        'item_discount' => 'decimal:2',
+        'price'           => 'decimal:2',
+        'item_discount'   => 'decimal:2',
         'scheme_discount' => 'decimal:2',
-        'line_total'    => 'decimal:2',
-        'serials'       => 'array',
+        'backup_percent'  => 'decimal:2',
+        'backup_amount'   => 'decimal:2',
+        'annual_percent'  => 'decimal:2',
+        'annual_amount'   => 'decimal:2',
+        'line_total'      => 'decimal:2',
+        'serials'         => 'array',
     ];
 
     public function purchase()  { return $this->belongsTo(Purchase::class); }

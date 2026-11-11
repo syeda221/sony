@@ -496,12 +496,14 @@ class VoucherController extends Controller
             $receiptDate = !empty($request->receipt_date) ? \Carbon\Carbon::parse($request->receipt_date)->format('Y-m-d') : date('Y-m-d');
             $entryDate = !empty($request->entry_date) ? \Carbon\Carbon::parse($request->entry_date)->format('Y-m-d') : $receiptDate;
 
+            $targetPartyId = (int) ($request->vendor_id ?: $request->vendor_id_vendor);
+
             $voucherData = [
                 'rvid' => $rvid,
                 'receipt_date' => $receiptDate,
                 'entry_date' => $entryDate,
                 'type' => $request->vendor_type,
-                'party_id' => $request->vendor_id,
+                'party_id' => $targetPartyId ?: $request->vendor_id,
                 'tel' => $request->tel,
                 'remarks' => $request->remarks,
 
@@ -518,6 +520,29 @@ class VoucherController extends Controller
             ];
 
             $rec = ReceiptsVoucher::create($voucherData);
+
+            // ✅ Off-Invoice Vendor Incentive Claim Payout Receipt
+            $vType = strtolower($request->vendor_type);
+            $totalAmt = (float) $request->total_amount;
+            if ($vType == 'vendor' && in_array($request->incentive_type, ['backup', 'annual']) && $totalAmt > 0 && $targetPartyId > 0) {
+                $incType = $request->incentive_type;
+                $incLabel = $incType === 'backup' ? 'Backup Incentive Claim' : 'Annual Rebate Claim';
+                $sourceAccId = !empty($request->row_account_id[0]) ? $request->row_account_id[0] : null;
+
+                \App\Models\VendorIncentiveLedger::create([
+                    'vendor_id'         => $targetPartyId,
+                    'purchase_id'       => null,
+                    'type'              => $incType,
+                    'entry_type'        => 'received',
+                    'date'              => $receiptDate,
+                    'reference_no'      => $rvid,
+                    'debit'             => 0,
+                    'credit'            => $totalAmt,
+                    'account_id'        => $sourceAccId,
+                    'notes'             => "{$incLabel} Payout Received via Receipt Voucher {$rvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
+                    'admin_or_user_id'  => auth()->id(),
+                ]);
+            }
             // ✅ V2 VOUCHER INTEGRATION (Primary Logic Now)
             try {
                 \Log::info('V2 Integration Start. Type: '.$request->vendor_type.', ID: '.$request->vendor_id);
@@ -531,8 +556,15 @@ class VoucherController extends Controller
                     $partyType = \App\Models\Customer::class;
                     $creditAccountId = $balanceService->getAccountsReceivableId();
                 } elseif ($vType == 'vendor') {
-                    $partyType = \App\Models\Vendor::class;
-                    $creditAccountId = $balanceService->getAccountsPayableId();
+                    if (in_array($request->incentive_type, ['backup', 'annual'])) {
+                        // Off-invoice claim payout: Do NOT increase vendor payable; credit Purchase/Rebate Expense account
+                        $partyType = null;
+                        $purchaseAcc = \App\Models\Account::where('account_code', 'PURCHASE')->orWhere('title', 'like', '%Purchase%')->first();
+                        $creditAccountId = $purchaseAcc ? $purchaseAcc->id : $balanceService->getAccountsPayableId();
+                    } else {
+                        $partyType = \App\Models\Vendor::class;
+                        $creditAccountId = $balanceService->getAccountsPayableId();
+                    }
                 } else {
                     $partyType = \App\Models\Account::class;
                     $creditAccountId = $request->vendor_id;
@@ -593,20 +625,20 @@ class VoucherController extends Controller
                             'date' => $receiptDate,
                             'status' => 'posted',
                             'party_type' => $partyType,
-                            'party_id' => $request->vendor_id,
+                            'party_id' => $partyType ? $targetPartyId : null,
                             'remarks' => $request->remarks." (Ref: $rvid)",
                         ], $v2Lines, auth()->id());
 
                         \Log::info('V2 Voucher Created Successfully.');
 
                         // ✅ Also update CustomerLedger for correct balance display on form
-                        if (($vType == 'customer' || $vType == 'walkin') && $totalAmt > 0) {
-                            $latestLedger = CustomerLedger::where('customer_id', $request->vendor_id)->latest()->first();
+                        if (($vType == 'customer' || $vType == 'walkin') && $totalAmt > 0 && $targetPartyId > 0) {
+                            $latestLedger = CustomerLedger::where('customer_id', $targetPartyId)->latest()->first();
                             $prevBal = $latestLedger ? $latestLedger->closing_balance : (
-                                \App\Models\Customer::find($request->vendor_id)->opening_balance ?? 0
+                                \App\Models\Customer::find($targetPartyId)->opening_balance ?? 0
                             );
                             CustomerLedger::create([
-                                'customer_id'      => $request->vendor_id,
+                                'customer_id'      => $targetPartyId,
                                 'admin_or_user_id' => auth()->id(),
                                 'previous_balance' => $prevBal,
                                 'opening_balance'  => 0,
@@ -614,7 +646,6 @@ class VoucherController extends Controller
                                 'description'      => 'Receipt Voucher '.$rvid,
                             ]);
                         }
-
                     } else {
                         \Log::warning('V2 Lines Empty. Total Amt: '.$totalAmt);
                     }
@@ -756,13 +787,24 @@ class VoucherController extends Controller
                 }
 
                 $v2Lines = [];
+                $adjustBackup = (float) ($request->adjust_backup_amount ?? 0);
+                $adjustAnnual = (float) ($request->adjust_annual_amount ?? 0);
+                $totalClaimsAdjusted = $adjustBackup + $adjustAnnual;
+
                 // 1. DEBIT SIDE (AP / AR / Accounts) - Table Destinations
                 if ($request->vendor_id && $request->amount) {
+                    $claimsApplied = false;
                     foreach ($request->vendor_id as $idx => $partyId) {
                         $type = $request->vendor_type[$idx] ?? null;
                         $amt = (float) ($request->amount[$idx] ?? 0);
                         if ($amt <= 0) {
                             continue;
+                        }
+
+                        $claimOffsetForThisRow = 0;
+                        if ($type == 'vendor' && !$claimsApplied && $totalClaimsAdjusted > 0) {
+                            $claimOffsetForThisRow = $totalClaimsAdjusted;
+                            $claimsApplied = true;
                         }
 
                         $controlAccountId = null;
@@ -777,9 +819,9 @@ class VoucherController extends Controller
                         if ($controlAccountId) {
                             $v2Lines[] = [
                                 'account_id' => $controlAccountId,
-                                'debit' => $amt,
+                                'debit' => $amt + $claimOffsetForThisRow,
                                 'credit' => 0,
-                                'narration' => $request->narration_text[$idx] ?? "Payment to " . $type,
+                                'narration' => ($request->narration_text[$idx] ?? ("Payment to " . $type)) . ($claimOffsetForThisRow > 0 ? " (Includes Rs. {$claimOffsetForThisRow} Claim Offset)" : ""),
                             ];
                         }
                     }
@@ -792,6 +834,16 @@ class VoucherController extends Controller
                         'debit' => 0,
                         'credit' => $totalAmount,
                         'narration' => $request->remarks ?: "Payment from Cash/Bank",
+                    ];
+                }
+
+                // 2b. CREDIT SIDE (Claim Offset) - Balancing Entry if Claims Deducted
+                if ($totalClaimsAdjusted > 0) {
+                    $v2Lines[] = [
+                        'account_id' => $balanceService->getAccountsPayableId(),
+                        'debit' => 0,
+                        'credit' => $totalClaimsAdjusted,
+                        'narration' => "Vendor Claims Offset (Backup: Rs. {$adjustBackup}, Annual: Rs. {$adjustAnnual})",
                     ];
                 }
 
@@ -815,6 +867,7 @@ class VoucherController extends Controller
              * STEP 2: Legacy Table Destinations (Parties) - Update polymorphic ledger balances (Closing balances)
              */
             if ($request->vendor_id && $request->amount) {
+                $claimsAppliedLegacy = false;
                 foreach ($request->vendor_id as $index => $partyId) {
                     $type = $request->vendor_type[$index] ?? null;
                     $rowAmount = isset($request->amount[$index]) ? (float) $request->amount[$index] : 0;
@@ -826,12 +879,54 @@ class VoucherController extends Controller
                     if ($type === 'vendor') {
                         $ledger = VendorLedger::where('vendor_id', $partyId)->latest()->first();
                         $bal = $ledger ? $ledger->closing_balance : 0;
+
+                        // Check if claim offsets apply to this vendor
+                        $claimOffset = 0;
+                        if (!$claimsAppliedLegacy && $totalClaimsAdjusted > 0) {
+                            $claimOffset = $totalClaimsAdjusted;
+                            $claimsAppliedLegacy = true;
+
+                            if ($adjustBackup > 0) {
+                                \App\Models\VendorIncentiveLedger::create([
+                                    'vendor_id'         => (int) $partyId,
+                                    'purchase_id'       => null,
+                                    'type'              => 'backup',
+                                    'entry_type'        => 'adjusted',
+                                    'date'              => $receiptDate,
+                                    'reference_no'      => $pvid,
+                                    'debit'             => 0,
+                                    'credit'            => $adjustBackup,
+                                    'account_id'        => $request->header_account_id,
+                                    'notes'             => "Backup Claim Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
+                                    'admin_or_user_id'  => auth()->id(),
+                                ]);
+                            }
+
+                            if ($adjustAnnual > 0) {
+                                \App\Models\VendorIncentiveLedger::create([
+                                    'vendor_id'         => (int) $partyId,
+                                    'purchase_id'       => null,
+                                    'type'              => 'annual',
+                                    'entry_type'        => 'adjusted',
+                                    'date'              => $receiptDate,
+                                    'reference_no'      => $pvid,
+                                    'debit'             => 0,
+                                    'credit'            => $adjustAnnual,
+                                    'account_id'        => $request->header_account_id,
+                                    'notes'             => "Annual Rebate Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
+                                    'admin_or_user_id'  => auth()->id(),
+                                ]);
+                            }
+                        }
+
+                        $totalBillCleared = $rowAmount + $claimOffset;
+
                         VendorLedger::create([
                             'vendor_id'         => $partyId,
                             'admin_or_user_id'  => auth()->id(),
                             'opening_balance'   => 0,
                             'previous_balance'  => $bal,
-                            'closing_balance'   => $bal - $rowAmount, // ✅ MINUS: payment reduces vendor balance
+                            'closing_balance'   => $bal - $totalBillCleared, // ✅ MINUS: payment + claims offset reduces vendor payable
                         ]);
 
                     } elseif ($type === 'customer' || $type === 'walkin') {
@@ -1101,12 +1196,17 @@ class VoucherController extends Controller
         $balance = 0.0;
         $label = 'Dr';
 
+        $backupBalance = 0.0;
+        $annualBalance = 0.0;
+
         if (in_array($type, ['customer', 'walkin'])) {
             $balance = $balanceService->getCustomerBalance((int) $id);
             $label = $balance >= 0 ? 'Dr' : 'Cr';
         } elseif ($type === 'vendor') {
             $balance = $balanceService->getVendorBalance((int) $id);
             $label = $balance >= 0 ? 'Cr' : 'Dr';
+            $backupBalance = (float) $balanceService->getVendorIncentiveBalance((int) $id, 'backup');
+            $annualBalance = (float) $balanceService->getVendorIncentiveBalance((int) $id, 'annual');
         } else {
             // Cash / Bank / any control account
             $balance = $balanceService->getAccountBalance((int) $id);
@@ -1119,11 +1219,13 @@ class VoucherController extends Controller
             : 'Rs. '.number_format(abs($balance), 2).' '.$label;
 
         return response()->json([
-            'balance' => round($balance, 2),
-            'label'   => $zero ? '' : $label,
-            'display' => $display,
-            'type'    => $type,
-            'id'      => (int) $id,
+            'balance'        => round($balance, 2),
+            'label'          => $zero ? '' : $label,
+            'display'        => $display,
+            'type'           => $type,
+            'id'             => (int) $id,
+            'backup_balance' => round($backupBalance, 2),
+            'annual_balance' => round($annualBalance, 2),
         ]);
     }
 

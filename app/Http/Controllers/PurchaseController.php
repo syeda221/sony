@@ -555,6 +555,45 @@ class PurchaseController extends Controller
             ]
         );
 
+        // 2B. Vendor Incentive Ledgers (Backup & Annual Claims)
+        if ($purchase->vendor_id && (float)($purchase->total_backup_amount ?? 0) > 0) {
+            \App\Models\VendorIncentiveLedger::updateOrCreate(
+                [
+                    'vendor_id' => $purchase->vendor_id,
+                    'purchase_id' => $purchase->id,
+                    'type' => 'backup',
+                ],
+                [
+                    'entry_type' => 'claim',
+                    'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                    'reference_no' => $purchase->invoice_no,
+                    'debit' => (float) $purchase->total_backup_amount,
+                    'credit' => 0,
+                    'admin_or_user_id' => auth()->id() ?? 1,
+                    'notes' => "Backup Incentive Claim from Purchase #{$purchase->invoice_no}",
+                ]
+            );
+        }
+
+        if ($purchase->vendor_id && (float)($purchase->total_annual_amount ?? 0) > 0) {
+            \App\Models\VendorIncentiveLedger::updateOrCreate(
+                [
+                    'vendor_id' => $purchase->vendor_id,
+                    'purchase_id' => $purchase->id,
+                    'type' => 'annual',
+                ],
+                [
+                    'entry_type' => 'claim',
+                    'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                    'reference_no' => $purchase->invoice_no,
+                    'debit' => (float) $purchase->total_annual_amount,
+                    'credit' => 0,
+                    'admin_or_user_id' => auth()->id() ?? 1,
+                    'notes' => "Annual Rebate Claim from Purchase #{$purchase->invoice_no}",
+                ]
+            );
+        }
+
         // 3. Accounting
         try {
             $transactionService = app(\App\Services\TransactionService::class);
@@ -729,6 +768,10 @@ class PurchaseController extends Controller
                 'product_id.*' => 'nullable|exists:products,id',
                 'item_scheme_discount' => 'nullable|array',
                 'item_scheme_discount.*' => 'nullable|numeric|min:0',
+                'backup_percent' => 'nullable|array',
+                'backup_percent.*' => 'nullable|numeric|min:0|max:100',
+                'annual_percent' => 'nullable|array',
+                'annual_percent.*' => 'nullable|numeric|min:0|max:100',
                 'qty' => 'array',
                 'qty.*' => 'nullable|required_with:product_id.*|numeric|min:0.01',
                 'price' => 'array',
@@ -807,6 +850,10 @@ class PurchaseController extends Controller
             $itemSchemeDiscs = $request->item_scheme_discount ?? [];
             $totalSchemeDiscount = 0;
             $totalItemDiscount = 0;
+            $backupPercents = $request->backup_percent ?? [];
+            $annualPercents = $request->annual_percent ?? [];
+            $totalBackupAmount = 0;
+            $totalAnnualAmount = 0;
             $gstPercents = $request->gst_percent ?? [];
             $totalExclusiveGst = 0;
             $totalGst = 0;
@@ -871,6 +918,14 @@ class PurchaseController extends Controller
                 $gstAmount = round($exclusiveGstAmount * ($gstPercent / 100), 2);
                 $lineTotal = round($exclusiveGstAmount + $gstAmount, 2);
 
+                // Calculate Backup & Annual Incentives (Note: Does not affect lineTotal or net payable)
+                $backupPercent = isset($backupPercents[$i]) && is_numeric($backupPercents[$i]) ? (float)$backupPercents[$i] : 0;
+                $annualPercent = isset($annualPercents[$i]) && is_numeric($annualPercents[$i]) ? (float)$annualPercents[$i] : 0;
+                $backupAmount = round($lineTotal * ($backupPercent / 100), 2);
+                $annualAmount = round($lineTotal * ($annualPercent / 100), 2);
+                $totalBackupAmount += $backupAmount;
+                $totalAnnualAmount += $annualAmount;
+
                 // Snapshots
                 $bQty = (float) ($boxesQtys[$i] ?? 0);
                 $lQty = (float) ($looseQtys[$i] ?? 0);
@@ -910,6 +965,10 @@ class PurchaseController extends Controller
                     'price' => $price,
                     'item_discount' => $discAmount, // Store calculated amount
                     'scheme_discount' => $itemSchemeDiscount,
+                    'backup_percent' => $backupPercent,
+                    'backup_amount' => $backupAmount,
+                    'annual_percent' => $annualPercent,
+                    'annual_amount' => $annualAmount,
                     'gst_percent' => $gstPercent,
                     'gst_amount' => $gstAmount,
                     'exclusive_gst_amount' => $exclusiveGstAmount,
@@ -957,6 +1016,8 @@ class PurchaseController extends Controller
                 'extra_cost' => $extraCost,
                 'net_amount' => $netAmount,
                 'due_amount' => $netAmount,
+                'total_backup_amount' => $totalBackupAmount,
+                'total_annual_amount' => $totalAnnualAmount,
             ]);
 
             // Check if payment was submitted (array or scalar)
@@ -1535,6 +1596,10 @@ class PurchaseController extends Controller
             $itemSchemeDiscs = $request->item_scheme_discount ?? [];
             $totalSchemeDiscount = 0;
             $totalItemDiscountUpdate = 0;
+            $backupPercents = $request->backup_percent ?? [];
+            $annualPercents = $request->annual_percent ?? [];
+            $totalBackupAmount = 0;
+            $totalAnnualAmount = 0;
             $gstPercents = $request->gst_percent ?? [];
             $totalExclusiveGst = 0;
             $totalGst = 0;
@@ -1611,6 +1676,14 @@ class PurchaseController extends Controller
                 $gstAmount = round($exclusiveGstAmount * ($gstPercent / 100), 2);
                 $lineTotal = round($exclusiveGstAmount + $gstAmount, 2);
 
+                // Calculate Backup & Annual Incentives (Note: Does not affect lineTotal or net payable)
+                $backupPercent = isset($backupPercents[$i]) && is_numeric($backupPercents[$i]) ? (float)$backupPercents[$i] : 0;
+                $annualPercent = isset($annualPercents[$i]) && is_numeric($annualPercents[$i]) ? (float)$annualPercents[$i] : 0;
+                $backupAmount = round($lineTotal * ($backupPercent / 100), 2);
+                $annualAmount = round($lineTotal * ($annualPercent / 100), 2);
+                $totalBackupAmount += $backupAmount;
+                $totalAnnualAmount += $annualAmount;
+
                 if ($isPiece) {
                     $baseQty = $qty;
                 } elseif ($isCarton) {
@@ -1660,6 +1733,10 @@ class PurchaseController extends Controller
                     'price' => $price,
                     'item_discount' => $discAmount,
                     'scheme_discount' => $itemSchemeDiscount,
+                    'backup_percent' => $backupPercent,
+                    'backup_amount' => $backupAmount,
+                    'annual_percent' => $annualPercent,
+                    'annual_amount' => $annualAmount,
                     'gst_percent' => $gstPercent,
                     'gst_amount' => $gstAmount,
                     'exclusive_gst_amount' => $exclusiveGstAmount,
@@ -1736,7 +1813,52 @@ class PurchaseController extends Controller
                 'net_amount' => $netAmount,
                 'paid_amount' => $newPaidAmount,
                 'due_amount' => $dueAmount,
+                'total_backup_amount' => $totalBackupAmount,
+                'total_annual_amount' => $totalAnnualAmount,
             ]);
+
+            // Sync Vendor Incentive Ledgers (Backup & Annual Claims)
+            if ($purchase->vendor_id && $totalBackupAmount > 0) {
+                \App\Models\VendorIncentiveLedger::updateOrCreate(
+                    [
+                        'vendor_id' => $purchase->vendor_id,
+                        'purchase_id' => $purchase->id,
+                        'type' => 'backup',
+                    ],
+                    [
+                        'entry_type' => 'claim',
+                        'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                        'reference_no' => $purchase->invoice_no,
+                        'debit' => $totalBackupAmount,
+                        'credit' => 0,
+                        'admin_or_user_id' => auth()->id() ?? 1,
+                        'notes' => "Backup Incentive Claim from Purchase #{$purchase->invoice_no}",
+                    ]
+                );
+            } else {
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'backup')->delete();
+            }
+
+            if ($purchase->vendor_id && $totalAnnualAmount > 0) {
+                \App\Models\VendorIncentiveLedger::updateOrCreate(
+                    [
+                        'vendor_id' => $purchase->vendor_id,
+                        'purchase_id' => $purchase->id,
+                        'type' => 'annual',
+                    ],
+                    [
+                        'entry_type' => 'claim',
+                        'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                        'reference_no' => $purchase->invoice_no,
+                        'debit' => $totalAnnualAmount,
+                        'credit' => 0,
+                        'admin_or_user_id' => auth()->id() ?? 1,
+                        'notes' => "Annual Rebate Claim from Purchase #{$purchase->invoice_no}",
+                    ]
+                );
+            } else {
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'annual')->delete();
+            }
 
             // Stock movements & Warehouse stock updates
             $isLinkedToGatepass = \App\Models\InwardGatepass::where('purchase_id', $purchase->id)->exists();

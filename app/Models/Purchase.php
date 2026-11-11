@@ -12,14 +12,16 @@ class Purchase extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'purchase_date' => 'date',
-        'subtotal'      => 'decimal:2',
-        'discount'      => 'decimal:2',
+        'purchase_date'       => 'date',
+        'subtotal'            => 'decimal:2',
+        'discount'            => 'decimal:2',
         'additional_discount' => 'decimal:2',
-        'extra_cost'    => 'decimal:2',
-        'net_amount'    => 'decimal:2',
-        'paid_amount'   => 'decimal:2',
-        'due_amount'    => 'decimal:2',
+        'extra_cost'          => 'decimal:2',
+        'net_amount'          => 'decimal:2',
+        'paid_amount'         => 'decimal:2',
+        'due_amount'          => 'decimal:2',
+        'total_backup_amount' => 'decimal:2',
+        'total_annual_amount' => 'decimal:2',
     ];
 
     public function branch()   { return $this->belongsTo(Branch::class); }
@@ -27,4 +29,5 @@ class Purchase extends Model
     public function vendor()   { return $this->belongsTo(Vendor::class, 'vendor_id'); }
     public function items()    { return $this->hasMany(PurchaseItem::class); }
     public function returns()  { return $this->hasMany(PurchaseReturn::class); }
+    public function incentiveLedgers() { return $this->hasMany(VendorIncentiveLedger::class); }
 }

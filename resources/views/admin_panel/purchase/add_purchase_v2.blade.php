@@ -778,6 +778,8 @@
                                 <th style="width: 85px;">Disc %</th>
                                 <th style="width: 95px;">Disc Amt</th>
                                 <th style="width: 100px;">Scheme (Rs)</th>
+                                <th style="width: 85px;" class="text-center" title="Vendor Backup Support (%)">Backup %</th>
+                                <th style="width: 85px;" class="text-center" title="Annual Volume Rebate (%)">Annual %</th>
                                 @if($purchaseGstEnabled ?? true)
                                     <th style="width: 95px;" class="col-purchase-gst text-center">GST %</th>
                                 @endif
@@ -790,7 +792,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="{{ $canSelectWarehouse ? (($purchaseGstEnabled ?? true) ? 10 : 9) : (($purchaseGstEnabled ?? true) ? 9 : 8) }}" class="text-end fw-bold text-muted py-2 pe-2" style="background:#F8FAFC;">Total Item Amount:</td>
+                                <td colspan="{{ $canSelectWarehouse ? (($purchaseGstEnabled ?? true) ? 12 : 11) : (($purchaseGstEnabled ?? true) ? 11 : 10) }}" class="text-end fw-bold text-muted py-2 pe-2" style="background:#F8FAFC;">Total Item Amount:</td>
                                 <td class="text-end fw-bold fs-6 text-dark py-2 pe-2" style="background:#F8FAFC;"><span id="totalAmount">0.00</span></td>
                                 <td style="background:#F8FAFC;"></td>
                             </tr>
@@ -940,6 +942,27 @@
                             <div class="s-row" style="background:#FEF2F2; padding: 6px 10px; border-radius: 6px; border: 1px solid #FECACA; margin-top: 6px;">
                                 <span class="s-label fw-bold text-danger" style="font-size: 13px;">Balance Due</span>
                                 <span class="change-val text-danger" style="font-size: 16px;" id="tBalanceDue">0.00</span>
+                            </div>
+
+                            {{-- BACKEND INCENTIVES SUMMARY (Off-Invoice Claims) --}}
+                            <div class="mt-3 p-2 rounded" style="background: #F0FDF4; border: 1.5px solid #86EFAC;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small fw-bold text-success"><i class="fas fa-shield-alt me-1"></i> Vendor Backup Claim:</span>
+                                    <span class="fw-bold text-success fs-6" id="tTotalBackup">Rs. 0.00</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small fw-bold text-primary"><i class="fas fa-bullseye me-1"></i> Vendor Annual Rebate:</span>
+                                    <span class="fw-bold text-primary fs-6" id="tTotalAnnual">Rs. 0.00</span>
+                                </div>
+                                <div class="border-top pt-1 mt-1 d-flex justify-content-between align-items-center">
+                                    <span class="small text-muted fw-bold">Total Vendor Claims:</span>
+                                    <span class="fw-bold text-dark" id="tTotalVendorClaims">Rs. 0.00</span>
+                                </div>
+                                <small class="text-muted d-block mt-1" style="font-size: 11px;">
+                                    <i class="fas fa-info-circle me-1 text-info"></i> Note: Yeh amounts bill se minus nahi hongi. Vendor ke respective ledgers me claim entry jayegi.
+                                </small>
+                                <input type="hidden" name="total_backup_amount" id="totalBackupInput" value="0.00">
+                                <input type="hidden" name="total_annual_amount" id="totalAnnualInput" value="0.00">
                             </div>
                         </div>
                     </div>
@@ -1354,7 +1377,7 @@
             });
 
             // Inputs -> Calc
-            $('#purchaseTableBody').on('input', '.main-qty-input, .price, .item-disc-percent, .item-scheme-amt, .item-gst-percent', function() {
+            $('#purchaseTableBody').on('input', '.main-qty-input, .price, .item-disc-percent, .item-scheme-amt, .item-backup-percent, .item-annual-percent, .item-gst-percent', function() {
                 recalcRow($(this).closest('tr'));
                 recalcAll();
             });
@@ -1627,6 +1650,14 @@
                     <td>
                         <input type="number" step="0.01" min="0" name="item_scheme_discount[]" class="form-control text-end item-scheme-amt" value="0" placeholder="0">
                     </td>
+                    <td>
+                        <input type="number" step="0.01" min="0" max="100" name="backup_percent[]" class="form-control text-end item-backup-percent" value="0" placeholder="0%">
+                        <input type="hidden" name="backup_amount[]" class="item-backup-amt" value="0.00">
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" min="0" max="100" name="annual_percent[]" class="form-control text-end item-annual-percent" value="0" placeholder="0%">
+                        <input type="hidden" name="annual_amount[]" class="item-annual-amt" value="0.00">
+                    </td>
                     @if($purchaseGstEnabled ?? true)
                     <td class="col-purchase-gst">
                         <input type="number" step="0.01" min="0" max="100" name="gst_percent[]" class="form-control text-end item-gst-percent fw-semibold" value="{{ (float)($defaultGstPercent ?? 18) }}" placeholder="18">
@@ -1859,7 +1890,13 @@
                         // Disc % -> Scheme (Rs)
                         $row.find('.item-scheme-amt').focus().select();
                     } else if ($input.hasClass('item-scheme-amt')) {
-                        // Scheme (Rs) -> GST % or Next Row
+                        // Scheme (Rs) -> Backup %
+                        $row.find('.item-backup-percent').focus().select();
+                    } else if ($input.hasClass('item-backup-percent')) {
+                        // Backup % -> Annual %
+                        $row.find('.item-annual-percent').focus().select();
+                    } else if ($input.hasClass('item-annual-percent')) {
+                        // Annual % -> GST % or Next Row
                         if ($row.find('.item-gst-percent').length) {
                             $row.find('.item-gst-percent').focus().select();
                         } else {
@@ -1943,12 +1980,22 @@
                 $row.find('.item-excl-gst-amt').val(exclGst.toFixed(2));
                 $row.find('.item-gst-amt').val(gstAmt.toFixed(2));
                 $row.find('.row-total').val(lineTotal.toFixed(2));
+
+                // Calculate Backup & Annual Incentives (Claims accrued, does NOT reduce bill)
+                const backupPct = parseFloat($row.find('.item-backup-percent').val()) || 0;
+                const annualPct = parseFloat($row.find('.item-annual-percent').val()) || 0;
+                const backupAmt = (lineTotal * (backupPct / 100));
+                const annualAmt = (lineTotal * (annualPct / 100));
+                $row.find('.item-backup-amt').val(backupAmt.toFixed(2));
+                $row.find('.item-annual-amt').val(annualAmt.toFixed(2));
             }
 
             function recalcAll() {
                 let subtotal = 0;
                 let totalInlineDiscount = 0;
                 let totalSchemeDiscount = 0;
+                let totalBackupClaim = 0;
+                let totalAnnualClaim = 0;
                 let totalExclusiveGst = 0;
                 let totalGstAmount = 0;
 
@@ -1956,12 +2003,16 @@
                     const total = parseFloat($(this).find('.row-total').val()) || 0;
                     const rowDiscAmt = parseFloat($(this).find('.item-disc-amt').val()) || 0;
                     const rowSchemeAmt = parseFloat($(this).find('.item-scheme-amt').val()) || 0;
+                    const rowBackupAmt = parseFloat($(this).find('.item-backup-amt').val()) || 0;
+                    const rowAnnualAmt = parseFloat($(this).find('.item-annual-amt').val()) || 0;
                     const rowExclGst = parseFloat($(this).find('.item-excl-gst-amt').val()) || 0;
                     const rowGstAmt = parseFloat($(this).find('.item-gst-amt').val()) || 0;
 
                     subtotal += total;
                     totalInlineDiscount += rowDiscAmt;
                     totalSchemeDiscount += rowSchemeAmt;
+                    totalBackupClaim += rowBackupAmt;
+                    totalAnnualClaim += rowAnnualAmt;
                     totalExclusiveGst += rowExclGst;
                     totalGstAmount += rowGstAmt;
                 });
@@ -1974,6 +2025,11 @@
                 $('#tLineDisc').text(totalInlineDiscount.toFixed(2));
                 $('#tSchemeDisc').text(totalSchemeDiscount.toFixed(2));
                 $('#additionalDiscountHidden').val(totalSchemeDiscount.toFixed(2));
+                $('#tTotalBackup').text('Rs. ' + totalBackupClaim.toFixed(2));
+                $('#tTotalAnnual').text('Rs. ' + totalAnnualClaim.toFixed(2));
+                $('#tTotalVendorClaims').text('Rs. ' + (totalBackupClaim + totalAnnualClaim).toFixed(2));
+                $('#totalBackupInput').val(totalBackupClaim.toFixed(2));
+                $('#totalAnnualInput').val(totalAnnualClaim.toFixed(2));
                 $('#tExclusiveGst').text(totalExclusiveGst.toFixed(2));
                 $('#exclusiveGstInput').val(totalExclusiveGst.toFixed(2));
                 $('#tGstAmount').text(totalGstAmount.toFixed(2));

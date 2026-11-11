@@ -123,9 +123,44 @@
         .text-right { text-align: right !important; }
         .fw-bold { font-weight: bold !important; }
     }
+
+    .btn-ledger-tab {
+        font-size: .84rem;
+        transition: all 0.2s ease;
+        border-radius: 8px !important;
+    }
+    .btn-ledger-tab.active-main {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+    }
+    .btn-ledger-tab.active-backup {
+        background: linear-gradient(135deg, #10b981 0%, #047857 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+    }
+    .btn-ledger-tab.active-annual {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+    }
 </style>
 
 <div class="sale-report-container">
+
+    {{-- MULTI-LEDGER TABS (Main Ledger, Backup Claim Ledger, Annual Rebate Ledger) --}}
+    <div class="d-flex align-items-center gap-2 mb-2 no-print flex-wrap">
+        <button type="button" class="btn btn-sm px-3 py-2 fw-bold btn-ledger-tab active-main shadow-sm" data-tab="main" id="tabMainLedger">
+            <i class="fas fa-file-invoice me-1"></i> 1. Main Ledger (Bills & Payments)
+        </button>
+        <button type="button" class="btn btn-sm px-3 py-2 fw-bold btn-ledger-tab text-secondary border bg-white shadow-sm" data-tab="backup" id="tabBackupLedger">
+            <i class="fas fa-shield-alt text-success me-1"></i> 2. Backup Claim Ledger
+        </button>
+        <button type="button" class="btn btn-sm px-3 py-2 fw-bold btn-ledger-tab text-secondary border bg-white shadow-sm" data-tab="annual" id="tabAnnualLedger">
+            <i class="fas fa-bullseye text-primary me-1"></i> 3. Annual Rebate Ledger
+        </button>
+        <input type="hidden" id="reportLedgerType" value="main">
+    </div>
 
     {{-- DESKTOP FILTER HEADER CARD (d-none d-md-block Standard Pattern) --}}
     <div class="card border-0 shadow-sm mb-2 no-print d-none d-md-block" style="border-radius: 10px;">
@@ -268,22 +303,22 @@
             <div class="summary-pill-bar">
                 
                 <div class="stat-pill" style="background: #f8fafc; border-color: #cbd5e1;">
-                    <div class="stat-label text-muted">Opening Balance</div>
+                    <div class="stat-label text-muted" id="pillOpeningLabel">Opening Balance</div>
                     <div class="stat-val text-dark" id="pillOpeningBalance">Rs 0.00</div>
                 </div>
 
                 <div class="stat-pill" style="background: #f0fdf4; border-color: #86efac;">
-                    <div class="stat-label text-success">Total Debit (Dr)</div>
+                    <div class="stat-label text-success" id="pillDebitLabel">Total Debit (Dr)</div>
                     <div class="stat-val text-success" id="pillTotalDebit">Rs 0.00</div>
                 </div>
 
                 <div class="stat-pill" style="background: #fef2f2; border-color: #fca5a5;">
-                    <div class="stat-label text-danger">Total Credit (Cr)</div>
+                    <div class="stat-label text-danger" id="pillCreditLabel">Total Credit (Cr)</div>
                     <div class="stat-val text-danger" id="pillTotalCredit">Rs 0.00</div>
                 </div>
 
                 <div class="stat-pill" style="background: #f0f9ff; border-color: #bae6fd;">
-                    <div class="stat-label text-info">Net Closing Balance</div>
+                    <div class="stat-label text-info" id="pillClosingLabel">Net Closing Balance</div>
                     <div class="stat-val text-primary" id="pillClosingBalance">Rs 0.00</div>
                 </div>
 
@@ -295,25 +330,25 @@
     <div class="row g-2 mb-3 d-md-none no-print px-1">
         <div class="col-6 mb-1">
             <div class="mob-metric-card">
-                <span class="mob-metric-label"><i class="fas fa-wallet text-muted me-1"></i>Opening</span>
+                <span class="mob-metric-label"><i class="fas fa-wallet text-muted me-1"></i><span id="mobPillOpeningLabel">Opening</span></span>
                 <div class="mob-metric-val text-dark mt-1" id="mobPillOpeningBalance">Rs 0.00</div>
             </div>
         </div>
         <div class="col-6 mb-1">
             <div class="mob-metric-card">
-                <span class="mob-metric-label"><i class="fas fa-arrow-up text-success me-1"></i>Debit (Dr)</span>
+                <span class="mob-metric-label"><i class="fas fa-arrow-up text-success me-1"></i><span id="mobPillDebitLabel">Debit (Dr)</span></span>
                 <div class="mob-metric-val text-success mt-1" id="mobPillTotalDebit">Rs 0.00</div>
             </div>
         </div>
         <div class="col-6 mb-1">
             <div class="mob-metric-card">
-                <span class="mob-metric-label"><i class="fas fa-arrow-down text-danger me-1"></i>Credit (Cr)</span>
+                <span class="mob-metric-label"><i class="fas fa-arrow-down text-danger me-1"></i><span id="mobPillCreditLabel">Credit (Cr)</span></span>
                 <div class="mob-metric-val text-danger mt-1" id="mobPillTotalCredit">Rs 0.00</div>
             </div>
         </div>
         <div class="col-6 mb-1">
             <div class="mob-metric-card">
-                <span class="mob-metric-label"><i class="fas fa-balance-scale text-primary me-1"></i>Closing</span>
+                <span class="mob-metric-label"><i class="fas fa-balance-scale text-primary me-1"></i><span id="mobPillClosingLabel">Closing</span></span>
                 <div class="mob-metric-val text-primary mt-1" id="mobPillClosingBalance">Rs 0.00</div>
             </div>
         </div>
@@ -344,9 +379,9 @@
                                 <th style="width: 12%;">Ref / Invoice</th>
                                 <th style="width: 18%;">Vendor</th>
                                 <th>Description</th>
-                                <th style="width: 12%;">Debit (Dr)</th>
-                                <th style="width: 12%;">Credit (Cr)</th>
-                                <th style="width: 14%;">Balance</th>
+                                <th style="width: 12%;" id="colDebitHeader">Debit (Dr)</th>
+                                <th style="width: 12%;" id="colCreditHeader">Credit (Cr)</th>
+                                <th style="width: 14%;" id="colBalanceHeader">Balance</th>
                             </tr>
                         </thead>
                         <tbody id="ledgerBody"></tbody>
@@ -365,7 +400,7 @@
                 <h2 style="font-weight: 900; margin: 0; font-size: 20px; text-transform: uppercase;">{{ \App\Models\Setting::get('company_name', 'WHITE DIAMOND (PACKAGES PRIVATE LIMITED)') }}</h2>
                 <p style="margin: 0; font-size: 11px;">{{ \App\Models\Setting::get('company_address', 'Hanif Garden Dry Port Road Near Soha Mall Faisalabad') }}</p>
                 <p style="margin: 0; font-size: 11px;">Tel: {{ \App\Models\Setting::get('company_phone', '+92 3216293333 | +92 300 7995500') }} | Web: {{ \App\Models\Setting::get('company_website', 'whitediamondpack.com') }}</p>
-                <h5 style="font-weight: 800; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase;">VENDOR LEDGER</h5>
+                <h5 id="printReportTitle" style="font-weight: 800; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase;">VENDOR LEDGER</h5>
             </div>
 
             <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 11px;">
@@ -488,10 +523,25 @@
                 updateReportTitle();
             });
 
+            $(document).on('click', '.btn-ledger-tab', function() {
+                let tab = $(this).data('tab');
+                $('#reportLedgerType').val(tab);
+                $('.btn-ledger-tab').removeClass('active-main active-backup active-annual text-white').addClass('text-secondary border bg-white');
+                if (tab === 'main') {
+                    $(this).removeClass('text-secondary border bg-white').addClass('active-main text-white');
+                } else if (tab === 'backup') {
+                    $(this).removeClass('text-secondary border bg-white').addClass('active-backup text-white');
+                } else if (tab === 'annual') {
+                    $(this).removeClass('text-secondary border bg-white').addClass('active-annual text-white');
+                }
+                loadLedger();
+            });
+
             function loadLedger() {
                 let vid = $(".vendorSelect").val();
                 let start = $(".startDateInput").val() || '2000-01-01';
                 let end = $(".endDateInput").val() || '{{ date("Y-m-d") }}';
+                let ledgerType = $("#reportLedgerType").val() || 'main';
 
                 $("#loader").show();
                 $("#ledgerBox").hide();
@@ -499,7 +549,8 @@
                 $.get("{{ route('report.vendor.ledger.fetch') }}", {
                     vendor_id: vid || 'all',
                     start_date: start,
-                    end_date: end
+                    end_date: end,
+                    ledger_type: ledgerType
                 }, function(res) {
                     $("#loader").hide();
                     $("#ledgerBox").show();
@@ -507,12 +558,16 @@
                     let displayStart = formatDisplayDate(start);
                     let displayEnd = formatDisplayDate(end);
 
-                    updateReportTitle(res.vendor ? res.vendor.name : null);
+                    let isInc = (res.ledger_type === 'backup' || res.ledger_type === 'annual');
+                    let incTitle = res.ledger_type === 'backup' ? 'Backup Claim' : (res.ledger_type === 'annual' ? 'Annual Rebate' : 'Ledger');
+                    let badgeColor = res.ledger_type === 'backup' ? 'success' : (res.ledger_type === 'annual' ? 'primary' : 'primary');
+
+                    updateReportTitle(res.vendor ? (res.vendor.name + ' - ' + incTitle) : null);
 
                     window.currentLedgerResponse = res;
                     let bothBadge = '';
                     let navTabs = '';
-                    if (res.is_both) {
+                    if (res.is_both && !isInc) {
                         bothBadge = `<span class="badge bg-primary text-white me-2 px-2 py-1"><i class="fas fa-sync-alt me-1"></i>Both: Vendor &amp; Customer</span>`;
                         navTabs = `
                             <ul class="nav nav-pills mt-2" id="partyLedgerTabs" role="tablist" style="font-size: 0.85rem;">
@@ -526,21 +581,52 @@
                         `;
                     }
 
-                    // Build Header
+                    // Dynamic Header Title & Badge
+                    let statementBadgeText = isInc ? (incTitle + ' Statement (Off-Invoice Claims)') : 'Statement of Account';
                     $("#ledgerHeader").html(`
                         <div class="w-100">
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <div>
-                                    <h6 class="fw-bold text-dark mb-0">${res.vendor.name} ${bothBadge}</h6>
+                                    <h6 class="fw-bold text-dark mb-0">
+                                        <i class="fas ${res.ledger_type === 'backup' ? 'fa-shield-alt text-success' : (res.ledger_type === 'annual' ? 'fa-bullseye text-primary' : 'fa-truck text-primary')} me-1"></i>
+                                        ${res.vendor.name} ${bothBadge}
+                                    </h6>
                                     <small class="text-muted">Period: <strong>${displayStart}</strong> to <strong>${displayEnd}</strong></small>
                                 </div>
                                 <div>
-                                     <span class="badge bg-primary text-white p-2 shadow-sm font-monospace">Statement of Account</span>
+                                     <span class="badge bg-${badgeColor} text-white p-2 shadow-sm font-monospace">${statementBadgeText}</span>
                                 </div>
                             </div>
                             ${navTabs}
                         </div>
                     `);
+
+                    // Dynamic Column Headers & Metric Labels
+                    if (res.ledger_type === 'backup') {
+                        $('#pillOpeningLabel, #mobPillOpeningLabel').text('Opening Claim Balance');
+                        $('#pillDebitLabel, #mobPillDebitLabel').text('Total Accrued (Dr +)');
+                        $('#pillCreditLabel, #mobPillCreditLabel').text('Total Settled (Cr -)');
+                        $('#pillClosingLabel, #mobPillClosingLabel').text('Outstanding Claim Due');
+                        $('#colDebitHeader').text('Claim Accrued (Dr)');
+                        $('#colCreditHeader').text('Received / Settled (Cr)');
+                        $('#colBalanceHeader').text('Claim Due (Receivable)');
+                    } else if (res.ledger_type === 'annual') {
+                        $('#pillOpeningLabel, #mobPillOpeningLabel').text('Opening Rebate Balance');
+                        $('#pillDebitLabel, #mobPillDebitLabel').text('Total Accrued (Dr +)');
+                        $('#pillCreditLabel, #mobPillCreditLabel').text('Total Settled (Cr -)');
+                        $('#pillClosingLabel, #mobPillClosingLabel').text('Outstanding Rebate Due');
+                        $('#colDebitHeader').text('Rebate Accrued (Dr)');
+                        $('#colCreditHeader').text('Received / Settled (Cr)');
+                        $('#colBalanceHeader').text('Rebate Due (Receivable)');
+                    } else {
+                        $('#pillOpeningLabel, #mobPillOpeningLabel').text('Opening Balance');
+                        $('#pillDebitLabel, #mobPillDebitLabel').text('Total Debit (Dr)');
+                        $('#pillCreditLabel, #mobPillCreditLabel').text('Total Credit (Cr)');
+                        $('#pillClosingLabel, #mobPillClosingLabel').text('Net Closing Balance');
+                        $('#colDebitHeader').text('Debit (Dr)');
+                        $('#colCreditHeader').text('Credit (Cr)');
+                        $('#colBalanceHeader').text('Balance');
+                    }
 
                     let totalDebit = 0;
                     let totalCredit = 0;
@@ -581,8 +667,15 @@
                         totalCredit += credit;
                         lastBalance = parseFloat(t.balance);
 
-                        let balLabel = lastBalance >= 0 ? 'Cr' : 'Dr';
-                        let balClass = lastBalance >= 0 ? 'balance-negative' : 'balance-positive';
+                        let balLabel = '';
+                        let balClass = '';
+                        if (isInc) {
+                            balLabel = lastBalance > 0 ? 'Receivable' : (lastBalance < 0 ? 'Advance' : 'Settled');
+                            balClass = lastBalance > 0 ? 'text-primary fw-bold' : (lastBalance === 0 ? 'text-muted' : 'text-success fw-bold');
+                        } else {
+                            balLabel = lastBalance >= 0 ? 'Cr' : 'Dr';
+                            balClass = lastBalance >= 0 ? 'balance-negative' : 'balance-positive';
+                        }
                         let vendName = t.vendor_name || '-';
 
                         let invoiceBadge = t.invoice_url 
@@ -593,15 +686,29 @@
                             ? `<a href="${t.invoice_url}" target="_blank" class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace text-decoration-none" title="View & Print Invoice"><i class="fas fa-file-invoice me-1"></i>${t.invoice} <i class="fas fa-external-link-alt ms-1" style="font-size: 8.5px;"></i></a>`
                             : `<span class="badge bg-light text-primary border font-monospace">${t.invoice ?? 'REF'}</span>`;
 
+                        let descHtml = t.description;
+                        if (isInc && t.entry_type) {
+                            if (t.entry_type === 'claim') {
+                                descHtml += ` <span class="badge bg-success-subtle text-success border border-success-subtle ms-1 font-monospace" style="font-size: 10px;">Claim Accrued</span>`;
+                            } else if (t.entry_type === 'received') {
+                                descHtml += ` <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1 font-monospace" style="font-size: 10px;">Payout Received</span>`;
+                            } else if (t.entry_type === 'adjusted') {
+                                descHtml += ` <span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1 font-monospace" style="font-size: 10px;">Bill Adjusted</span>`;
+                            }
+                        }
+
+                        let debitDisplay = debit > 0 ? (isInc ? '+Rs ' : 'Rs ') + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-';
+                        let creditDisplay = credit > 0 ? (isInc ? '-Rs ' : 'Rs ') + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-';
+
                         // Desktop Row
                         html += `
                             <tr>
                                 <td class="text-center small text-nowrap">${t.date}</td>
                                 <td class="text-center">${invoiceBadge}</td>
                                 <td class="fw-bold text-dark">${vendName}</td>
-                                <td class="text-start">${t.description}</td>
-                                <td class="text-end text-success fw-semibold">${debit > 0 ? 'Rs ' + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                                <td class="text-end text-danger fw-semibold">${credit > 0 ? 'Rs ' + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
+                                <td class="text-start">${descHtml}</td>
+                                <td class="text-end text-success fw-semibold">${debitDisplay}</td>
+                                <td class="text-end text-danger fw-semibold">${creditDisplay}</td>
                                 <td class="text-end fw-bold ${balClass}">
                                     Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} 
                                     <small class="text-muted" style="font-size:0.75em">${balLabel}</small>
@@ -618,17 +725,17 @@
                                 </div>
                                 <div class="mb-1">
                                     <strong class="text-dark d-block" style="font-size: 12.5px;">${vendName}</strong>
-                                    <small class="text-muted d-block" style="font-size: 11px;">${t.description}</small>
+                                    <small class="text-muted d-block" style="font-size: 11px;">${descHtml}</small>
                                 </div>
                                 <div class="border-top pt-2 mt-1">
                                     <div class="row g-1 text-center" style="font-size: 11px;">
                                         <div class="col-4 border-end">
-                                            <span class="text-muted d-block" style="font-size: 10px;">Debit (Dr)</span>
-                                            <strong class="text-success">${debit > 0 ? 'Rs ' + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</strong>
+                                            <span class="text-muted d-block" style="font-size: 10px;">${isInc ? 'Accrued (+)' : 'Debit (Dr)'}</span>
+                                            <strong class="text-success">${debitDisplay}</strong>
                                         </div>
                                         <div class="col-4 border-end">
-                                            <span class="text-muted d-block" style="font-size: 10px;">Credit (Cr)</span>
-                                            <strong class="text-danger">${credit > 0 ? 'Rs ' + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</strong>
+                                            <span class="text-muted d-block" style="font-size: 10px;">${isInc ? 'Settled (-)' : 'Credit (Cr)'}</span>
+                                            <strong class="text-danger">${creditDisplay}</strong>
                                         </div>
                                         <div class="col-4">
                                             <span class="text-muted d-block" style="font-size: 10px;">Balance</span>
@@ -641,12 +748,19 @@
                     });
 
                     // Totals Row
+                    let finalBalLabel = isInc 
+                        ? (lastBalance > 0 ? 'Receivable' : (lastBalance < 0 ? 'Advance' : 'Settled')) 
+                        : (lastBalance >= 0 ? 'Cr' : 'Dr');
+                    let finalBalClass = isInc 
+                        ? (lastBalance > 0 ? 'text-primary fw-bold' : (lastBalance === 0 ? 'text-muted' : 'text-success fw-bold'))
+                        : (lastBalance >= 0 ? 'balance-negative' : 'balance-positive');
+
                     html += `
                         <tr class="fw-bold bg-light">
                             <td colspan="4" class="text-end text-dark">Totals:</td>
-                            <td class="text-end text-success">Rs ${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td class="text-end text-danger">Rs ${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td class="text-end ${lastBalance >= 0 ? 'balance-negative' : 'balance-positive'}">Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} ${lastBalance >= 0 ? 'Cr' : 'Dr'}</td>
+                            <td class="text-end text-success">${isInc ? '+Rs ' : 'Rs '}${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                            <td class="text-end text-danger">${isInc ? '-Rs ' : 'Rs '}${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                            <td class="text-end ${finalBalClass}">Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} <small class="text-muted" style="font-size:0.75em">${finalBalLabel}</small></td>
                         </tr>
                     `;
 
@@ -654,15 +768,21 @@
                     $("#ledgerMobileContainer").html(mobHtml);
 
                     // Update Top Summary Pills (Desktop & Mobile)
-                    let formattedDebit   = 'Rs ' + totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    let formattedCredit  = 'Rs ' + totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    let formattedClosing = 'Rs ' + Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + (lastBalance >= 0 ? 'Cr' : 'Dr');
+                    let formattedDebit   = (isInc ? '+Rs ' : 'Rs ') + totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    let formattedCredit  = (isInc ? '-Rs ' : 'Rs ') + totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    let formattedClosing = isInc 
+                        ? ('Rs ' + lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' Due') 
+                        : ('Rs ' + Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + (lastBalance >= 0 ? 'Cr' : 'Dr'));
 
                     $('#pillTotalDebit, #mobPillTotalDebit').text(formattedDebit);
                     $('#pillTotalCredit, #mobPillTotalCredit').text(formattedCredit);
                     $('#pillClosingBalance, #mobPillClosingBalance').text(formattedClosing);
 
                     // --- POPULATE PRINT LAYOUT ---
+                    let printTitle = isInc 
+                        ? (res.ledger_type === 'backup' ? 'VENDOR BACKUP CLAIM LEDGER (OFF-INVOICE)' : 'VENDOR ANNUAL REBATE LEDGER (OFF-INVOICE)') 
+                        : 'VENDOR LEDGER';
+                    $('#printReportTitle').text(printTitle);
                     $('#printVendName').text(res.vendor.name);
                     $('#printDateRangeVal').text(displayStart + ' to ' + displayEnd);
                     $('#printTotalDueVal').text(lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2}));
@@ -689,14 +809,26 @@
                         let type = 'Journal Entry';
                         let refDesc = t.description || '';
                         
-                        if (refDesc.toLowerCase().includes('payment') || refDesc.toLowerCase().includes('receipt') || t.source_type === 'Payment') {
-                            type = 'Payment';
-                        } else if (refDesc.toLowerCase().includes('purchase return') || t.source_type === 'PurchaseReturn') {
-                            type = 'Purchase Return';
-                        } else if (refDesc.toLowerCase().includes('purchase invoice') || t.source_type === 'Purchase') {
-                            type = 'Purchase Invoice';
-                        } else if (refDesc.toLowerCase().includes('sale invoice')) {
-                            type = 'Sale Invoice';
+                        if (isInc) {
+                            if (t.entry_type === 'claim') {
+                                type = res.ledger_type === 'backup' ? 'Backup Claim' : 'Annual Rebate';
+                            } else if (t.entry_type === 'received') {
+                                type = 'Payout Received';
+                            } else if (t.entry_type === 'adjusted') {
+                                type = 'Bill Adjusted';
+                            } else {
+                                type = 'Claim Entry';
+                            }
+                        } else {
+                            if (refDesc.toLowerCase().includes('payment') || refDesc.toLowerCase().includes('receipt') || t.source_type === 'Payment') {
+                                type = 'Payment';
+                            } else if (refDesc.toLowerCase().includes('purchase return') || t.source_type === 'PurchaseReturn') {
+                                type = 'Purchase Return';
+                            } else if (refDesc.toLowerCase().includes('purchase invoice') || t.source_type === 'Purchase') {
+                                type = 'Purchase Invoice';
+                            } else if (refDesc.toLowerCase().includes('sale invoice')) {
+                                type = 'Sale Invoice';
+                            }
                         }
                         
                         // Look for A/C: bank name
@@ -725,8 +857,8 @@
                                 <td class="text-left font-monospace">${invNo}</td>
                                 <td class="text-left">${refDesc}</td>
                                 <td class="text-center font-monospace">${vendorInv}</td>
-                                <td class="text-right">${debit > 0 ? debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                                <td class="text-right">${credit > 0 ? credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
+                                <td class="text-right">${debit > 0 ? (isInc ? '+' : '') + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
+                                <td class="text-right">${credit > 0 ? (isInc ? '-' : '') + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
                                 <td class="text-right">${bal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                             </tr>
                         `;
@@ -735,8 +867,8 @@
                     printHtml += `
                         <tr>
                             <td colspan="5" class="text-right fw-bold">Total:</td>
-                            <td class="text-right fw-bold">${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td class="text-right fw-bold">${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                            <td class="text-right fw-bold">${isInc ? '+' : ''}${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                            <td class="text-right fw-bold">${isInc ? '-' : ''}${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                             <td class="text-right fw-bold">${lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                         </tr>
                     `;

@@ -564,12 +564,45 @@ body {
                             </div>
                             <div id="pi_vendor_wrapper" style="display:none;">
                                 <label class="pw-label">SELECT VENDOR <span class="text-danger">*</span></label>
-                                <select name="vendor_id_vendor" id="pi_vendor_select" class="form-select select2-vendor" disabled>
+                                <select name="vendor_id" id="pi_vendor_select" class="form-select select2-vendor" disabled>
                                     <option value="">Search vendor...</option>
                                     @foreach($vendors as $v)
                                         <option value="{{ $v->id }}">{{ $v->name }} @if(!empty($v->phone)) ({{ $v->phone }}) @endif</option>
                                     @endforeach
                                 </select>
+                            </div>
+                        </div>
+
+                        {{-- Vendor Incentive Options for Payment In --}}
+                        <div class="col-12 mt-3 pt-2 border-top" id="pi_vendor_incentive_box" style="display: none;">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <span class="pw-label mb-0"><i class="fas fa-coins text-warning me-1"></i> PURPOSE:</span>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input pi-inc-radio" type="radio" name="incentive_type" id="pi_inc_general" value="" checked>
+                                        <label class="form-check-label small fw-semibold" for="pi_inc_general">General Refund</label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input pi-inc-radio" type="radio" name="incentive_type" id="pi_inc_backup" value="backup">
+                                        <label class="form-check-label small fw-bold text-success" for="pi_inc_backup">
+                                            <i class="fas fa-shield-alt me-1"></i> Backup Claim Payout
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input pi-inc-radio" type="radio" name="incentive_type" id="pi_inc_annual" value="annual">
+                                        <label class="form-check-label small fw-bold text-primary" for="pi_inc_annual">
+                                            <i class="fas fa-bullseye me-1"></i> Annual Rebate Payout
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace" id="pi_badge_backup" style="display: none;">
+                                        Pending Backup: <strong id="pi_val_backup">0.00</strong>
+                                    </span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace" id="pi_badge_annual" style="display: none;">
+                                        Pending Annual: <strong id="pi_val_annual">0.00</strong>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -672,18 +705,70 @@ body {
                     </div>
                 </div>
 
+                {{-- Vendor Claim Offset / Deduction Box for Payment Out --}}
+                <div class="card border-0 shadow-sm p-3 rounded-4 mb-4" id="po_claim_adjustment_card" style="display: none; background: #f8fafc; border-left: 4px solid #ef4444 !important;">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <span class="fw-bold text-dark fs-6">
+                            <i class="fas fa-hand-holding-usd text-danger me-1"></i> Adjust / Deduct Vendor Claims from Bill
+                        </span>
+                        <small class="text-muted">Offset claims to reduce actual cash payout</small>
+                    </div>
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-5">
+                            <div class="p-2 border rounded-3 bg-white">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-check-label fw-bold text-success small mb-0" for="po_chk_backup">
+                                        <input class="form-check-input me-1" type="checkbox" id="po_chk_backup">
+                                        <i class="fas fa-shield-alt me-1"></i> Backup Claim
+                                    </label>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle small font-monospace" id="po_avail_backup_badge">Avail: 0.00</span>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light text-muted">Deduct Rs.</span>
+                                    <input type="number" step="any" min="0" name="adjust_backup_amount" id="po_input_backup" class="form-control text-end fw-bold text-success po-adj-input" placeholder="0.00" value="0" disabled>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="p-2 border rounded-3 bg-white">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-check-label fw-bold text-primary small mb-0" for="po_chk_annual">
+                                        <input class="form-check-input me-1" type="checkbox" id="po_chk_annual">
+                                        <i class="fas fa-bullseye me-1"></i> Annual Rebate
+                                    </label>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle small font-monospace" id="po_avail_annual_badge">Avail: 0.00</span>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light text-muted">Deduct Rs.</span>
+                                    <input type="number" step="any" min="0" name="adjust_annual_amount" id="po_input_annual" class="form-control text-end fw-bold text-primary po-adj-input" placeholder="0.00" value="0" disabled>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="p-2 border rounded-3 text-center bg-white">
+                                <small class="text-muted d-block" style="font-size: 11px;">Claims Offset</small>
+                                <strong class="text-danger fs-6" id="po_total_offset_text">-Rs. 0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Amount & Remarks --}}
                 <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <label class="pw-label">PAID AMOUNT (PKR) <span class="text-danger">*</span></label>
-                        <input type="number" step="any" min="0.01" name="amount[]" id="po_amount" class="form-control pw-input fw-bold fs-5 text-danger text-end" placeholder="0.00" required oninput="$('#po_total_amount').val(this.value)">
+                    <div class="col-md-3">
+                        <label class="pw-label" id="po_bill_amount_label">BILL AMOUNT TO SETTLE (PKR) <span class="text-danger">*</span></label>
+                        <input type="number" step="any" min="0.01" id="po_gross_amount" class="form-control pw-input fw-bold fs-5 text-dark text-end" placeholder="0.00" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="pw-label">NET CASH/BANK TO PAY (PKR)</label>
+                        <input type="number" step="any" min="0.01" name="amount[]" id="po_amount" class="form-control pw-input fw-bold fs-5 text-danger text-end" placeholder="0.00" readonly style="background: #fef2f2;">
                         <input type="hidden" name="total_amount" id="po_total_amount" value="">
                         <input type="hidden" name="narration_id[]" value="">
                         <input type="hidden" name="narration_text[]" value="Payment Made">
                     </div>
-                    <div class="col-md-8">
+                    <div class="col-md-6">
                         <label class="pw-label">REMARKS / REFERENCE</label>
-                        <input type="text" name="remarks" class="form-control pw-input" placeholder="e.g. Paid against bill invoice">
+                        <input type="text" name="remarks" id="po_remarks" class="form-control pw-input" placeholder="e.g. Paid against bill invoice">
                     </div>
                 </div>
 
@@ -1048,6 +1133,159 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // 6b. Payment In (Receipt) Party & Incentive Handling
+    $('.pi-party-type').on('change', function() {
+        let type = $(this).val();
+        if (type === 'customer') {
+            $('#pi_customer_wrapper').show();
+            $('#pi_customer_select').prop('disabled', false).attr('name', 'vendor_id');
+            $('#pi_vendor_wrapper').hide();
+            $('#pi_vendor_select').prop('disabled', true).removeAttr('name');
+            $('#pi_vendor_incentive_box').hide();
+            $('#pi_inc_general').prop('checked', true);
+        } else {
+            $('#pi_customer_wrapper').hide();
+            $('#pi_customer_select').prop('disabled', true).removeAttr('name');
+            $('#pi_vendor_wrapper').show();
+            $('#pi_vendor_select').prop('disabled', false).attr('name', 'vendor_id');
+            $('#pi_vendor_incentive_box').show();
+            initSelect2();
+            $('#pi_vendor_select').trigger('change');
+        }
+    });
+
+    window.piAvailBackup = 0;
+    window.piAvailAnnual = 0;
+
+    $('#pi_vendor_select').on('change', function() {
+        let vId = $(this).val();
+        if (vId) {
+            $.get('/voucher-balance/vendor/' + vId, function(res) {
+                window.piAvailBackup = parseFloat(res.backup_balance) || 0;
+                window.piAvailAnnual = parseFloat(res.annual_balance) || 0;
+
+                if (window.piAvailBackup > 0) {
+                    $('#pi_val_backup').text(window.piAvailBackup.toFixed(2));
+                    $('#pi_badge_backup').show();
+                } else {
+                    $('#pi_badge_backup').hide();
+                }
+
+                if (window.piAvailAnnual > 0) {
+                    $('#pi_val_annual').text(window.piAvailAnnual.toFixed(2));
+                    $('#pi_badge_annual').show();
+                } else {
+                    $('#pi_badge_annual').hide();
+                }
+            });
+        } else {
+            $('#pi_badge_backup, #pi_badge_annual').hide();
+        }
+    });
+
+    $('.pi-inc-radio').on('change', function() {
+        let mode = $(this).val();
+        let vendName = $('#pi_vendor_select option:selected').text().trim() || 'Vendor';
+        if (mode === 'backup') {
+            $('input[name="remarks"]:visible').val('Backup Incentive Claim Payout from ' + vendName);
+            if (window.piAvailBackup > 0 && (!$('#pi_amount').val() || parseFloat($('#pi_amount').val()) === 0)) {
+                $('#pi_amount').val(window.piAvailBackup.toFixed(2)).trigger('input');
+            }
+        } else if (mode === 'annual') {
+            $('input[name="remarks"]:visible').val('Annual Rebate Claim Payout from ' + vendName);
+            if (window.piAvailAnnual > 0 && (!$('#pi_amount').val() || parseFloat($('#pi_amount').val()) === 0)) {
+                $('#pi_amount').val(window.piAvailAnnual.toFixed(2)).trigger('input');
+            }
+        } else {
+            $('input[name="remarks"]:visible').val('Payment Received from ' + vendName);
+        }
+    });
+
+    // 6c. Payment Out (Paid) Party & Claim Deduction Handling
+    $('.po-party-type').on('change', function() {
+        let choice = $(this).val();
+        $('#po_vendor_type').val(choice);
+        if (choice === 'vendor') {
+            $('#po_vendor_wrapper').show();
+            $('#po_vendor_select').prop('disabled', false).attr('name', 'vendor_id[]');
+            $('#po_customer_wrapper').hide();
+            $('#po_customer_select').prop('disabled', true).removeAttr('name');
+            initSelect2();
+            $('#po_vendor_select').trigger('change');
+        } else {
+            $('#po_vendor_wrapper').hide();
+            $('#po_vendor_select').prop('disabled', true).removeAttr('name');
+            $('#po_customer_wrapper').show();
+            $('#po_customer_select').prop('disabled', false).attr('name', 'vendor_id[]');
+            initSelect2();
+            resetPoClaimDeductions();
+        }
+    });
+
+    window.poAvailBackup = 0;
+    window.poAvailAnnual = 0;
+
+    $('#po_vendor_select').on('change', function() {
+        let vId = $(this).val();
+        if (vId) {
+            $.get('/voucher-balance/vendor/' + vId, function(res) {
+                window.poAvailBackup = parseFloat(res.backup_balance) || 0;
+                window.poAvailAnnual = parseFloat(res.annual_balance) || 0;
+
+                if (window.poAvailBackup > 0 || window.poAvailAnnual > 0) {
+                    $('#po_claim_adjustment_card').slideDown(150);
+                    $('#po_avail_backup_badge').text('Avail: ' + window.poAvailBackup.toFixed(2));
+                    $('#po_avail_annual_badge').text('Avail: ' + window.poAvailAnnual.toFixed(2));
+                } else {
+                    resetPoClaimDeductions();
+                }
+            });
+        } else {
+            resetPoClaimDeductions();
+        }
+    });
+
+    function resetPoClaimDeductions() {
+        $('#po_claim_adjustment_card').slideUp(150);
+        $('#po_chk_backup, #po_chk_annual').prop('checked', false);
+        $('#po_input_backup, #po_input_annual').prop('disabled', true).val('0');
+        window.poAvailBackup = 0;
+        window.poAvailAnnual = 0;
+        calcPoTotal();
+    }
+
+    $(document).on('change', '#po_chk_backup', function() {
+        if ($(this).is(':checked')) {
+            $('#po_input_backup').prop('disabled', false).val(window.poAvailBackup > 0 ? window.poAvailBackup.toFixed(2) : '0');
+        } else {
+            $('#po_input_backup').prop('disabled', true).val('0');
+        }
+        calcPoTotal();
+    });
+
+    $(document).on('change', '#po_chk_annual', function() {
+        if ($(this).is(':checked')) {
+            $('#po_input_annual').prop('disabled', false).val(window.poAvailAnnual > 0 ? window.poAvailAnnual.toFixed(2) : '0');
+        } else {
+            $('#po_input_annual').prop('disabled', true).val('0');
+        }
+        calcPoTotal();
+    });
+
+    $(document).on('input', '#po_gross_amount, .po-adj-input', calcPoTotal);
+
+    function calcPoTotal() {
+        let gross = parseFloat($('#po_gross_amount').val()) || 0;
+        let backupAdj = $('#po_chk_backup').is(':checked') ? (parseFloat($('#po_input_backup').val()) || 0) : 0;
+        let annualAdj = $('#po_chk_annual').is(':checked') ? (parseFloat($('#po_input_annual').val()) || 0) : 0;
+        let totalOffset = backupAdj + annualAdj;
+
+        $('#po_total_offset_text').text('-Rs. ' + totalOffset.toFixed(2));
+        let netCash = Math.max(0, gross - totalOffset);
+        $('#po_amount').val(netCash.toFixed(2));
+        $('#po_total_amount').val(netCash.toFixed(2));
+    }
 
     // 7. Form Submission AJAX
     $('.voucher-form').on('submit', function(e) {
