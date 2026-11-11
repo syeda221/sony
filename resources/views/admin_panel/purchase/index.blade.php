@@ -315,6 +315,15 @@
                             </div>
                         @endif
 
+                        @if (session('error'))
+                            <div class="alert alert-danger d-flex align-items-center gap-2 rounded-3 mb-4">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span>{{ session('error') }}</span>
+                                <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"
+                                    aria-label="Close"></button>
+                            </div>
+                        @endif
+
                         {{-- AJAX Filter Panel --}}
                         <div class="card filter-panel mb-4">
                             <div class="card-body p-0">

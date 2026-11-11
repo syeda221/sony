@@ -418,13 +418,14 @@
             <table class="invoice-table">
                 <thead>
                     <tr>
-                        <th class="text-center" style="width: 12%">Code</th>
-                        <th class="text-start" style="width: 33%">Description</th>
-                        <th class="text-center" style="width: 12%">Qty</th>
-                        <th class="text-center" style="width: 10%">UOM</th>
+                        <th class="text-center" style="width: 10%">Code</th>
+                        <th class="text-start" style="width: 30%">Description</th>
+                        <th class="text-center" style="width: 11%">Qty</th>
+                        <th class="text-center" style="width: 9%">UOM</th>
                         <th class="text-end" style="width: 10%">Price</th>
-                        <th class="text-end" style="width: 10%">Disc</th>
-                        <th class="text-end" style="width: 13%">Total</th>
+                        <th class="text-end" style="width: 9%">Disc</th>
+                        <th class="text-end" style="width: 9%">Scheme Amt</th>
+                        <th class="text-end" style="width: 12%">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -584,11 +585,19 @@
                             <td class="text-end" style="vertical-align: middle; color: #dc2626;">
                                 @if ($item->item_discount > 0)
                                     @php
-                                        $grossLine = $item->line_total + $item->item_discount;
+                                        $grossLine = $item->line_total + $item->item_discount + ($item->scheme_discount ?? 0) - ($item->gst_amount ?? 0);
                                         $discPercent = $grossLine > 0 ? ($item->item_discount / $grossLine) * 100 : 0;
                                     @endphp
                                     <div style="font-size: 10px; line-height: 1;">{{ number_format($discPercent, 1) }}%</div>
                                     <div style="font-size: 11px; font-weight: bold;">{{ number_format($item->item_discount, 2) }}</div>
+                                @else
+                                    -
+                                @endif
+                            </td>
+
+                            <td class="text-end" style="vertical-align: middle; color: #7c3aed; font-weight: 700;">
+                                @if (($item->scheme_discount ?? 0) > 0)
+                                    {{ number_format($item->scheme_discount, 2) }}
                                 @else
                                     -
                                 @endif
@@ -614,6 +623,18 @@
                             @endphp
                             @if ($totalInlineDisc > 0)
                                 {{ number_format($totalInlineDisc, 2) }}
+                            @else
+                                -
+                            @endif
+                        </td>
+                        <td class="text-end" style="color: #7c3aed; font-weight: 700;">
+                            @php
+                                $totalSchemeAmt = $purchase->items->sum('scheme_discount');
+                            @endphp
+                            @if ($totalSchemeAmt > 0)
+                                {{ number_format($totalSchemeAmt, 2) }}
+                            @else
+                                -
                             @endif
                         </td>
                         <td class="text-end" style="font-size: 13px; color: var(--primary-color); padding: 10px 6px;">
@@ -718,6 +739,9 @@
                             @if ($item->item_discount > 0)
                                 <div class="text-danger small" style="font-size: 0.72rem;">Disc: Rs. {{ number_format($item->item_discount, 2) }}</div>
                             @endif
+                            @if (($item->scheme_discount ?? 0) > 0)
+                                <div class="small fw-bold" style="font-size: 0.72rem; color: #7c3aed;">Scheme: Rs. {{ number_format($item->scheme_discount, 2) }}</div>
+                            @endif
                             <div class="fw-bold text-dark" style="font-size: 0.95rem;">Rs. {{ number_format($item->line_total, 2) }}</div>
                         </div>
                     </div>
@@ -763,15 +787,19 @@
                             <td class="text-end text-success fw-bold font-monospace">+Rs. {{ number_format($purchase->total_gst, 2) }}</td>
                         </tr>
                         @endif
-                        @if ($purchase->additional_discount > 0)
+                        @php
+                            $inlineSchemeSum = (float) $purchase->items->sum('scheme_discount');
+                            $extraOrderScheme = max(0, (float)($purchase->additional_discount ?? 0) - $inlineSchemeSum);
+                        @endphp
+                        @if ($extraOrderScheme > 0)
                             <tr>
-                                <td>Additional Discount</td>
+                                <td>Scheme Discount</td>
                                 <td class="text-end text-danger font-monospace">
                                     @php
-                                        $billDiscPercent = $purchase->subtotal > 0 ? ($purchase->additional_discount / $purchase->subtotal) * 100 : 0;
+                                        $billDiscPercent = $purchase->subtotal > 0 ? ($extraOrderScheme / $purchase->subtotal) * 100 : 0;
                                     @endphp
                                     <span style="font-size: 10px;" class="me-1">({{ number_format($billDiscPercent, 1) }}%)</span>
-                                    -{{ number_format($purchase->additional_discount, 2) }}
+                                    -{{ number_format($extraOrderScheme, 2) }}
                                 </td>
                             </tr>
                         @endif

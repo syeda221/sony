@@ -310,7 +310,12 @@
                         {{ number_format($item->price, 2) }} x
                     </td>
                     <td class="text-center">{{ $qtyDisplay }}</td>
-                    <td class="text-end">{{ number_format($item->line_total, 2) }}</td>
+                    <td class="text-end">
+                        @if(($item->scheme_discount ?? 0) > 0)
+                            <div style="font-size: 9px; color: #555;">Sch: -{{ number_format($item->scheme_discount, 2) }}</div>
+                        @endif
+                        {{ number_format($item->line_total, 2) }}
+                    </td>
                 </tr>
             @endforeach
         </tbody>
@@ -327,10 +332,14 @@
             <span>{{ number_format($purchase->subtotal, 2) }}</span>
         </div>
 
-        @if ($purchase->additional_discount > 0)
+        @php
+            $inlineSchemeReceipt = (float) $purchase->items->sum('scheme_discount');
+            $extraSchemeReceipt = max(0, (float)($purchase->additional_discount ?? 0) - $inlineSchemeReceipt);
+        @endphp
+        @if ($extraSchemeReceipt > 0)
             <div class="info-row">
-                <span>Additional Discount:</span>
-                <span>-{{ number_format($purchase->additional_discount, 2) }}</span>
+                <span>Scheme Discount:</span>
+                <span>-{{ number_format($extraSchemeReceipt, 2) }}</span>
             </div>
         @endif
 

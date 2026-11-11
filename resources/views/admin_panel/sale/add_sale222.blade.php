@@ -1557,7 +1557,7 @@
                     {{-- Date --}}
                     <div class="d-flex align-items-center gap-2">
                         <label class="field-label mb-0 fw-bold text-secondary" for="displayDateInput">Date:</label>
-                        <input type="text" name="sale_date" class="form-control datepicker-custom text-center fw-bold" id="displayDateInput" value="{{ date('d/m/Y') }}" style="width: 130px; height: 38px;">
+                        <input type="text" name="sale_date" class="form-control datepicker-custom text-center fw-bold" id="displayDateInput" value="{{ date('Y-m-d') }}" data-default-date="today" style="width: 130px; height: 38px;">
                     </div>
 
                     {{-- Screen Configuration Button --}}

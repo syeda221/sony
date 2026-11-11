@@ -346,6 +346,7 @@ class BalanceService
         $purchases = DB::table('purchases')
             ->where('vendor_id', $vendorId)
             ->whereIn('status_purchase', ['approved', 'Returned'])
+            ->whereNull('deleted_at')
             ->whereBetween('purchase_date', [$startDate, $endDate])
             ->select('id', 'invoice_no', 'purchase_order_no', 'net_amount', 'purchase_date')
             ->get()

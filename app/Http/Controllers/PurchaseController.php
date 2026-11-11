@@ -722,9 +722,13 @@ class PurchaseController extends Controller
                 'header_warehouse_id' => 'nullable',
                 'note' => 'nullable|string',
                 'discount' => 'nullable|numeric|min:0',
+                'scheme_discount' => 'nullable|numeric|min:0',
+                'additional_discount' => 'nullable|numeric|min:0',
                 'extra_cost' => 'nullable|numeric|min:0',
                 'product_id' => 'array',
                 'product_id.*' => 'nullable|exists:products,id',
+                'item_scheme_discount' => 'nullable|array',
+                'item_scheme_discount.*' => 'nullable|numeric|min:0',
                 'qty' => 'array',
                 'qty.*' => 'nullable|required_with:product_id.*|numeric|min:0.01',
                 'price' => 'array',
@@ -800,6 +804,9 @@ class PurchaseController extends Controller
             $cartonPrices = $validated['price_per_carton'] ?? [];
             $units = $validated['unit'] ?? [];
             $itemDiscs = $validated['item_discount'] ?? [];
+            $itemSchemeDiscs = $request->item_scheme_discount ?? [];
+            $totalSchemeDiscount = 0;
+            $totalItemDiscount = 0;
             $gstPercents = $request->gst_percent ?? [];
             $totalExclusiveGst = 0;
             $totalGst = 0;
@@ -853,9 +860,13 @@ class PurchaseController extends Controller
                     $grossTotal = $qty * $price;
                 }
 
-                // Calculate absolute discount from percentage
+                // Calculate absolute discount from percentage + scheme discount
                 $discAmount = $grossTotal * ($discPercent / 100);
-                $exclusiveGstAmount = max(0, $grossTotal - $discAmount);
+                $totalItemDiscount += $discAmount;
+                $itemSchemeDiscount = (float) ($itemSchemeDiscs[$i] ?? 0);
+                $totalSchemeDiscount += $itemSchemeDiscount;
+                $totalRowDiscount = $discAmount + $itemSchemeDiscount;
+                $exclusiveGstAmount = max(0, $grossTotal - $totalRowDiscount);
                 $gstPercent = isset($gstPercents[$i]) && is_numeric($gstPercents[$i]) ? (float)$gstPercents[$i] : 0;
                 $gstAmount = round($exclusiveGstAmount * ($gstPercent / 100), 2);
                 $lineTotal = round($exclusiveGstAmount + $gstAmount, 2);
@@ -898,6 +909,7 @@ class PurchaseController extends Controller
                     'unit' => $unit,
                     'price' => $price,
                     'item_discount' => $discAmount, // Store calculated amount
+                    'scheme_discount' => $itemSchemeDiscount,
                     'gst_percent' => $gstPercent,
                     'gst_amount' => $gstAmount,
                     'exclusive_gst_amount' => $exclusiveGstAmount,
@@ -921,16 +933,27 @@ class PurchaseController extends Controller
             }
 
             // totals
-            $discount = (float) ($request->discount ?? 0);
-            $extraCost = (float) ($request->extra_cost ?? 0);
-            $netAmount = ($subtotal - $discount) + $extraCost;
+            $postedDiscount = (float) ($request->discount ?? 0);
+            $orderDiscount = 0;
+            if ($request->has('discount_amt') && is_numeric($request->discount_amt)) {
+                $orderDiscount = max(0, (float) $request->discount_amt);
+            } elseif ($postedDiscount > $totalItemDiscount) {
+                $orderDiscount = $postedDiscount - $totalItemDiscount;
+            }
+
+            $overallSchemeDiscount = (float) ($request->scheme_discount ?? 0);
+            $extraCost = (float) ($request->extra_cost ?? $request->freight ?? 0);
+
+            // $subtotal is ALREADY net of all item discounts and inline scheme discounts.
+            // Only order-level additional discounts are subtracted from $subtotal:
+            $netAmount = max(0, ($subtotal - $orderDiscount - $overallSchemeDiscount) + $extraCost);
 
             $purchase->update([
                 'subtotal' => $subtotal,
                 'total_exclusive_gst' => $totalExclusiveGst,
                 'total_gst' => $totalGst,
-                'discount' => $discount,
-                'additional_discount' => $discount,
+                'discount' => $totalItemDiscount + $orderDiscount,
+                'additional_discount' => $overallSchemeDiscount + $orderDiscount,
                 'extra_cost' => $extraCost,
                 'net_amount' => $netAmount,
                 'due_amount' => $netAmount,
@@ -1431,10 +1454,14 @@ class PurchaseController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'note' => 'nullable|string',
             'discount' => 'nullable|numeric|min:0',
+            'scheme_discount' => 'nullable|numeric|min:0',
+            'additional_discount' => 'nullable|numeric|min:0',
             'extra_cost' => 'nullable|numeric|min:0',
 
             'product_id' => 'array',
             'product_id.*' => 'nullable|string',
+            'item_scheme_discount' => 'nullable|array',
+            'item_scheme_discount.*' => 'nullable|numeric|min:0',
             'qty' => 'array',
             'qty.*' => 'nullable|required_with:product_id.*|numeric|min:0',
             'price' => 'array',
@@ -1505,6 +1532,9 @@ class PurchaseController extends Controller
             $prices = $validated['price'] ?? [];
             $units = $validated['unit'] ?? [];
             $itemDiscs = $validated['item_discount'] ?? [];
+            $itemSchemeDiscs = $request->item_scheme_discount ?? [];
+            $totalSchemeDiscount = 0;
+            $totalItemDiscountUpdate = 0;
             $gstPercents = $request->gst_percent ?? [];
             $totalExclusiveGst = 0;
             $totalGst = 0;
@@ -1570,9 +1600,13 @@ class PurchaseController extends Controller
                     $grossTotal = $qty * $price;
                 }
 
-                // Calculate absolute discount from percentage
+                // Calculate absolute discount from percentage + scheme discount
                 $discAmount = $grossTotal * ($discPercent / 100);
-                $exclusiveGstAmount = max(0, $grossTotal - $discAmount);
+                $totalItemDiscountUpdate += $discAmount;
+                $itemSchemeDiscount = (float) ($itemSchemeDiscs[$i] ?? 0);
+                $totalSchemeDiscount += $itemSchemeDiscount;
+                $totalRowDiscount = $discAmount + $itemSchemeDiscount;
+                $exclusiveGstAmount = max(0, $grossTotal - $totalRowDiscount);
                 $gstPercent = isset($gstPercents[$i]) && is_numeric($gstPercents[$i]) ? (float)$gstPercents[$i] : 0;
                 $gstAmount = round($exclusiveGstAmount * ($gstPercent / 100), 2);
                 $lineTotal = round($exclusiveGstAmount + $gstAmount, 2);
@@ -1625,6 +1659,7 @@ class PurchaseController extends Controller
                     'unit' => $unit,
                     'price' => $price,
                     'item_discount' => $discAmount,
+                    'scheme_discount' => $itemSchemeDiscount,
                     'gst_percent' => $gstPercent,
                     'gst_amount' => $gstAmount,
                     'exclusive_gst_amount' => $exclusiveGstAmount,
@@ -1649,9 +1684,19 @@ class PurchaseController extends Controller
             }
 
             // Totals calculation
-            $discount = (float) ($request->discount ?? 0);
-            $extraCost = (float) ($request->extra_cost ?? 0);
-            $netAmount = ($subtotal - $discount) + $extraCost;
+            $postedDiscount = (float) ($request->discount ?? 0);
+            $orderDiscount = 0;
+            if ($request->has('discount_amt') && is_numeric($request->discount_amt)) {
+                $orderDiscount = max(0, (float) $request->discount_amt);
+            } elseif ($postedDiscount > $totalItemDiscountUpdate) {
+                $orderDiscount = $postedDiscount - $totalItemDiscountUpdate;
+            }
+
+            $overallSchemeDiscount = (float) ($request->scheme_discount ?? 0);
+            $extraCost = (float) ($request->extra_cost ?? $request->freight ?? 0);
+
+            // $subtotal is ALREADY net of item discounts and inline scheme discounts
+            $netAmount = max(0, ($subtotal - $orderDiscount - $overallSchemeDiscount) + $extraCost);
 
             // Payments calculation from request
             $paymentAccountIds = $request->input('payment_account_id', []);
@@ -1685,8 +1730,8 @@ class PurchaseController extends Controller
                 'subtotal' => $subtotal,
                 'total_exclusive_gst' => $totalExclusiveGst,
                 'total_gst' => $totalGst,
-                'discount' => $discount,
-                'additional_discount' => $discount,
+                'discount' => $totalItemDiscountUpdate + $orderDiscount,
+                'additional_discount' => $overallSchemeDiscount + $orderDiscount,
                 'extra_cost' => $extraCost,
                 'net_amount' => $netAmount,
                 'paid_amount' => $newPaidAmount,
@@ -1875,51 +1920,209 @@ class PurchaseController extends Controller
         return redirect()->route('Purchase.home')->with('success', "Purchase Invoice{$invNo} updated successfully!");
     }
 
-    public function destroy($id)
+    public function destroy($id, Request $request = null)
     {
-        DB::transaction(function () use ($id) {
-            $purchase = Purchase::with('items')->findOrFail($id);
-            $oldNetAmount = $purchase->net_amount;
+        $request = $request ?: request();
 
+        if (!auth()->user()->can('purchases.delete')) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized! You do not have permission to delete purchases (permission:purchases.delete).'
+                ], 403);
+            }
+            return redirect()->back()->with('error', 'Unauthorized! You do not have permission to delete purchases.');
+        }
+
+        $purchase = Purchase::with(['items', 'returns'])->findOrFail($id);
+        $invNo = $purchase->invoice_no ?: ('#' . $purchase->id);
+
+        // 1. Check for linked Purchase Returns
+        $hasReturns = \App\Models\PurchaseReturn::where('purchase_id', $purchase->id)->exists()
+            || ($purchase->returns && $purchase->returns->count() > 0);
+        if ($hasReturns) {
+            $msg = "Cannot delete purchase invoice {$invNo} because it has linked Purchase Return(s). Please remove or reverse the return(s) first.";
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+            return redirect()->back()->with('error', $msg);
+        }
+
+        // 2. Check if product serials have already been sold or used
+        foreach ($purchase->items as $it) {
+            $serialsList = is_array($it->serials) ? $it->serials : (is_string($it->serials) ? json_decode($it->serials, true) : []);
+            if (is_array($serialsList) && count($serialsList) > 0) {
+                $soldCount = \App\Models\ProductSerial::where('product_id', $it->product_id)
+                    ->whereIn('serial_number', $serialsList)
+                    ->where('status', '!=', 'available')
+                    ->count();
+                if ($soldCount > 0) {
+                    $msg = "Cannot delete purchase invoice {$invNo}: Some product serials/IMEIs from this purchase have already been sold or used.";
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+                    return redirect()->back()->with('error', $msg);
+                }
+            }
+        }
+
+        DB::beginTransaction();
+        try {
             $branchId = (int) ($purchase->branch_id ?? 1);
             $warehouseId = (int) ($purchase->warehouse_id);
 
-            // linked to gatepass? then NO stock changes
+            // linked to gatepass? then NO stock changes (inward gatepass manages it)
             $isLinkedToGatepass = \App\Models\InwardGatepass::where('purchase_id', $purchase->id)->exists();
 
-            if (! $isLinkedToGatepass) {
-                $movs = [];
-                $now = now();
-
+            // 3. Rollback stock if purchase was approved/received and not linked to gatepass
+            if (! $isLinkedToGatepass && $purchase->status_purchase !== 'draft') {
                 foreach ($purchase->items as $it) {
                     $pid = (int) $it->product_id;
-                    $qty = (float) $it->qty;
+                    $itemWarehouseId = (int) ($it->warehouse_id ?: $warehouseId);
 
-                    $movs[] = [
-                        'product_id' => $pid,
-                        'type' => 'out',
-                        'qty' => $qty,
-                        'ref_type' => 'PURCHASE_DELETE',
-                        'ref_id' => $purchase->id,
-                        'note' => 'Delete purchase (reverse)',
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ];
+                    // Determine conversion factor and unit
+                    $convFactor = 1;
+                    $unit = strtolower(trim($it->unit ?? ''));
+                    if (!empty($it->color)) {
+                        $itemColor = $it->color;
+                        $b64Decoded = base64_decode($itemColor, true);
+                        $json = $b64Decoded !== false ? json_decode($b64Decoded, true) : null;
+                        if (!is_array($json)) {
+                            $json = json_decode($itemColor, true);
+                        }
+                        if (is_array($json)) {
+                            if (isset($json['conv_factor']) && (float)$json['conv_factor'] > 0) {
+                                $convFactor = (float) $json['conv_factor'];
+                            }
+                            if (empty($unit) && isset($json['unit'])) {
+                                $unit = strtolower(trim($json['unit']));
+                            }
+                        }
+                    }
 
-                    // stocks rollback
-                    $this->upsertStocks($pid, -$qty, $branchId, $warehouseId);
+                    $ppb = (float) ($it->pieces_per_box > 0 ? $it->pieces_per_box : ($it->product->pieces_per_box ?? 1));
+                    if ($ppb <= 0) $ppb = 1;
+
+                    $isPiece = in_array($unit, ['pcs', 'pc', 'piece']);
+                    $isCarton = in_array($unit, ['carton', 'ctn', 'box', 'bandal', 'bundal', 'bndl']) || (!$isPiece && in_array($it->size_mode, ['by_cartons', 'by_bandal']));
+
+                    if ($unit === 'gm' || $unit === 'g' || $unit === 'gram' || $unit === 'grams') {
+                        $baseQty = ((float) $it->qty) / 1000.0;
+                    } elseif ($isPiece) {
+                        $baseQty = (float) $it->qty;
+                    } elseif ($isCarton) {
+                        if ($it->boxes_qty > 0 || $it->loose_qty > 0) {
+                            $boxes = (int) $it->boxes_qty;
+                            $loose = (int) $it->loose_qty;
+                        } else {
+                            [$boxes, $loose] = self::parseCartonQty($it->qty);
+                        }
+                        $baseQty = ($boxes * $ppb) + $loose;
+                    } else {
+                        $baseQty = ((float) $it->qty) * $convFactor;
+                    }
+
+                    // Rollback warehouse stock
+                    $this->upsertStocks($pid, -$baseQty, $branchId, $itemWarehouseId);
+
+                    // Rollback batch qty if tracked
+                    if (!empty($it->batch_id)) {
+                        $batch = \App\Models\ProductBatch::find($it->batch_id);
+                        if ($batch) {
+                            $batch->decrement('qty', min($batch->qty, $baseQty));
+                        }
+                    }
+
+                    // Rollback product serials
+                    $serialsList = is_array($it->serials) ? $it->serials : (is_string($it->serials) ? json_decode($it->serials, true) : []);
+                    if (is_array($serialsList) && count($serialsList) > 0) {
+                        \App\Models\ProductSerial::where('product_id', $pid)
+                            ->whereIn('serial_number', $serialsList)
+                            ->where('status', 'available')
+                            ->delete();
+                    }
                 }
 
-                if (! empty($movs)) {
-                    DB::table('stock_movements')->insert($movs);
-                }
+                // Remove stock movements for this purchase
+                DB::table('stock_movements')
+                    ->where('ref_id', $purchase->id)
+                    ->where(function ($q) {
+                        $q->where('ref_type', 'purchase')
+                          ->orWhere('ref_type', 'PURCHASE_DELETE');
+                    })
+                    ->delete();
             }
 
+            // Unlink any inward gatepass
+            if ($isLinkedToGatepass) {
+                \App\Models\InwardGatepass::where('purchase_id', $purchase->id)
+                    ->update(['purchase_id' => null, 'status' => 'pending']);
+            }
+
+            // 4. Reverse Journal Entries & Vouchers
+            $journalService = app(\App\Services\JournalEntryService::class);
+
+            // Reverse direct journal entries linked to Purchase model
+            $directEntries = \App\Models\JournalEntry::where('source_type', get_class($purchase))
+                ->where('source_id', $purchase->id)
+                ->get();
+            foreach ($directEntries as $dEntry) {
+                $journalService->updateAccountBalance($dEntry->account_id, $dEntry->credit, $dEntry->debit);
+                $dEntry->delete();
+            }
+
+            // Vouchers related to this purchase (Purchase Voucher & Auto-Payment Voucher)
+            $vouchers = \App\Models\VoucherMaster::where(function ($q) use ($purchase) {
+                $q->where('remarks', 'like', "%#{$purchase->invoice_no}%")
+                  ->orWhere('remarks', 'like', "%Purchase #{$purchase->id}%");
+            })->get();
+
+            foreach ($vouchers as $voucher) {
+                $journalService->reverseEntriesForSource($voucher);
+                \App\Models\VoucherDetail::where('voucher_master_id', $voucher->id)->delete();
+                $voucher->delete();
+            }
+
+            // 5. Adjust Vendor Ledger closing balance
+            if ($purchase->vendor_id && $purchase->status_purchase !== 'draft') {
+                $prevClosing = \App\Models\VendorLedger::where('vendor_id', $purchase->vendor_id)
+                    ->value('closing_balance') ?? 0;
+                \App\Models\VendorLedger::where('vendor_id', $purchase->vendor_id)->update([
+                    'closing_balance' => max(0, $prevClosing - (float)$purchase->net_amount)
+                ]);
+            }
+
+            // 6. Delete purchase items and soft delete purchase
             $purchase->items()->delete();
             $purchase->delete();
-        });
 
-        return redirect()->back()->with('success', 'Purchase deleted successfully.');
+            DB::commit();
+
+            $successMsg = "Purchase invoice {$invNo} has been deleted successfully. Stock, ledger, and accounting entries have been safely reversed.";
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $successMsg
+                ]);
+            }
+
+            return redirect()->back()->with('success', $successMsg);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error("Failed to delete purchase {$invNo}: " . $e->getMessage(), [
+                'purchase_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            $errMsg = "Failed to delete purchase {$invNo}: " . $e->getMessage();
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 500);
+            }
+
+            return redirect()->back()->with('error', $errMsg);
+        }
     }
 
     public function Invoice($id)

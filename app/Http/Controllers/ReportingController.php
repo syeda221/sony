@@ -254,7 +254,23 @@ class ReportingController extends Controller
                 }
 
                 if ($vBatchStock !== null) {
-                    $balance = max(0, $vBatchStock);
+                    if (count($parsedVariants) <= 1) {
+                        // Respect physical warehouse stock if it exceeds batch stock (e.g. unbatched purchases or returns)
+                        $balance = max(0, max($whPieces, $vBatchStock));
+                    } else {
+                        $totalAllBatches = (float) \App\Models\ProductBatch::where('product_id', $product->id)
+                            ->when($warehouseId && $warehouseId !== 'all', fn($q) => $q->where('warehouse_id', $warehouseId))
+                            ->sum('qty');
+                        if ($whPieces > $totalAllBatches && $totalAllBatches > 0) {
+                            $unallocated = $whPieces - $totalAllBatches;
+                            $vRatio = $totalAllBatches > 0 ? ($vBatchStock / $totalAllBatches) : (1 / count($parsedVariants));
+                            $balance = max(0, round($vBatchStock + ($unallocated * $vRatio), 2));
+                        } elseif ($whPieces > $totalAllBatches && $totalAllBatches == 0) {
+                            $balance = max(0, round($whPieces / count($parsedVariants), 2));
+                        } else {
+                            $balance = max(0, $vBatchStock);
+                        }
+                    }
                 } elseif (count($parsedVariants) === 1) {
                     $balance = max(0, $whPieces);
                 } else {
@@ -808,7 +824,23 @@ class ReportingController extends Controller
                         }
 
                         if ($vBatchStock !== null) {
-                            $balance = max(0, $vBatchStock);
+                            if (count($parsedVariants) <= 1) {
+                                // Respect physical warehouse stock if it exceeds batch stock (e.g. unbatched purchases or returns)
+                                $balance = max(0, max($whPieces, $vBatchStock));
+                            } else {
+                                $totalAllBatches = (float) \App\Models\ProductBatch::where('product_id', $product->id)
+                                    ->when($warehouseId && $warehouseId !== 'all', fn($q) => $q->where('warehouse_id', $warehouseId))
+                                    ->sum('qty');
+                                if ($whPieces > $totalAllBatches && $totalAllBatches > 0) {
+                                    $unallocated = $whPieces - $totalAllBatches;
+                                    $vRatio = $totalAllBatches > 0 ? ($vBatchStock / $totalAllBatches) : (1 / count($parsedVariants));
+                                    $balance = max(0, round($vBatchStock + ($unallocated * $vRatio), 2));
+                                } elseif ($whPieces > $totalAllBatches && $totalAllBatches == 0) {
+                                    $balance = max(0, round($whPieces / count($parsedVariants), 2));
+                                } else {
+                                    $balance = max(0, $vBatchStock);
+                                }
+                            }
                         } elseif (count($parsedVariants) === 1) {
                             $balance = max(0, $whPieces);
                         } else {

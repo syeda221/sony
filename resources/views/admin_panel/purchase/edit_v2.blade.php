@@ -422,7 +422,7 @@
                         </div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold mb-1 text-muted small">Date</label>
-                            <input type="text" name="purchase_date" class="form-control datepicker-custom" value="{{ date('Y-m-d') }}">
+                            <input type="text" name="purchase_date" class="form-control datepicker-custom" value="{{ isset($purchase) && $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : date('Y-m-d') }}">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold mb-1 text-muted small">M.Bill / Remarks</label>
@@ -547,6 +547,13 @@
                                     <input type="hidden" name="discount" id="discountInput" value="0">
                                 </div>
                             </div>
+                                <div class="row py-1 align-items-center">
+                                    <div class="col-7 text-muted fw-medium">Scheme Discount (Rs)</div>
+                                    <div class="col-5 text-end">
+                                        <input type="number" class="form-control text-end form-control-sm"
+                                            name="scheme_discount" id="schemeDiscount" value="{{ isset($purchase) ? (float)($purchase->additional_discount ?? 0) : 0 }}" step="0.01">
+                                    </div>
+                                </div>
                                 <div class="row py-1 align-items-center">
                                     <div class="col-7 text-muted fw-medium">Extra Cost</div>
                                     <div class="col-5 text-end">
@@ -721,7 +728,7 @@
             });
 
             // Summary Inputs
-            $('#billDiscount, #billDiscountPct, #extraCost').on('input', function() {
+            $('#billDiscount, #billDiscountPct, #schemeDiscount, #extraCost').on('input', function() {
                 recalcAll();
             });
 
@@ -1304,7 +1311,8 @@
                 $('#discountInput').val(additionalDiscount.toFixed(2));
 
                 const extraCost = parseFloat($('#extraCost').val()) || 0;
-                const net = subtotal - additionalDiscount + extraCost;
+                const schemeDiscount = parseFloat($('#schemeDiscount').val()) || 0;
+                const net = Math.max(0, subtotal - additionalDiscount - schemeDiscount + extraCost);
 
                 $('#tPayable').text(net.toFixed(2));
                 $('#netAmountInput').val(net.toFixed(2));
