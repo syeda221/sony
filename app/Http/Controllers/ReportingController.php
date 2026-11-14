@@ -1457,6 +1457,7 @@ class ReportingController extends Controller
         $productStats = [];
         $totalGrossProfit = 0;
         $avgPriceMap = [];
+        $variantPriceMap = [];
 
         foreach ($products as $product) {
             // Determine default purchase price per piece
@@ -1469,18 +1470,34 @@ class ReportingController extends Controller
                 $productPurchPrice = (float) ($product->purchase_price_per_piece ?? 0);
             }
 
-            // Calculate overall product average price (for fallback)
-            $initial = (float) DB::table('stock_movements')
-                ->where('product_id', $product->id)
-                ->whereIn('ref_type', ['INIT', 'OPENING_STOCK'])
-                ->sum('qty');
+            // Dynamic Purchase Cost Calculation:
+            // 1. Check actual purchases within the selected date range
+            [$periodPurchasedQty, $periodPurchasedAmount] = $this->getPurchasedQtyAndNetAmount($product->id, [
+                'from' => $start,
+                'to'   => $end
+            ]);
 
-            [$purchased, $purchaseAmount] = $this->getPurchasedQtyAndNetAmount($product->id);
+            if ($periodPurchasedQty > 0) {
+                $averagePrice = $periodPurchasedAmount / $periodPurchasedQty;
+            } else {
+                // 2. If no purchases in selected range, look at prior purchases up to $end
+                [$priorPurchasedQty, $priorPurchasedAmount] = $this->getPurchasedQtyAndNetAmount($product->id, [
+                    'before' => $end
+                ]);
 
-            $initialAmount = $initial * $productPurchPrice;
-            $totalQtyIn = $initial + $purchased;
-            $totalAmountIn = $initialAmount + $purchaseAmount;
-            $averagePrice = $totalQtyIn > 0 ? ($totalAmountIn / $totalQtyIn) : $productPurchPrice;
+                if ($priorPurchasedQty > 0) {
+                    $averagePrice = $priorPurchasedAmount / $priorPurchasedQty;
+                } else {
+                    // 3. Check all-time purchases
+                    [$allPurchasedQty, $allPurchasedAmount] = $this->getPurchasedQtyAndNetAmount($product->id);
+                    if ($allPurchasedQty > 0) {
+                        $averagePrice = $allPurchasedAmount / $allPurchasedQty;
+                    } else {
+                        // 4. Fallback to product default purchase price
+                        $averagePrice = $productPurchPrice;
+                    }
+                }
+            }
             $avgPriceMap[$product->id] = $averagePrice;
 
             // Check if product has variants
@@ -1495,6 +1512,28 @@ class ReportingController extends Controller
             }
 
             if (count($parsedVariants) > 0) {
+                // Pre-fetch purchases for this product to match variants in period
+                $periodPurchQuery = DB::table('purchase_items')
+                    ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+                    ->where('purchase_items.product_id', $product->id)
+                    ->whereIn('purchases.status_purchase', ['approved', 'posted', 'Returned', 'Partial']);
+
+                if ($start && $end) {
+                    $fromStr = substr($start, 0, 10);
+                    $toStr = substr($end, 0, 10);
+                    $periodPurchQuery->whereRaw("COALESCE(purchases.purchase_date, DATE(purchases.created_at)) >= ?", [$fromStr])
+                                     ->whereRaw("COALESCE(purchases.purchase_date, DATE(purchases.created_at)) <= ?", [$toStr]);
+                }
+                $periodPurchItems = $periodPurchQuery->select(
+                    'purchase_items.qty',
+                    'purchase_items.unit',
+                    'purchase_items.pieces_per_box',
+                    'purchase_items.line_total',
+                    'purchase_items.color',
+                    'purchases.subtotal as p_subtotal',
+                    'purchases.net_amount as p_net_amount'
+                )->get();
+
                 // Fetch all sales and returns for this product to distribute
                 $saleQuery = DB::table('sale_items')
                     ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
@@ -1648,7 +1687,47 @@ class ReportingController extends Controller
                         }
                     }
 
-                    $vAveragePrice = (float) ($v['purch_price'] ?? $productPurchPrice);
+                    // Calculate variant purchase average price
+                    $vPurchQty = 0;
+                    $vPurchAmount = 0;
+                    foreach ($periodPurchItems as $pItem) {
+                        if ($this->matchSaleItemToVariant($pItem, $v)) {
+                            $u = strtolower(trim($pItem->unit ?? ''));
+                            $ppbP = (float) ($pItem->pieces_per_box ?? 1);
+                            if ($ppbP <= 0) $ppbP = 1;
+                            $pPieces = in_array($u, ['carton', 'ctn', 'box', 'bandal', 'bundal', 'bndl'])
+                                ? ((float) $pItem->qty * $ppbP)
+                                : (in_array($u, ['gm', 'g']) ? ((float) $pItem->qty / 1000.0) : (float) $pItem->qty);
+
+                            $pNet = (float) $pItem->line_total;
+                            if ((float) $pItem->p_subtotal > 0) {
+                                $pNet = $pNet / (float) $pItem->p_subtotal * (float) $pItem->p_net_amount;
+                            }
+                            $vPurchQty += $pPieces;
+                            $vPurchAmount += $pNet;
+                        }
+                    }
+
+                    if ($vPurchQty > 0) {
+                        $vAveragePrice = $vPurchAmount / $vPurchQty;
+                    } elseif ($averagePrice > 0 && ($periodPurchasedQty > 0 || $averagePrice != $productPurchPrice)) {
+                        $vAveragePrice = $averagePrice;
+                    } else {
+                        $variantMasterPrice = (float) ($v['purch_price'] ?? 0);
+                        if ($variantMasterPrice > 0) {
+                            $vAveragePrice = $variantMasterPrice;
+                        } else {
+                            $vAveragePrice = $averagePrice;
+                        }
+                    }
+
+                    // Store for customer profit calculation
+                    $vColorKey = strtolower(trim($v['color'] ?? '-'));
+                    $vSizeKey = strtolower(trim($v['size'] ?? '-'));
+                    if ($vColorKey === '') $vColorKey = '-';
+                    if ($vSizeKey === '') $vSizeKey = '-';
+                    $variantPriceMap[$product->id][$vColorKey . '_' . $vSizeKey] = $vAveragePrice;
+
                     $netSoldAmount = $soldAmount - $returnedAmount;
                     $netQtyPieces = $soldQtyPieces - $returnedQtyPieces;
                     $costOfGoodsSold = $netQtyPieces * $vAveragePrice;
@@ -2020,17 +2099,22 @@ class ReportingController extends Controller
                             if ($vColor === '') $vColor = '-';
                             if ($vSize === '') $vSize = '-';
 
-                            $decoded = json_decode($product->color, true);
-                            if (is_array($decoded)) {
-                                foreach ($decoded as $v) {
-                                    $vC = strtolower(trim($v['color'] ?? '-'));
-                                    $vS = strtolower(trim($v['size'] ?? '-'));
-                                    if ($vC === '') $vC = '-';
-                                    if ($vS === '') $vS = '-';
+                            $vKey = $vColor . '_' . $vSize;
+                            if (isset($variantPriceMap[$item->product_id][$vKey])) {
+                                $avgPrice = (float) $variantPriceMap[$item->product_id][$vKey];
+                            } else {
+                                $decoded = json_decode($product->color, true);
+                                if (is_array($decoded)) {
+                                    foreach ($decoded as $v) {
+                                        $vC = strtolower(trim($v['color'] ?? '-'));
+                                        $vS = strtolower(trim($v['size'] ?? '-'));
+                                        if ($vC === '') $vC = '-';
+                                        if ($vS === '') $vS = '-';
 
-                                    if ($vC === $vColor && $vS === $vSize) {
-                                        $avgPrice = (float) ($v['purch_price'] ?? 0);
-                                        break;
+                                        if ($vC === $vColor && $vS === $vSize) {
+                                            $avgPrice = (float) ($v['purch_price'] ?? 0);
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -3827,14 +3911,17 @@ class ReportingController extends Controller
         }
 
         if (is_array($dateFilter) && !empty($dateFilter)) {
-            if (isset($dateFilter['before'])) {
-                $query->where('purchases.purchase_date', '<=', $dateFilter['before']);
+            if (isset($dateFilter['before']) && !empty($dateFilter['before'])) {
+                $before = substr($dateFilter['before'], 0, 10);
+                $query->whereRaw("COALESCE(purchases.purchase_date, DATE(purchases.created_at)) <= ?", [$before]);
             }
             if (isset($dateFilter['from']) && !empty($dateFilter['from'])) {
-                $query->whereDate('purchases.created_at', '>=', $dateFilter['from']);
+                $from = substr($dateFilter['from'], 0, 10);
+                $query->whereRaw("COALESCE(purchases.purchase_date, DATE(purchases.created_at)) >= ?", [$from]);
             }
             if (isset($dateFilter['to']) && !empty($dateFilter['to'])) {
-                $query->whereDate('purchases.created_at', '<=', $dateFilter['to']);
+                $to = substr($dateFilter['to'], 0, 10);
+                $query->whereRaw("COALESCE(purchases.purchase_date, DATE(purchases.created_at)) <= ?", [$to]);
             }
         }
 

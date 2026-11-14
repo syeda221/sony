@@ -307,6 +307,7 @@ class HomeController extends Controller
                     ->whereBetween('sales.created_at', [$startDtStr, $endDtStr])
                     ->whereNotIn('sales.sale_status', ['cancelled', 'returned'])
                     ->select(
+                        'sale_items.product_id',
                         'sale_items.price',
                         'sale_items.color',
                         'sale_items.total_pieces',
@@ -321,6 +322,45 @@ class HomeController extends Controller
                         'products.purchase_price_per_piece'
                     )->get();
 
+                $dashProductIds = $saleItemsQuery->pluck('product_id')->filter()->unique()->toArray();
+                $dashAvgMap = [];
+                if (!empty($dashProductIds)) {
+                    $fromStr = substr($startDtStr, 0, 10);
+                    $toStr = substr($endDtStr, 0, 10);
+                    $dashPurchQuery = DB::table('purchase_items')
+                        ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+                        ->whereIn('purchase_items.product_id', $dashProductIds)
+                        ->whereIn('purchases.status_purchase', ['approved', 'posted', 'Returned', 'Partial'])
+                        ->whereRaw("COALESCE(purchases.purchase_date, DATE(purchases.created_at)) >= ?", [$fromStr])
+                        ->whereRaw("COALESCE(purchases.purchase_date, DATE(purchases.created_at)) <= ?", [$toStr]);
+
+                    $dashPurchItems = $dashPurchQuery->select(
+                        'purchase_items.product_id',
+                        DB::raw("COALESCE(SUM(
+                            CASE
+                                WHEN LOWER(purchase_items.unit) IN ('carton', 'ctn', 'box', 'bandal', 'bundal', 'bndl')
+                                THEN purchase_items.qty * COALESCE(NULLIF(purchase_items.pieces_per_box, 0), 1)
+                                WHEN LOWER(purchase_items.unit) IN ('gm', 'g')
+                                THEN purchase_items.qty / 1000.0
+                                ELSE purchase_items.qty
+                            END
+                        ), 0) as total_qty"),
+                        DB::raw("COALESCE(SUM(
+                            CASE
+                                WHEN COALESCE(purchases.subtotal, 0) > 0
+                                THEN purchase_items.line_total / purchases.subtotal * purchases.net_amount
+                                ELSE purchase_items.line_total
+                            END
+                        ), 0) as total_net_amount")
+                    )->groupBy('purchase_items.product_id')->get();
+
+                    foreach ($dashPurchItems as $dpi) {
+                        if ((float)$dpi->total_qty > 0) {
+                            $dashAvgMap[$dpi->product_id] = (float)$dpi->total_net_amount / (float)$dpi->total_qty;
+                        }
+                    }
+                }
+
                 $totRev = 0;
                 $totCost = 0;
                 foreach ($saleItemsQuery as $si) {
@@ -328,19 +368,21 @@ class HomeController extends Controller
                     if ($si->is_manual) {
                         $purchPrice = (float) $si->manual_purchase_price;
                     } else {
-                        $purchPrice = 0;
-                        if (!empty($si->color)) {
-                            $decoded = base64_decode($si->color, true);
-                            $json = $decoded ? json_decode($decoded, true) : json_decode($si->color, true);
-                            if (is_array($json)) {
-                                $purchPrice = (float)($json['purch_price'] ?? 0);
-                            }
-                        }
+                        $purchPrice = $dashAvgMap[$si->product_id] ?? 0;
                         if ($purchPrice <= 0) {
-                            if ($si->size_mode === 'by_size') {
-                                $purchPrice = (float)($si->pieces_per_m2 ?? 0) * (float)($si->purchase_price_per_m2 ?? 0);
-                            } else {
-                                $purchPrice = (float)($si->purchase_price_per_piece ?? 0);
+                            if (!empty($si->color)) {
+                                $decoded = base64_decode($si->color, true);
+                                $json = $decoded ? json_decode($decoded, true) : json_decode($si->color, true);
+                                if (is_array($json)) {
+                                    $purchPrice = (float)($json['purch_price'] ?? 0);
+                                }
+                            }
+                            if ($purchPrice <= 0) {
+                                if ($si->size_mode === 'by_size') {
+                                    $purchPrice = (float)($si->pieces_per_m2 ?? 0) * (float)($si->purchase_price_per_m2 ?? 0);
+                                } else {
+                                    $purchPrice = (float)($si->purchase_price_per_piece ?? 0);
+                                }
                             }
                         }
                     }
@@ -361,6 +403,7 @@ class HomeController extends Controller
                     ->leftJoin('products', 'products.id', '=', 'sale_return_items.product_id')
                     ->whereBetween('sale_returns.created_at', [$startDtStr, $endDtStr])
                     ->select(
+                        'sale_return_items.product_id',
                         'sale_return_items.qty',
                         'sale_return_items.line_total',
                         'sale_return_items.color',
@@ -377,19 +420,21 @@ class HomeController extends Controller
                     if ($sr->is_manual) {
                         $purchPrice = (float) $sr->manual_purchase_price;
                     } else {
-                        $purchPrice = 0;
-                        if (!empty($sr->color)) {
-                            $decoded = base64_decode($sr->color, true);
-                            $json = $decoded ? json_decode($decoded, true) : json_decode($sr->color, true);
-                            if (is_array($json)) {
-                                $purchPrice = (float)($json['purch_price'] ?? 0);
-                            }
-                        }
+                        $purchPrice = $dashAvgMap[$sr->product_id] ?? 0;
                         if ($purchPrice <= 0) {
-                            if ($sr->size_mode === 'by_size') {
-                                $purchPrice = (float)($sr->pieces_per_m2 ?? 0) * (float)($sr->purchase_price_per_m2 ?? 0);
-                            } else {
-                                $purchPrice = (float)($sr->purchase_price_per_piece ?? 0);
+                            if (!empty($sr->color)) {
+                                $decoded = base64_decode($sr->color, true);
+                                $json = $decoded ? json_decode($decoded, true) : json_decode($sr->color, true);
+                                if (is_array($json)) {
+                                    $purchPrice = (float)($json['purch_price'] ?? 0);
+                                }
+                            }
+                            if ($purchPrice <= 0) {
+                                if ($sr->size_mode === 'by_size') {
+                                    $purchPrice = (float)($sr->pieces_per_m2 ?? 0) * (float)($sr->purchase_price_per_m2 ?? 0);
+                                } else {
+                                    $purchPrice = (float)($sr->purchase_price_per_piece ?? 0);
+                                }
                             }
                         }
                     }

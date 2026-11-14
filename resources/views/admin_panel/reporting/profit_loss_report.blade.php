@@ -507,7 +507,7 @@ $(document).ready(function() {
                 sold_qty: '<span class="fw-bold text-dark">' + r.sold_qty + '</span>',
                 returned_qty: '<span class="text-danger fw-bold">' + (r.returned_qty || 0) + '</span>',
                 revenue: 'Rs ' + fmt(r.revenue),
-                cogs: 'Rs ' + fmt(r.cogs),
+                cogs: '<div class="fw-bold text-dark">Rs ' + fmt(r.cogs) + '</div><div class="text-muted" style="font-size:10px;">@ Rs ' + (parseFloat(r.avg_cost) || 0).toFixed(2) + '/pc</div>',
                 profit: '<span style="color:' + profitColor + '; font-weight:700;">Rs ' + fmt(r.profit) + '</span>'
             });
 
@@ -533,7 +533,7 @@ $(document).ready(function() {
                             <div class="col-3 border-end"><span class="text-muted d-block">Qty</span><strong>${r.sold_qty}</strong></div>
                             <div class="col-3 border-end"><span class="text-muted d-block">Ret</span><strong class="text-danger">${r.returned_qty||0}</strong></div>
                             <div class="col-3 border-end"><span class="text-muted d-block">Revenue</span><strong>Rs ${fmt(r.revenue)}</strong></div>
-                            <div class="col-3"><span class="text-muted d-block">COGS</span><strong>Rs ${fmt(r.cogs)}</strong></div>
+                            <div class="col-3"><span class="text-muted d-block">COGS</span><strong>Rs ${fmt(r.cogs)}</strong><span class="text-muted d-block" style="font-size:9.5px;">@Rs ${(parseFloat(r.avg_cost)||0).toFixed(1)}</span></div>
                         </div>
                     </div>
                 </div>`;
