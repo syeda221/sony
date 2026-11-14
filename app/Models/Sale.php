@@ -67,6 +67,16 @@ class Sale extends Model
         return $this->hasMany(SaleReturn::class, 'sale_id');
     }
 
+    public function installmentPlan()
+    {
+        return $this->hasOne(SaleInstallmentPlan::class, 'sale_id');
+    }
+
+    public function installments()
+    {
+        return $this->hasMany(SaleInstallment::class, 'sale_id')->orderBy('installment_no', 'asc');
+    }
+
     protected static function boot()
     {
         parent::boot();

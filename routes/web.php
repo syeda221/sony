@@ -434,6 +434,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/{id}/recepit', [SaleController::class, 'salereceipt'])->middleware('permission:sales.view')->name('sales.receipt');
     Route::get('/sales/{id}/details-modal', [SaleController::class, 'getSaleDetailsModal'])->middleware('permission:sales.view')->name('sales.details_modal');
 
+    // Installment Management Routes
+    Route::middleware(['permission:sales.view'])->group(function () {
+        Route::get('installments', [App\Http\Controllers\InstallmentController::class, 'index'])->name('installments.index');
+        Route::get('installments/monthly-report', [App\Http\Controllers\InstallmentController::class, 'monthlyReport'])->name('installments.monthly_report');
+        Route::get('installments/alerts/due', [App\Http\Controllers\InstallmentController::class, 'getDueAlerts'])->name('installments.due_alerts');
+        Route::get('installments/{id}', [App\Http\Controllers\InstallmentController::class, 'show'])->name('installments.show');
+        Route::post('installments/{installmentId}/collect', [App\Http\Controllers\InstallmentController::class, 'collectPayment'])->name('installments.collect_payment');
+        Route::post('installments/preview-schedule', [App\Http\Controllers\InstallmentController::class, 'previewSchedule'])->name('installments.preview_schedule');
+    });
+
     // booking system
 
     Route::get('bookings', [ProductBookingController::class, 'index'])->middleware('permission:bookings.view')->name('bookings.index');

@@ -1919,6 +1919,38 @@
                             </td>
                         </tr>
 
+                        {{-- Installment / Payment Summary Rows --}}
+                        @if ($sale->installmentPlan)
+                            <tr style="border-top: 1.5px solid #a855f7;">
+                                <td class="lbl text-success fw-bold">Advance Paid / Received</td>
+                                <td class="val text-success font-monospace fw-bold">- Rs. {{ number_format($sale->installmentPlan->advance_amount, 2) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="lbl fw-bold" style="color: #7e22ce;">Remaining (Financed)</td>
+                                <td class="val fw-bold font-monospace" style="color: #7e22ce;">Rs. {{ number_format($sale->installmentPlan->financed_amount, 2) }}</td>
+                            </tr>
+                            <tr style="background: #faf5ff;">
+                                <td class="lbl" style="color: #6b21a8; font-size: 11px;">Monthly Installment</td>
+                                <td class="val font-monospace" style="color: #6b21a8; font-weight: 700; font-size: 11px;">
+                                    Rs. {{ number_format($sale->installmentPlan->monthly_installment, 2) }} / Mo ({{ $sale->installmentPlan->duration_months }} Mos)
+                                </td>
+                            </tr>
+                        @elseif ($paidAmount > 0)
+                            <tr>
+                                <td class="lbl text-success">Paid / Received</td>
+                                <td class="val text-success font-monospace">- Rs. {{ number_format($paidAmount, 2) }}</td>
+                            </tr>
+                            @php
+                                $billBalanceDue = max(0, $finalPayable - $paidAmount);
+                            @endphp
+                            @if ((!$showCustomerBalance || empty($sale->customer_id)) && $billBalanceDue > 0)
+                                <tr style="border-top: 1px solid #cbd5e1;">
+                                    <td class="lbl fw-bold text-danger">Balance Due</td>
+                                    <td class="val fw-bold font-monospace text-danger">Rs. {{ number_format($billBalanceDue, 2) }}</td>
+                                </tr>
+                            @endif
+                        @endif
+
                         @if ($showCustomerBalance && !empty($sale->customer_id))
                             @php
                                 $prevBal = (float)($previousBalance ?? 0);

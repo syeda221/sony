@@ -6,24 +6,19 @@ $kernel->bootstrap();
 
 auth()->login(App\Models\User::first());
 
-try {
-    $instController = app(App\Http\Controllers\InstallmentController::class);
-    
-    // 1. Test installments.index
-    $indexView = $instController->index(new \Illuminate\Http\Request());
-    $indexHtml = $indexView->render();
-    echo "1. Installments Index Render: OK (Bytes: " . strlen($indexHtml) . ")\n";
-    if (strpos($indexHtml, 'New Installment Sale') !== false) {
-        echo "   - 'New Installment Sale' button present: YES\n";
+$sc = app(App\Http\Controllers\SaleController::class);
+$editView = $sc->saleedit(10);
+$html = $editView->render();
+
+echo "Rendered Sale 10 Edit View: " . strlen($html) . " bytes\n";
+
+// Check if ubl input has 250
+if (preg_match('/name="receipt_amount\[\]"[^>]*value="250(\.00)?"/i', $html, $m)) {
+    echo "SUCCESS: Found receipt_amount with value 250!\n";
+} else {
+    echo "WARNING: Could not find receipt_amount with value 250 in HTML.\n";
+    // Search around ubl
+    if (preg_match('/ubl.*?name="receipt_amount\[\]"[^>]*value="([^"]*)"/is', $html, $m2)) {
+        echo "Found around ubl: value = '" . $m2[1] . "'\n";
     }
-
-    // 2. Test installments.monthly_report
-    $reportView = $instController->monthlyReport(new \Illuminate\Http\Request());
-    $reportHtml = $reportView->render();
-    echo "2. Monthly Report Render: OK (Bytes: " . strlen($reportHtml) . ")\n";
-
-    echo "\n=== BOTH INSTALLMENT PAGES RENDER WITH ZERO ERRORS ===\n";
-
-} catch (\Throwable $e) {
-    echo "ERROR: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n";
 }

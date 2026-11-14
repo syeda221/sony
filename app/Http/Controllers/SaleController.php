@@ -8,6 +8,8 @@ use App\Models\CustomerLedger;
 use App\Models\Product;
 use App\Models\ProductBooking;
 use App\Models\Sale;
+use App\Models\SaleInstallment;
+use App\Models\SaleInstallmentPlan;
 use App\Models\SaleItem;
 use App\Models\SaleReturn;
 use App\Models\Stock;
@@ -922,7 +924,7 @@ class SaleController extends Controller
 
     public function saleinvoice($id)
     {
-        $sale = Sale::with(['customer_relation.salesOfficer'])->findOrFail($id);
+        $sale = Sale::with(['customer_relation.salesOfficer', 'installmentPlan.installments', 'installmentPlan.advanceAccount'])->findOrFail($id);
         $items = $this->_getSaleItems($sale);
         $isEstimate = request()->query('type') === 'estimate';
 
@@ -1025,7 +1027,7 @@ class SaleController extends Controller
     {
         // 1. Fetch Sale with relations (including nested items.product for pre-fill)
         // Eager load warehouseStocks to display stock in edit view
-        $sale = Sale::with(['items.product.warehouseStocks', 'customer_relation'])->findOrFail($id);
+        $sale = Sale::with(['items.product.warehouseStocks', 'customer_relation', 'installmentPlan.installments', 'installmentPlan.advanceAccount'])->findOrFail($id);
 
         if (in_array($sale->sale_status, ['cancelled', 'returned'])) {
             return redirect()->route('sale.index')->with('error', 'Cannot edit a '.$sale->sale_status.' sale.');
@@ -1609,7 +1611,13 @@ class SaleController extends Controller
             $sale->total_net = max(0, $net);
             $sale->total_items = $total_items;
 
-            $sale->cash = $request->cash ?? 0;
+            $sale->cash = (float)($request->cash ?? 0);
+            if (($request->boolean('is_installment_plan') || $request->input('is_installment_plan') == '1') && (float)$request->input('installment_advance_amount', 0) > 0) {
+                $advAmt = (float)$request->input('installment_advance_amount', 0);
+                if ($sale->cash < $advAmt) {
+                    $sale->cash = $advAmt;
+                }
+            }
             $sale->change = ($sale->cash - $sale->total_net);
             $sale->change_account_id = $request->input('change_account_id') ?: null;
 
@@ -1908,17 +1916,37 @@ class SaleController extends Controller
 
                     // --- AUTO RECEIPT (ENTRY 2: THE PAYMENT) ---
                     $transactionService = app(\App\Services\TransactionService::class);
+                    $receiptAccIds = (array) $request->input('receipt_account_id', []);
+                    $receiptAmounts = (array) $request->input('receipt_amount', []);
+
+                    // Safeguard for installment plans with advance payment
+                    if ($request->boolean('is_installment_plan') || $request->input('is_installment_plan') == '1') {
+                        $advAmount = max(0, (float) $request->input('installment_advance_amount', 0));
+                        $advAccId = $request->input('installment_advance_account_id');
+                        if ($advAmount > 0 && $advAccId) {
+                            $foundAdv = false;
+                            foreach ($receiptAccIds as $k => $accId) {
+                                if ((int)$accId == (int)$advAccId && (float)($receiptAmounts[$k] ?? 0) > 0) {
+                                    $foundAdv = true;
+                                    break;
+                                }
+                            }
+                            if (!$foundAdv) {
+                                $receiptAccIds[] = $advAccId;
+                                $receiptAmounts[] = $advAmount;
+                            }
+                        }
+                    }
+
                     $transactionService->createReceiptFromSale(
                         $sale,
-                        $request->input('receipt_account_id', []),
-                        $request->input('receipt_amount', []),
+                        $receiptAccIds,
+                        $receiptAmounts,
                         $sale->change_account_id
                     );
 
                     // --- CHEQUE PAYMENT RECORDING ---
                     $chequeAcc = \App\Models\Account::where('title', 'Cheques in Hand')->first();
-                    $receiptAccIds = $request->input('receipt_account_id', []);
-                    $receiptAmounts = $request->input('receipt_amount', []);
                     $paidByCheque = 0;
 
                     if ($chequeAcc) {
@@ -2041,6 +2069,75 @@ class SaleController extends Controller
 
                 } catch (\Exception $e) {
                     \Log::error('Professional Ledger Posting Error: '.$e->getMessage());
+                }
+            }
+
+            // 5. SALE INSTALLMENT PLAN HANDLING
+            if ($request->boolean('is_installment_plan') || $request->input('is_installment_plan') == '1') {
+                if (empty($sale->customer_id)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'is_installment_plan' => 'An installment plan requires a registered customer.'
+                    ]);
+                }
+
+                $durationMonths = max(1, min(60, (int) $request->input('installment_duration_months', 12)));
+                $advanceAmount = max(0, (float) $request->input('installment_advance_amount', 0));
+                $advanceAccountId = $request->input('installment_advance_account_id') ?: null;
+                $startDate = $request->input('installment_start_date') ? \Carbon\Carbon::parse($request->input('installment_start_date')) : \Carbon\Carbon::today()->addMonth();
+                $notes = $request->input('installment_notes');
+                $totalAmount = (float) $sale->total_net;
+                $financedAmount = max(0, $totalAmount - $advanceAmount);
+                $monthlyInstallment = $durationMonths > 0 ? round($financedAmount / $durationMonths, 2) : 0;
+
+                $plan = \App\Models\SaleInstallmentPlan::updateOrCreate(
+                    ['sale_id' => $sale->id],
+                    [
+                        'customer_id'         => $sale->customer_id,
+                        'total_amount'        => $totalAmount,
+                        'advance_amount'      => $advanceAmount,
+                        'advance_account_id'  => $advanceAccountId,
+                        'financed_amount'     => $financedAmount,
+                        'duration_months'     => $durationMonths,
+                        'monthly_installment' => $monthlyInstallment,
+                        'start_date'          => $startDate->format('Y-m-d'),
+                        'status'              => 'active',
+                        'notes'               => $notes,
+                    ]
+                );
+
+                // Regenerate schedule if no installments are paid yet
+                $hasPaid = $plan->installments()->where('status', 'paid')->exists();
+                if (!$hasPaid) {
+                    $plan->installments()->delete();
+                    $accumulated = 0;
+                    for ($i = 1; $i <= $durationMonths; $i++) {
+                        $dueDate = $startDate->copy()->addMonthsNoOverflow($i - 1)->format('Y-m-d');
+                        if ($i === $durationMonths) {
+                            $instAmount = round($financedAmount - $accumulated, 2);
+                        } else {
+                            $instAmount = $monthlyInstallment;
+                            $accumulated += $instAmount;
+                        }
+
+                        \App\Models\SaleInstallment::create([
+                            'plan_id'        => $plan->id,
+                            'sale_id'        => $sale->id,
+                            'customer_id'    => $sale->customer_id,
+                            'installment_no' => $i,
+                            'due_date'       => $dueDate,
+                            'amount'         => max(0, $instAmount),
+                            'paid_amount'    => 0,
+                            'status'         => 'pending',
+                        ]);
+                    }
+                }
+            } else {
+                if ($sale->installmentPlan) {
+                    $hasPaid = $sale->installmentPlan->installments()->where('status', 'paid')->exists();
+                    if (!$hasPaid) {
+                        $sale->installmentPlan->installments()->delete();
+                        $sale->installmentPlan->delete();
+                    }
                 }
             }
 

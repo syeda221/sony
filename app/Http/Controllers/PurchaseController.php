@@ -1539,6 +1539,7 @@ class PurchaseController extends Controller
             $oldNetAmount = (float) $purchase->net_amount;
             $oldPaidAmount = (float) $purchase->paid_amount;
             $oldVendorId = $purchase->vendor_id;
+            $oldInvoiceNo = $purchase->invoice_no;
             $user = auth()->user();
             $canSelectWarehouse = $user && (
                 (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) ||
@@ -1818,15 +1819,22 @@ class PurchaseController extends Controller
             ]);
 
             // Sync Vendor Incentive Ledgers (Backup & Annual Claims)
+            // If vendor was changed, delete claims recorded for old vendor on this purchase
+            if ($oldVendorId && $oldVendorId != $purchase->vendor_id) {
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)
+                    ->where('vendor_id', $oldVendorId)
+                    ->delete();
+            }
+
             if ($purchase->vendor_id && $totalBackupAmount > 0) {
                 \App\Models\VendorIncentiveLedger::updateOrCreate(
                     [
-                        'vendor_id' => $purchase->vendor_id,
                         'purchase_id' => $purchase->id,
                         'type' => 'backup',
+                        'entry_type' => 'claim',
                     ],
                     [
-                        'entry_type' => 'claim',
+                        'vendor_id' => $purchase->vendor_id,
                         'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
                         'reference_no' => $purchase->invoice_no,
                         'debit' => $totalBackupAmount,
@@ -1836,18 +1844,18 @@ class PurchaseController extends Controller
                     ]
                 );
             } else {
-                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'backup')->delete();
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'backup')->where('entry_type', 'claim')->delete();
             }
 
             if ($purchase->vendor_id && $totalAnnualAmount > 0) {
                 \App\Models\VendorIncentiveLedger::updateOrCreate(
                     [
-                        'vendor_id' => $purchase->vendor_id,
                         'purchase_id' => $purchase->id,
                         'type' => 'annual',
+                        'entry_type' => 'claim',
                     ],
                     [
-                        'entry_type' => 'claim',
+                        'vendor_id' => $purchase->vendor_id,
                         'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
                         'reference_no' => $purchase->invoice_no,
                         'debit' => $totalAnnualAmount,
@@ -1857,7 +1865,7 @@ class PurchaseController extends Controller
                     ]
                 );
             } else {
-                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'annual')->delete();
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'annual')->where('entry_type', 'claim')->delete();
             }
 
             // Stock movements & Warehouse stock updates
@@ -1931,10 +1939,16 @@ class PurchaseController extends Controller
             $apAccountId = $balanceService->getAccountsPayableId();
 
             // 1. Purchase Voucher (Journal Voucher)
-            $purchaseVoucher = \App\Models\VoucherMaster::where('remarks', "Purchase Voucher #{$purchase->invoice_no}")->first();
+            $purchaseVoucher = \App\Models\VoucherMaster::where(function ($q) use ($purchase, $oldInvoiceNo) {
+                $q->where('remarks', "Purchase Voucher #{$purchase->invoice_no}")
+                  ->orWhere('remarks', "Purchase Voucher #{$oldInvoiceNo}");
+            })->first();
+
             if ($purchaseVoucher) {
+                $purchaseVoucher->remarks = "Purchase Voucher #{$purchase->invoice_no}";
                 $purchaseVoucher->total_amount = $netAmount;
                 $purchaseVoucher->date = $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d');
+                $purchaseVoucher->party_type = \App\Models\Vendor::class;
                 $purchaseVoucher->party_id = $purchase->vendor_id;
                 $purchaseVoucher->status = \App\Models\VoucherMaster::STATUS_DRAFT;
                 $purchaseVoucher->save();
@@ -1965,13 +1979,19 @@ class PurchaseController extends Controller
             }
 
             // 2. Payment Voucher (Payment Voucher)
-            $paymentVoucher = \App\Models\VoucherMaster::where('remarks', "Auto-Payment for Purchase #{$purchase->invoice_no}")->first();
+            $paymentVoucher = \App\Models\VoucherMaster::where(function ($q) use ($purchase, $oldInvoiceNo) {
+                $q->where('remarks', "Auto-Payment for Purchase #{$purchase->invoice_no}")
+                  ->orWhere('remarks', "Auto-Payment for Purchase #{$oldInvoiceNo}");
+            })->first();
+
             if (! empty($validPaymentAccounts)) {
                 if ($paymentVoucher) {
                     $paymentVoucher->journalEntries()->delete();
                     $paymentVoucher->details()->delete();
+                    $paymentVoucher->remarks = "Auto-Payment for Purchase #{$purchase->invoice_no}";
                     $paymentVoucher->total_amount = $newPaidAmount;
                     $paymentVoucher->date = $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d');
+                    $paymentVoucher->party_type = \App\Models\Vendor::class;
                     $paymentVoucher->party_id = $purchase->vendor_id;
                     $paymentVoucher->status = \App\Models\VoucherMaster::STATUS_DRAFT;
                     $paymentVoucher->save();
@@ -2204,6 +2224,9 @@ class PurchaseController extends Controller
                 \App\Models\VoucherDetail::where('voucher_master_id', $voucher->id)->delete();
                 $voucher->delete();
             }
+
+            // Clean up any incentive ledger claims (Backup & Annual)
+            \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->delete();
 
             // 5. Adjust Vendor Ledger closing balance
             if ($purchase->vendor_id && $purchase->status_purchase !== 'draft') {
