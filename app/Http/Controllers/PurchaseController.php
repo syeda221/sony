@@ -152,7 +152,7 @@ class PurchaseController extends Controller
         $vendors = Vendor::orderBy('name')->get();
 
         $purchaseGstEnabled = (bool) \App\Models\Setting::get('purchase_gst_enabled', '1');
-        $purchaseGstPercent = (float) \App\Models\Setting::get('purchase_gst_percent', '18.00');
+        $purchaseGstPercent = (float) \App\Models\Setting::get('purchase_gst_percent', '0.00');
 
         return view('admin_panel.purchase.index', compact('Purchase', 'vendors', 'purchaseGstEnabled', 'purchaseGstPercent'));
     }
@@ -189,7 +189,7 @@ class PurchaseController extends Controller
 
         // Return new V2 view
         $purchaseGstEnabled = (bool) \App\Models\Setting::get('purchase_gst_enabled', '1');
-        $defaultGstPercent = (float) \App\Models\Setting::get('purchase_gst_percent', '18.00');
+        $defaultGstPercent = $purchaseGstEnabled ? (float) \App\Models\Setting::get('purchase_gst_percent', '0.00') : 0.0;
 
         return view('admin_panel.purchase.add_purchase_v2', compact('Vendor', 'Warehouse', 'Purchase', 'accounts', 'nextInvoice', 'allProducts', 'purchaseGstEnabled', 'defaultGstPercent'));
     }
@@ -1499,7 +1499,7 @@ class PurchaseController extends Controller
             ->get();
 
         $purchaseGstEnabled = (bool) \App\Models\Setting::get('purchase_gst_enabled', '1');
-        $defaultGstPercent = (float) \App\Models\Setting::get('purchase_gst_percent', '18.00');
+        $defaultGstPercent = $purchaseGstEnabled ? (float) \App\Models\Setting::get('purchase_gst_percent', '0.00') : 0.0;
 
         return view('admin_panel.purchase.edit', compact('purchase', 'Vendor', 'Warehouse', 'accounts', 'existingPayments', 'allProducts', 'purchaseGstEnabled', 'defaultGstPercent'));
     }
@@ -2889,7 +2889,10 @@ class PurchaseController extends Controller
         ]);
 
         $enabled = $request->has('purchase_gst_enabled') && ($request->purchase_gst_enabled == '1' || $request->purchase_gst_enabled == 'on' || $request->purchase_gst_enabled === true || $request->purchase_gst_enabled === 'true') ? '1' : '0';
-        $percent = $request->filled('purchase_gst_percent') ? (float)$request->purchase_gst_percent : 18.00;
+        $percent = ($request->has('purchase_gst_percent') && $request->purchase_gst_percent !== null && $request->purchase_gst_percent !== '') ? (float)$request->purchase_gst_percent : 0.00;
+        if ($enabled === '0') {
+            $percent = 0.00;
+        }
 
         \App\Models\Setting::set('purchase_gst_enabled', $enabled, 'purchases', 'Enable Purchase GST (%)', 'boolean');
         \App\Models\Setting::set('purchase_gst_percent', number_format($percent, 2, '.', ''), 'purchases', 'Default Purchase GST Rate (%)', 'decimal');

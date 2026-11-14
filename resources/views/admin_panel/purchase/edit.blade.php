@@ -739,7 +739,7 @@
                                     </td>
                                     @if($purchaseGstEnabled ?? true)
                                     <td class="col-purchase-gst">
-                                        <input type="number" step="0.01" min="0" max="100" name="gst_percent[]" class="form-control text-end item-gst-percent fw-semibold" value="{{ (float)($item->gst_percent ?? ($defaultGstPercent ?? 18)) }}" placeholder="18">
+                                        <input type="number" step="0.01" min="0" max="100" name="gst_percent[]" class="form-control text-end item-gst-percent fw-semibold" value="{{ (float)($item->gst_percent ?? ($defaultGstPercent ?? 0)) }}" placeholder="0">
                                         <input type="hidden" name="gst_amount[]" class="item-gst-amt" value="{{ number_format($item->gst_amount ?? 0, 2, '.', '') }}">
                                         <input type="hidden" name="exclusive_gst_amount[]" class="item-excl-gst-amt" value="{{ number_format($item->exclusive_gst_amount ?? 0, 2, '.', '') }}">
                                     </td>
@@ -1427,7 +1427,7 @@
                     </td>
                     @if($purchaseGstEnabled ?? true)
                     <td class="col-purchase-gst">
-                        <input type="number" step="0.01" min="0" max="100" name="gst_percent[]" class="form-control text-end item-gst-percent fw-semibold" value="{{ (float)($defaultGstPercent ?? 18) }}" placeholder="18">
+                        <input type="number" step="0.01" min="0" max="100" name="gst_percent[]" class="form-control text-end item-gst-percent fw-semibold" value="{{ (float)($defaultGstPercent ?? 0) }}" placeholder="0">
                         <input type="hidden" name="gst_amount[]" class="item-gst-amt" value="0.00">
                         <input type="hidden" name="exclusive_gst_amount[]" class="item-excl-gst-amt" value="0.00">
                     </td>

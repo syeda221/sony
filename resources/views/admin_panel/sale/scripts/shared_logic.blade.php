@@ -405,7 +405,7 @@
     <!-- ST % (Dynamic Sales Tax) -->
     <td class="col-st">
       <div class="input-group input-group-sm">
-        <input type="number" step="0.01" class="form-control sales-tax-percent text-end" name="sales_tax_percent[]" value="${window.saleScreenConfig && window.saleScreenConfig.default_st_rate !== undefined ? window.saleScreenConfig.default_st_rate : 18}" placeholder="18">
+        <input type="number" step="0.01" class="form-control sales-tax-percent text-end" name="sales_tax_percent[]" value="${window.saleScreenConfig && window.saleScreenConfig.default_st_rate !== undefined ? window.saleScreenConfig.default_st_rate : 0}" placeholder="0">
         <span class="input-group-text px-1 py-0 text-muted" style="font-size: 11px; font-weight: 600;">%</span>
       </div>
       <input type="hidden" class="sales-tax-amount" name="sales_tax_amount[]" value="0">

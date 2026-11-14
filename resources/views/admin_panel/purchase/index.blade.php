@@ -560,7 +560,7 @@
                                 <i class="fas fa-calculator text-primary mr-1 me-1"></i> Default Purchase GST Rate (%)
                             </label>
                             <div class="input-group">
-                                <input type="number" step="0.01" min="0" max="100" class="form-control text-end fw-bold" id="modalPurchaseGstPercent" name="purchase_gst_percent" value="{{ (float)($purchaseGstPercent ?? 18) }}" placeholder="18.00" style="font-size: 15px; height: 42px;">
+                                <input type="number" step="0.01" min="0" max="100" class="form-control text-end fw-bold" id="modalPurchaseGstPercent" name="purchase_gst_percent" value="{{ (float)($purchaseGstPercent ?? 0) }}" placeholder="0.00" style="font-size: 15px; height: 42px;">
                                 <div class="input-group-append">
                                     <span class="input-group-text bg-light fw-bold text-muted px-3" style="font-size: 14px;">%</span>
                                 </div>

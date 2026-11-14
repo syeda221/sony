@@ -1874,7 +1874,7 @@
                                 <!-- ST % (Sales Tax @18%) -->
                                 <td class="col-st">
                                     <div class="input-group input-group-sm">
-                                        <input type="number" step="0.01" class="form-control sales-tax-percent text-end" name="sales_tax_percent[]" value="{{ (float)($saleConfig['default_st_rate'] ?? 18) }}" placeholder="18">
+                                        <input type="number" step="0.01" class="form-control sales-tax-percent text-end" name="sales_tax_percent[]" value="{{ (float)($saleConfig['default_st_rate'] ?? 0) }}" placeholder="0">
                                         <span class="input-group-text px-1 py-0 text-muted" style="font-size: 11px; font-weight: 600;">%</span>
                                     </div>
                                     <input type="hidden" class="sales-tax-amount" name="sales_tax_amount[]" value="0">
@@ -2285,7 +2285,7 @@
                                 <span class="s-val fw-bold text-dark" id="tExclusiveGst">0.00</span>
                             </div>
                             <div class="s-row row-summary-sales-tax">
-                                <span class="s-label text-success">Sales Tax (@<span id="labelStRate">{{ (float)($saleConfig['default_st_rate'] ?? 18) }}%</span>)</span>
+                                <span class="s-label text-success">Sales Tax (@<span id="labelStRate">{{ (float)($saleConfig['default_st_rate'] ?? 0) }}%</span>)</span>
                                 <span class="s-val text-success fw-bold" id="tSalesTax">0.00</span>
                             </div>
                             <div class="s-row row-summary-further-tax">
