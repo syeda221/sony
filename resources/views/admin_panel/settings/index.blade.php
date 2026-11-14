@@ -652,6 +652,27 @@
                                                         </div>
                                                     </div>
 
+                                                    <!-- Default Sales Tax / GST Rate -->
+                                                    <div class="col-md-4 col-sm-6 mb-2">
+                                                        <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <div class="font-weight-bold text-dark" style="font-size: 12px;">
+                                                                    <i class="fas fa-calculator text-primary mr-1"></i> Default Sales Tax / GST (%)
+                                                                </div>
+                                                                <small class="text-muted">Default GST% on Sale screen</small>
+                                                            </div>
+                                                            <div class="input-group input-group-sm ml-2" style="max-width: 100px;">
+                                                                <input type="number" step="0.01" min="0" max="100" class="form-control text-end font-weight-bold" 
+                                                                    name="settings[default_sales_tax_rate]" 
+                                                                    value="{{ (float) (\App\Models\SaleFieldConfiguration::where('field_key', 'sales_tax')->value('default_value') ?? 0) }}" 
+                                                                    placeholder="0" {{ !$canEditSettings ? 'disabled' : '' }}>
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text px-1">%</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
                                                     <!-- Amount in Words -->
                                                     <div class="col-md-4 col-sm-6 mb-2">
                                                         <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">

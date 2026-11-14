@@ -49,6 +49,14 @@ class SettingsController extends Controller
                 Setting::set($key, $value);
 
                 // Synchronize with SaleFieldConfiguration if applicable
+                if ($key === 'default_sales_tax_rate' || $key === 'default_gst_rate') {
+                    $stField = \App\Models\SaleFieldConfiguration::where('field_key', 'sales_tax')->first();
+                    if ($stField) {
+                        $stField->default_value = number_format((float) $value, 2, '.', '');
+                        $stField->save();
+                    }
+                }
+
                 if (in_array($key, ['summary_customer_balance', 'print_tax_breakdown', 'inv_show_disc_column'])) {
                     $boolVal = (bool) $value;
                     $fieldKey = $key === 'inv_show_disc_column' ? 'col_discount' : $key;

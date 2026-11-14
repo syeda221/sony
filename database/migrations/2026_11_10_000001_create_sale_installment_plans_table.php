@@ -18,6 +18,7 @@ return new class extends Migration
                 $table->foreignId('customer_id')->nullable()->constrained('customers')->onDelete('set null');
                 $table->decimal('total_amount', 12, 2)->default(0);
                 $table->decimal('advance_amount', 12, 2)->default(0);
+                $table->unsignedBigInteger('advance_account_id')->nullable();
                 $table->decimal('financed_amount', 12, 2)->default(0);
                 $table->integer('duration_months')->default(1);
                 $table->decimal('monthly_installment', 12, 2)->default(0);

@@ -2089,20 +2089,25 @@ class SaleController extends Controller
                 $financedAmount = max(0, $totalAmount - $advanceAmount);
                 $monthlyInstallment = $durationMonths > 0 ? round($financedAmount / $durationMonths, 2) : 0;
 
+                $planPayload = [
+                    'customer_id'         => $sale->customer_id,
+                    'total_amount'        => $totalAmount,
+                    'advance_amount'      => $advanceAmount,
+                    'financed_amount'     => $financedAmount,
+                    'duration_months'     => $durationMonths,
+                    'monthly_installment' => $monthlyInstallment,
+                    'start_date'          => $startDate->format('Y-m-d'),
+                    'status'              => 'active',
+                    'notes'               => $notes,
+                ];
+
+                if (\Illuminate\Support\Facades\Schema::hasColumn('sale_installment_plans', 'advance_account_id')) {
+                    $planPayload['advance_account_id'] = $advanceAccountId;
+                }
+
                 $plan = \App\Models\SaleInstallmentPlan::updateOrCreate(
                     ['sale_id' => $sale->id],
-                    [
-                        'customer_id'         => $sale->customer_id,
-                        'total_amount'        => $totalAmount,
-                        'advance_amount'      => $advanceAmount,
-                        'advance_account_id'  => $advanceAccountId,
-                        'financed_amount'     => $financedAmount,
-                        'duration_months'     => $durationMonths,
-                        'monthly_installment' => $monthlyInstallment,
-                        'start_date'          => $startDate->format('Y-m-d'),
-                        'status'              => 'active',
-                        'notes'               => $notes,
-                    ]
+                    $planPayload
                 );
 
                 // Regenerate schedule if no installments are paid yet
