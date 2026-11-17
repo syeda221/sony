@@ -225,7 +225,9 @@ class ProductController extends Controller
 
                     $vBalance = 0;
 
-                    if (isset($v['conv_factor']) && $p->size_mode === 'by_kg') {
+                    if (count($variants) === 1) {
+                        $vBalance = max(0, $stockPieces);
+                    } elseif (isset($v['conv_factor']) && $p->size_mode === 'by_kg') {
                         // Weight Unit: Calculate integer pieces based on total Kg divided by conversion factor
                         $factor = (float) $v['conv_factor'];
                         $factor = $factor > 0 ? $factor : 1;
@@ -1740,7 +1742,7 @@ class ProductController extends Controller
     {
         $itemColor = $saleItem->color;
         if (empty($itemColor)) {
-            return false;
+            return !empty($variant['is_base_variant']);
         }
 
         $itemVariant = [];

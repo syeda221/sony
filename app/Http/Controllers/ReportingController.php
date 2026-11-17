@@ -3195,51 +3195,19 @@ class ReportingController extends Controller
             $totalReceivables += $bal;
         }
 
-        // Stock in Trade
-        // Current Stock = Initial + Purchased - Sold
-        $products = DB::table('products')->get();
-        $totalInventory = 0;
-        foreach ($products as $p) {
-            // Initial
-            $initial = (float) DB::table('stock_movements')
-                ->where('product_id', $p->id)
-                ->whereIn('ref_type', ['INIT', 'OPENING_STOCK'])
-                ->where('created_at', '<=', $dateEnd)
-                ->sum('qty');
-
-            // Purchased
-            [$purchased, $purchaseAmount] = $this->getPurchasedQtyAndNetAmount($p->id, ['before' => $dateEnd]);
-
-            // Sold
-            $saleStats = DB::table('sale_items')
-                ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-                ->where('sale_items.product_id', $p->id)
-                ->where('sales.created_at', '<=', $dateEnd)
-                ->selectRaw('COALESCE(SUM(sale_items.qty),0) as total_qty')
-                ->first();
-
-            $sold = (float) $saleStats->total_qty;
-
-            $balance = $initial + $purchased - $sold;
-
-            // Average Cost
-            $productPurchPrice = 0;
-            if ($p->size_mode === 'by_size') {
-                $m2PerPiece = (float) ($p->pieces_per_m2 ?? 0);
-                $purchPerM2 = (float) ($p->purchase_price_per_m2 ?? 0);
-                $productPurchPrice = $m2PerPiece * $purchPerM2;
-            } else {
-                $productPurchPrice = (float) ($p->purchase_price_per_piece ?? 0);
-            }
-
-            $initialAmount = $initial * $productPurchPrice;
-            $totalQtyIn = $initial + $purchased;
-            $avgCost = $totalQtyIn > 0 ? ($initialAmount + $purchaseAmount) / $totalQtyIn : $productPurchPrice;
-
-            if ($balance > 0) {
-                $totalInventory += ($balance * $avgCost);
-            }
-        }
+        // Stock in Trade / Inventory on Hand
+        // Synchronized with Item Stock Report valuation logic (includes returns, physical warehouse stocks, and exact avg cost)
+        $stockReq = new Request([
+            'product_id'   => 'all',
+            'category_id'  => 'all',
+            'warehouse_id' => 'all',
+            'unit_type'    => 'all',
+            'report_mode'  => 'summary',
+            'date_to'      => substr($dateEnd, 0, 10),
+        ]);
+        $stockRes = $this->fetchItemStock($stockReq);
+        $stockData = $stockRes->getData(true);
+        $totalInventory = (float) ($stockData['grand_total'] ?? 0);
 
         $currentAssetsTotal = $totalCashBank + $totalReceivables + $totalInventory;
         $fixedAssetsTotal = 0; // if you have fixed assets head, you can add here
