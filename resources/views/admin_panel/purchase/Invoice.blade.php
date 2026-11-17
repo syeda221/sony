@@ -909,6 +909,8 @@
 
     </div>
 
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="{{ asset('assets/vendors/bootstrap5/js/bootstrap.bundle.min.js') }}"></script>
     <script>
         const waPurConfig = {
             phone: '{{ $waPurCleanPhone }}',
