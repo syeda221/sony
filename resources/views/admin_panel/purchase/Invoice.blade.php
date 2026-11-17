@@ -7,6 +7,7 @@
     <title>Purchase Invoice - {{ $purchase->invoice_no }}</title>
     <!-- Bootstrap 5 CSS -->
     <link href="{{ asset('assets/vendors/bootstrap5/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ asset('assets/vendors/font-awesome/css/all.min.css') }}" rel="stylesheet">
     <style>
         :root {
             --primary-color: #0f172a;
@@ -272,6 +273,74 @@
                 @endif
             </div>
             <div class="d-flex align-items-center gap-2">
+                @php
+                    $waVendorName = $purchase->vendor->name ?? 'Valued Vendor';
+                    $waVendorPhone = $purchase->vendor->phone ?? ($purchase->vendor->mobile ?? '');
+                    $waPurInvNo = $purchase->invoice_no ?: ('PUR-' . str_pad($purchase->id, 3, '0', STR_PAD_LEFT));
+                    $waPurDate = !empty($purchase->purchase_date) ? \Carbon\Carbon::parse($purchase->purchase_date)->format('d/m/Y') : \Carbon\Carbon::parse($purchase->created_at)->format('d/m/Y');
+                    $waPurTotal = number_format((float)($purchase->net_amount ?? 0), 2);
+                    $waPurPaid = number_format((float)($purchase->paid_amount ?? 0), 2);
+                    $waPurRemaining = number_format((float)($currentBalance ?? 0), 2);
+                    $waCompName = \App\Models\Setting::get('company_name', 'Prowave Technologies');
+
+                    $waPurData = [
+                        'vendor_name' => $waVendorName,
+                        'party_name' => $waVendorName,
+                        'invoice_no' => $waPurInvNo,
+                        'voucher_no' => $waPurInvNo,
+                        'date' => $waPurDate,
+                        'total_amount' => $waPurTotal,
+                        'paid_amount' => $waPurPaid,
+                        'remaining_balance' => $waPurRemaining,
+                        'company_name' => $waCompName,
+                    ];
+                    $waPurMessage = \App\Services\WhatsAppService::getPurchaseInvoiceMessage($waPurData);
+                    $waPurCleanPhone = \App\Services\WhatsAppService::formatPhoneNumber($waVendorPhone);
+                    $waPurCountryCode = \App\Models\Setting::get('whatsapp_country_code', '92');
+                    $waDefaultMode = \App\Models\Setting::get('whatsapp_default_mode', 'app');
+                @endphp
+
+                <!-- WhatsApp Action Button with Quick Mode Switcher -->
+                <div class="btn-group">
+                    <button type="button" onclick="sendWhatsAppPurchase()" class="btn btn-sm px-3 fw-bold text-white shadow-sm d-flex align-items-center gap-1" style="background-color: #25D366; border-color: #25D366; border-radius: 8px 0 0 8px; font-size: 0.8rem; white-space: nowrap;" title="Send WhatsApp Message">
+                        <i class="fab fa-whatsapp fs-6"></i>
+                        WhatsApp
+                    </button>
+                    <button type="button" class="btn btn-sm text-white dropdown-toggle dropdown-toggle-split" style="background-color: #1ebd5a; border-color: #1ebd5a; border-radius: 0 8px 8px 0;" data-bs-toggle="dropdown" aria-expanded="false" title="WhatsApp Options">
+                        <span class="visually-hidden">Toggle Dropdown</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow" style="font-size: 12px; z-index: 1060;">
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" onclick="sendWhatsAppPurchase('app')">
+                                <i class="fas fa-desktop text-success fa-fw"></i>
+                                <div>
+                                    <div class="fw-bold text-dark">WhatsApp App (Instant)</div>
+                                    <div class="text-muted" style="font-size: 10px;">Opens Windows App — No browser tabs</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" onclick="sendWhatsAppPurchase('web')">
+                                <i class="fab fa-whatsapp text-success fa-fw"></i>
+                                <div>
+                                    <div class="fw-bold text-dark">WhatsApp Web (Browser)</div>
+                                    <div class="text-muted" style="font-size: 10px;">Opens in web.whatsapp.com</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" onclick="copyWhatsAppPurchase()">
+                                <i class="fas fa-copy text-primary fa-fw"></i>
+                                <div>
+                                    <div class="fw-bold text-dark">Copy Message Text</div>
+                                    <div class="text-muted" style="font-size: 10px;">Paste (Ctrl+V) in your open WhatsApp</div>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
                 <button onclick="window.print()" class="btn btn-primary btn-sm px-3 fw-bold shadow-sm d-flex align-items-center gap-1" style="border-radius: 8px; font-size: 0.8rem; white-space: nowrap;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-printer-fill" viewBox="0 0 16 16">
                         <path d="M0 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V9zm4-6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2H4V3z" />
@@ -839,6 +908,60 @@
         </div>
 
     </div>
+
+    <script>
+        const waPurConfig = {
+            phone: '{{ $waPurCleanPhone }}',
+            countryCode: '{{ $waPurCountryCode }}',
+            defaultMode: '{{ $waDefaultMode }}',
+            message: {!! json_encode($waPurMessage) !!}
+        };
+
+        function getPurTargetPhone(config) {
+            let targetPhone = config.phone;
+            if (!targetPhone || targetPhone.trim() === '') {
+                let inputNum = prompt("Vendor phone number is missing. Please enter WhatsApp number (e.g. 03001234567):");
+                if (!inputNum) return null;
+                targetPhone = inputNum.replace(/[^0-9]/g, '');
+                let countryCode = config.countryCode || '92';
+                if (targetPhone.startsWith('00')) {
+                    targetPhone = targetPhone.substring(2);
+                } else if (targetPhone.startsWith('0')) {
+                    targetPhone = countryCode + targetPhone.substring(1);
+                } else if (!targetPhone.startsWith(countryCode) && targetPhone.length <= 10) {
+                    targetPhone = countryCode + targetPhone;
+                }
+            }
+            return targetPhone;
+        }
+
+        function sendWhatsAppPurchase(mode) {
+            let useMode = mode || waPurConfig.defaultMode || 'app';
+            let targetPhone = getPurTargetPhone(waPurConfig);
+            if (!targetPhone) return;
+
+            if (useMode === 'app') {
+                // Open directly via Windows WhatsApp Desktop App (zero browser tabs)
+                let appUrl = "whatsapp://send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waPurConfig.message);
+                window.location.href = appUrl;
+            } else {
+                // Open via WhatsApp Web
+                let webUrl = "https://web.whatsapp.com/send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waPurConfig.message);
+                let waWin = window.open(webUrl, 'whatsapp_web_tab');
+                if (waWin) {
+                    waWin.focus();
+                }
+            }
+        }
+
+        function copyWhatsAppPurchase() {
+            navigator.clipboard.writeText(waPurConfig.message).then(function() {
+                alert("Message copied! You can now switch to your open WhatsApp Web tab and press Ctrl+V to paste.");
+            }).catch(function() {
+                prompt("Copy message below:", waPurConfig.message);
+            });
+        }
+    </script>
 </body>
 
 </html>

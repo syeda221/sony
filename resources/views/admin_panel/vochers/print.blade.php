@@ -184,12 +184,44 @@
 
         .btn-primary { background: #000; color: #fff; }
         .btn-secondary { background: #e2e8f0; color: #334155; }
+        .btn-whatsapp { background: #25D366; color: #fff; }
     </style>
 </head>
 
 <body>
 
+    @php
+        $rcvPartyName = $party ? ($party->customer_name ?? ($party->name ?? 'Valued Customer')) : 'Valued Customer';
+        $rcvPartyPhone = $party ? ($party->mobile ?? ($party->phone ?? '')) : '';
+        $rcvVoucherNo = $voucher->rvid ?: ('CRV-' . $voucher->id);
+        $rcvDate = !empty($voucher->receipt_date) ? \Carbon\Carbon::parse($voucher->receipt_date)->format('d/m/Y') : now()->format('d/m/Y');
+        $rcvPaid = number_format((float)($voucher->total_amount ?? 0), 2);
+        $rcvBalanceAfter = (float)($previousBalance ?? 0) - (float)($voucher->total_amount ?? 0);
+        $rcvRemaining = number_format(abs($rcvBalanceAfter), 2) . ($rcvBalanceAfter >= 0 ? ' Dr' : ' Cr');
+        $rcvCompName = \App\Models\Setting::get('company_name', 'Prowave Technologies');
+
+        $rcvData = [
+            'customer_name' => $rcvPartyName,
+            'party_name' => $rcvPartyName,
+            'vendor_name' => $rcvPartyName,
+            'voucher_no' => $rcvVoucherNo,
+            'invoice_no' => $rcvVoucherNo,
+            'date' => $rcvDate,
+            'total_amount' => $rcvPaid,
+            'paid_amount' => $rcvPaid,
+            'remaining_balance' => $rcvRemaining,
+            'company_name' => $rcvCompName,
+        ];
+        $rcvMessage = \App\Services\WhatsAppService::getReceiptVoucherMessage($rcvData);
+        $rcvCleanPhone = \App\Services\WhatsAppService::formatPhoneNumber($rcvPartyPhone);
+        $rcvCountryCode = \App\Models\Setting::get('whatsapp_country_code', '92');
+        $rcvDefaultMode = \App\Models\Setting::get('whatsapp_default_mode', 'app');
+    @endphp
+
     <div class="print-controls no-print">
+        <a href="javascript:void(0)" onclick="sendWhatsAppReceipt('app')" class="btn btn-whatsapp" title="Instant - Opens WhatsApp Desktop">💬 WhatsApp App</a>
+        <a href="javascript:void(0)" onclick="sendWhatsAppReceipt('web')" class="btn btn-whatsapp" style="background:#128c7e;" title="Opens Web WhatsApp">🌐 Web</a>
+        <a href="javascript:void(0)" onclick="copyWhatsAppReceipt()" class="btn btn-secondary" style="background:#0284c7; color:#fff;" title="Copy text to paste in your open WhatsApp">📋 Copy</a>
         <a href="javascript:window.print()" class="btn btn-primary">🖨️ Print Voucher</a>
         <a href="{{ route('all_recepit_vochers') }}" class="btn btn-secondary">← Back</a>
     </div>
@@ -330,6 +362,56 @@
                 window.print();
             }, 300);
         });
+
+        const waRcvConfig = {
+            phone: '{{ $rcvCleanPhone }}',
+            countryCode: '{{ $rcvCountryCode }}',
+            defaultMode: '{{ $rcvDefaultMode }}',
+            message: {!! json_encode($rcvMessage) !!}
+        };
+
+        function getRcvTargetPhone(config) {
+            let targetPhone = config.phone;
+            if (!targetPhone || targetPhone.trim() === '') {
+                let inputNum = prompt("Customer phone number is missing. Please enter WhatsApp number (e.g. 03001234567):");
+                if (!inputNum) return null;
+                targetPhone = inputNum.replace(/[^0-9]/g, '');
+                let countryCode = config.countryCode || '92';
+                if (targetPhone.startsWith('00')) {
+                    targetPhone = targetPhone.substring(2);
+                } else if (targetPhone.startsWith('0')) {
+                    targetPhone = countryCode + targetPhone.substring(1);
+                } else if (!targetPhone.startsWith(countryCode) && targetPhone.length <= 10) {
+                    targetPhone = countryCode + targetPhone;
+                }
+            }
+            return targetPhone;
+        }
+
+        function sendWhatsAppReceipt(mode) {
+            let useMode = mode || waRcvConfig.defaultMode || 'app';
+            let targetPhone = getRcvTargetPhone(waRcvConfig);
+            if (!targetPhone) return;
+
+            if (useMode === 'app') {
+                let appUrl = "whatsapp://send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waRcvConfig.message);
+                window.location.href = appUrl;
+            } else {
+                let webUrl = "https://web.whatsapp.com/send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waRcvConfig.message);
+                let waWin = window.open(webUrl, 'whatsapp_web_tab');
+                if (waWin) {
+                    waWin.focus();
+                }
+            }
+        }
+
+        function copyWhatsAppReceipt() {
+            navigator.clipboard.writeText(waRcvConfig.message).then(function() {
+                alert("Message copied! You can now switch to your open WhatsApp Web tab and press Ctrl+V to paste.");
+            }).catch(function() {
+                prompt("Copy message below:", waRcvConfig.message);
+            });
+        }
     </script>
 
 </body>

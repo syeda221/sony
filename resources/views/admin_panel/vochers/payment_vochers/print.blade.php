@@ -184,12 +184,44 @@
 
         .btn-primary { background: #000; color: #fff; }
         .btn-secondary { background: #e2e8f0; color: #334155; }
+        .btn-whatsapp { background: #25D366; color: #fff; }
     </style>
 </head>
 
 <body>
 
+    @php
+        $pmtPartyName = $party ? ($party->name ?? ($party->customer_name ?? 'Valued Vendor')) : 'Valued Vendor';
+        $pmtPartyPhone = $party ? ($party->phone ?? ($party->mobile ?? '')) : '';
+        $pmtVoucherNo = $voucher->pvid ?: ('CPV-' . $voucher->id);
+        $pmtDate = !empty($voucher->receipt_date) ? \Carbon\Carbon::parse($voucher->receipt_date)->format('d/m/Y') : now()->format('d/m/Y');
+        $pmtPaid = number_format((float)($voucher->total_amount ?? 0), 2);
+        $pmtBalanceAfter = (float)($previousBalance ?? 0) - (float)($voucher->total_amount ?? 0);
+        $pmtRemaining = number_format(abs($pmtBalanceAfter), 2) . ($pmtBalanceAfter >= 0 ? ' Dr' : ' Cr');
+        $pmtCompName = \App\Models\Setting::get('company_name', 'Prowave Technologies');
+
+        $pmtData = [
+            'vendor_name' => $pmtPartyName,
+            'party_name' => $pmtPartyName,
+            'customer_name' => $pmtPartyName,
+            'voucher_no' => $pmtVoucherNo,
+            'invoice_no' => $pmtVoucherNo,
+            'date' => $pmtDate,
+            'total_amount' => $pmtPaid,
+            'paid_amount' => $pmtPaid,
+            'remaining_balance' => $pmtRemaining,
+            'company_name' => $pmtCompName,
+        ];
+        $pmtMessage = \App\Services\WhatsAppService::getPaymentVoucherMessage($pmtData);
+        $pmtCleanPhone = \App\Services\WhatsAppService::formatPhoneNumber($pmtPartyPhone);
+        $pmtCountryCode = \App\Models\Setting::get('whatsapp_country_code', '92');
+        $pmtDefaultMode = \App\Models\Setting::get('whatsapp_default_mode', 'app');
+    @endphp
+
     <div class="print-controls no-print">
+        <a href="javascript:void(0)" onclick="sendWhatsAppPayment('app')" class="btn btn-whatsapp" title="Instant - Opens WhatsApp Desktop">💬 WhatsApp App</a>
+        <a href="javascript:void(0)" onclick="sendWhatsAppPayment('web')" class="btn btn-whatsapp" style="background:#128c7e;" title="Opens Web WhatsApp">🌐 Web</a>
+        <a href="javascript:void(0)" onclick="copyWhatsAppPayment()" class="btn btn-secondary" style="background:#0284c7; color:#fff;" title="Copy text to paste in your open WhatsApp">📋 Copy</a>
         <a href="javascript:window.print()" class="btn btn-primary">🖨️ Print Voucher</a>
         <a href="{{ route('all_Payment_vochers') }}" class="btn btn-secondary">← Back</a>
     </div>
@@ -332,6 +364,56 @@
                 el.innerText = numberToWords(amount) || el.innerText;
             }
         });
+
+        const waPmtConfig = {
+            phone: '{{ $pmtCleanPhone }}',
+            countryCode: '{{ $pmtCountryCode }}',
+            defaultMode: '{{ $pmtDefaultMode }}',
+            message: {!! json_encode($pmtMessage) !!}
+        };
+
+        function getPmtTargetPhone(config) {
+            let targetPhone = config.phone;
+            if (!targetPhone || targetPhone.trim() === '') {
+                let inputNum = prompt("Vendor phone number is missing. Please enter WhatsApp number (e.g. 03001234567):");
+                if (!inputNum) return null;
+                targetPhone = inputNum.replace(/[^0-9]/g, '');
+                let countryCode = config.countryCode || '92';
+                if (targetPhone.startsWith('00')) {
+                    targetPhone = targetPhone.substring(2);
+                } else if (targetPhone.startsWith('0')) {
+                    targetPhone = countryCode + targetPhone.substring(1);
+                } else if (!targetPhone.startsWith(countryCode) && targetPhone.length <= 10) {
+                    targetPhone = countryCode + targetPhone;
+                }
+            }
+            return targetPhone;
+        }
+
+        function sendWhatsAppPayment(mode) {
+            let useMode = mode || waPmtConfig.defaultMode || 'app';
+            let targetPhone = getPmtTargetPhone(waPmtConfig);
+            if (!targetPhone) return;
+
+            if (useMode === 'app') {
+                let appUrl = "whatsapp://send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waPmtConfig.message);
+                window.location.href = appUrl;
+            } else {
+                let webUrl = "https://web.whatsapp.com/send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waPmtConfig.message);
+                let waWin = window.open(webUrl, 'whatsapp_web_tab');
+                if (waWin) {
+                    waWin.focus();
+                }
+            }
+        }
+
+        function copyWhatsAppPayment() {
+            navigator.clipboard.writeText(waPmtConfig.message).then(function() {
+                alert("Message copied! You can now switch to your open WhatsApp Web tab and press Ctrl+V to paste.");
+            }).catch(function() {
+                prompt("Copy message below:", waPmtConfig.message);
+            });
+        }
     </script>
 
 </body>

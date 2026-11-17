@@ -50,6 +50,11 @@
                                     <i class="fas fa-calculator"></i> Accounting
                                 </a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="whatsapp-tab" data-toggle="tab" href="#whatsapp" role="tab">
+                                    <i class="fab fa-whatsapp text-success"></i> WhatsApp Templates
+                                </a>
+                            </li>
                         </ul>
 
                         @php
@@ -823,6 +828,100 @@
                                             </div>
                                         @endforeach
                                     @endif
+                                </div>
+
+                                <!-- WhatsApp Tab -->
+                                <div class="tab-pane fade" id="whatsapp" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-md-12 mb-3">
+                                            <div class="alert alert-info py-2 px-3 d-flex align-items-center" style="font-size: 13px; border-radius: 8px;">
+                                                <i class="fab fa-whatsapp fs-5 text-success me-2"></i>
+                                                <div>
+                                                    <strong>Dynamic Placeholders:</strong> Use any of the following tags in templates:
+                                                    <span class="badge bg-light text-dark border ms-1">{customer_name}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{vendor_name}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{invoice_no}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{voucher_no}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{date}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{total_amount}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{paid_amount}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{remaining_balance}</span>
+                                                    <span class="badge bg-light text-dark border ms-1">{company_name}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <div class="form-group">
+                                                <label class="font-weight-bold text-dark"><i class="fas fa-globe mr-1 text-primary"></i> Default WhatsApp Country Code</label>
+                                                <input type="text" name="settings[whatsapp_country_code]" class="form-control" value="{{ \App\Models\Setting::get('whatsapp_country_code', '92') }}" placeholder="92" {{ !$canEditSettings ? 'disabled' : '' }}>
+                                                <small class="form-text text-muted">Example: <strong>92</strong> for Pakistan. Local numbers like 03001234567 will automatically convert to 923001234567.</small>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <div class="form-group">
+                                                <label class="font-weight-bold text-dark"><i class="fas fa-paper-plane mr-1 text-success"></i> Default WhatsApp Send Method</label>
+                                                <select name="settings[whatsapp_default_mode]" class="form-control" {{ !$canEditSettings ? 'disabled' : '' }}>
+                                                    <option value="app" {{ \App\Models\Setting::get('whatsapp_default_mode', 'app') === 'app' ? 'selected' : '' }}>
+                                                        WhatsApp Desktop App (Fastest - Instant, Opens Windows App)
+                                                    </option>
+                                                    <option value="web" {{ \App\Models\Setting::get('whatsapp_default_mode', 'app') === 'web' ? 'selected' : '' }}>
+                                                        WhatsApp Web (Browser Tab)
+                                                    </option>
+                                                </select>
+                                                <small class="form-text text-muted">Desktop App directly opens WhatsApp on Windows without reloading browser tabs.</small>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-12 mb-3">
+                                            <div class="card border shadow-sm" style="border-radius: 8px;">
+                                                <div class="card-header bg-light py-2">
+                                                    <strong class="text-primary"><i class="fas fa-file-invoice mr-1"></i> 1. Sale Invoice WhatsApp Message (Customer)</strong>
+                                                </div>
+                                                <div class="card-body p-3">
+                                                    <textarea name="settings[whatsapp_sale_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_sale_template', 'Assalam-o-Alaikum {customer_name}, aapka Invoice #{invoice_no} ba-tareekh {date} tayar hai. Total Bill: Rs {total_amount}, Wasool: Rs {paid_amount}, Baqiya Balance: Rs {remaining_balance}. Shukriya! - {company_name}') }}</textarea>
+                                                    <small class="text-muted mt-1 d-block">Supported tags: {customer_name}, {invoice_no}, {date}, {total_amount}, {paid_amount}, {remaining_balance}, {company_name}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-12 mb-3">
+                                            <div class="card border shadow-sm" style="border-radius: 8px;">
+                                                <div class="card-header bg-light py-2">
+                                                    <strong class="text-primary"><i class="fas fa-shopping-bag mr-1"></i> 2. Purchase Invoice WhatsApp Message (Vendor)</strong>
+                                                </div>
+                                                <div class="card-body p-3">
+                                                    <textarea name="settings[whatsapp_purchase_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_purchase_template', 'Assalam-o-Alaikum {vendor_name}, Purchase Bill #{invoice_no} ba-tareekh {date} record ho chuka hai. Total Bill: Rs {total_amount}, Paid: Rs {paid_amount}, Baqiya Balance: Rs {remaining_balance}. Shukriya! - {company_name}') }}</textarea>
+                                                    <small class="text-muted mt-1 d-block">Supported tags: {vendor_name}, {invoice_no}, {date}, {total_amount}, {paid_amount}, {remaining_balance}, {company_name}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-12 mb-3">
+                                            <div class="card border shadow-sm" style="border-radius: 8px;">
+                                                <div class="card-header bg-light py-2">
+                                                    <strong class="text-success"><i class="fas fa-hand-holding-usd mr-1"></i> 3. Customer Receipt Voucher WhatsApp Message (Payment Received)</strong>
+                                                </div>
+                                                <div class="card-body p-3">
+                                                    <textarea name="settings[whatsapp_receipt_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_receipt_template', 'Mohtaram {customer_name}, humein aapki taraf se Voucher #{voucher_no} ke tehat Rs {paid_amount} wasool ho chuke hain. Aapka current baqiya balance: Rs {remaining_balance} hai. Shukriya! - {company_name}') }}</textarea>
+                                                    <small class="text-muted mt-1 d-block">Supported tags: {customer_name}, {voucher_no}, {date}, {paid_amount}, {remaining_balance}, {company_name}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-12 mb-3">
+                                            <div class="card border shadow-sm" style="border-radius: 8px;">
+                                                <div class="card-header bg-light py-2">
+                                                    <strong class="text-danger"><i class="fas fa-money-check-alt mr-1"></i> 4. Vendor Payment Voucher WhatsApp Message (Payment Paid)</strong>
+                                                </div>
+                                                <div class="card-body p-3">
+                                                    <textarea name="settings[whatsapp_payment_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_payment_template', 'Mohtaram {vendor_name}, aapko Voucher #{voucher_no} ke tehat Rs {paid_amount} ada kar diye gaye hain. Aapka remaining ledger balance: Rs {remaining_balance} hai. Shukriya! - {company_name}') }}</textarea>
+                                                    <small class="text-muted mt-1 d-block">Supported tags: {vendor_name}, {voucher_no}, {date}, {paid_amount}, {remaining_balance}, {company_name}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

@@ -1120,6 +1120,77 @@
         </div>
 
         <div class="print-btn-right">
+            @php
+                $relCust = $sale->customer_relation ?? ($sale->customer ?? null);
+                if (!$relCust && !empty($sale->customer_id)) {
+                    $relCust = \App\Models\Customer::find($sale->customer_id);
+                }
+                $waCustomerName = $sale->walkin_name ?? ($relCust->customer_name ?? ($relCust->name ?? ($sale->customer_name ?? 'Valued Customer')));
+                $waCustomerPhone = $sale->walkin_mobile ?? ($relCust->mobile ?? ($relCust->phone ?? ($relCust->mobile_2 ?? ($sale->customer_phone ?? ''))));
+                $waInvNo = $sale->invoice_no ?: ('SAL-' . $sale->id);
+                $waDate = !empty($sale->invoice_date) ? \Carbon\Carbon::parse($sale->invoice_date)->format('d/m/Y') : \Carbon\Carbon::parse($sale->created_at)->format('d/m/Y');
+                $waTotalAmount = number_format((float)($sale->total_net ?? ($sale->grand_total ?? 0)), 2);
+                $waPaidAmount = number_format((float)($paidAmount ?? ($sale->received_amount ?? ($sale->paid_amount ?? 0))), 2);
+                $waRemainingBal = number_format((float)($currentBalance ?? 0), 2);
+                $waCompName = \App\Models\Setting::get('company_name', 'Prowave Technologies');
+
+                $waData = [
+                    'customer_name' => $waCustomerName,
+                    'party_name' => $waCustomerName,
+                    'invoice_no' => $waInvNo,
+                    'voucher_no' => $waInvNo,
+                    'date' => $waDate,
+                    'total_amount' => $waTotalAmount,
+                    'paid_amount' => $waPaidAmount,
+                    'remaining_balance' => $waRemainingBal,
+                    'company_name' => $waCompName,
+                ];
+                $waMessage = \App\Services\WhatsAppService::getSaleInvoiceMessage($waData);
+                $waCleanPhone = \App\Services\WhatsAppService::formatPhoneNumber($waCustomerPhone);
+                $waCountryCode = \App\Models\Setting::get('whatsapp_country_code', '92');
+                $waDefaultMode = \App\Models\Setting::get('whatsapp_default_mode', 'app');
+            @endphp
+
+            <!-- WhatsApp Action Button with Quick Mode Switcher -->
+            <div class="btn-group">
+                <button type="button" class="btn text-white fw-bold shadow-sm" style="background-color: #25D366; border-color: #25D366;" onclick="sendWhatsAppInvoice()" title="Send WhatsApp Message">
+                    <i class="fab fa-whatsapp fs-6"></i> WhatsApp
+                </button>
+                <button type="button" class="btn text-white dropdown-toggle dropdown-toggle-split" style="background-color: #1ebd5a; border-color: #1ebd5a;" data-bs-toggle="dropdown" aria-expanded="false" title="WhatsApp Options">
+                    <span class="visually-hidden">Toggle Dropdown</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow" style="font-size: 12px; z-index: 1060;">
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" onclick="sendWhatsAppInvoice('app')">
+                            <i class="fas fa-desktop text-success fa-fw"></i>
+                            <div>
+                                <div class="fw-bold text-dark">WhatsApp App (Instant)</div>
+                                <div class="text-muted" style="font-size: 10px;">Opens Windows App — No browser tabs</div>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" onclick="sendWhatsAppInvoice('web')">
+                            <i class="fab fa-whatsapp text-success fa-fw"></i>
+                            <div>
+                                <div class="fw-bold text-dark">WhatsApp Web (Browser)</div>
+                                <div class="text-muted" style="font-size: 10px;">Opens in web.whatsapp.com</div>
+                            </div>
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" onclick="copyWhatsAppInvoice()">
+                            <i class="fas fa-copy text-primary fa-fw"></i>
+                            <div>
+                                <div class="fw-bold text-dark">Copy Message Text</div>
+                                <div class="text-muted" style="font-size: 10px;">Paste (Ctrl+V) in your open WhatsApp</div>
+                            </div>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
             <button onclick="printReceipt()" class="btn btn-primary" title="Print 80mm Thermal Receipt">
                 <i class="fas fa-receipt"></i> Print Receipt
             </button>
@@ -2436,6 +2507,58 @@
             }
 
             window.location.href = "{{ route('sale.index') }}";
+        }
+
+        const waSaleConfig = {
+            phone: '{{ $waCleanPhone }}',
+            countryCode: '{{ $waCountryCode }}',
+            defaultMode: '{{ $waDefaultMode }}',
+            message: {!! json_encode($waMessage) !!}
+        };
+
+        function getTargetPhone(config) {
+            let targetPhone = config.phone;
+            if (!targetPhone || targetPhone.trim() === '') {
+                let inputNum = prompt("Customer phone number is missing. Please enter WhatsApp number (e.g. 03001234567):");
+                if (!inputNum) return null;
+                targetPhone = inputNum.replace(/[^0-9]/g, '');
+                let countryCode = config.countryCode || '92';
+                if (targetPhone.startsWith('00')) {
+                    targetPhone = targetPhone.substring(2);
+                } else if (targetPhone.startsWith('0')) {
+                    targetPhone = countryCode + targetPhone.substring(1);
+                } else if (!targetPhone.startsWith(countryCode) && targetPhone.length <= 10) {
+                    targetPhone = countryCode + targetPhone;
+                }
+            }
+            return targetPhone;
+        }
+
+        function sendWhatsAppInvoice(mode) {
+            let useMode = mode || waSaleConfig.defaultMode || 'app';
+            let targetPhone = getTargetPhone(waSaleConfig);
+            if (!targetPhone) return;
+
+            if (useMode === 'app') {
+                // Open directly via Windows WhatsApp Desktop App (zero browser tabs)
+                let appUrl = "whatsapp://send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waSaleConfig.message);
+                window.location.href = appUrl;
+            } else {
+                // Open via WhatsApp Web
+                let webUrl = "https://web.whatsapp.com/send?phone=" + encodeURIComponent(targetPhone) + "&text=" + encodeURIComponent(waSaleConfig.message);
+                let waWin = window.open(webUrl, 'whatsapp_web_tab');
+                if (waWin) {
+                    waWin.focus();
+                }
+            }
+        }
+
+        function copyWhatsAppInvoice() {
+            navigator.clipboard.writeText(waSaleConfig.message).then(function() {
+                alert("Message copied! You can now switch to your open WhatsApp Web tab and press Ctrl+V to paste.");
+            }).catch(function() {
+                prompt("Copy message below:", waSaleConfig.message);
+            });
         }
     </script>
 
