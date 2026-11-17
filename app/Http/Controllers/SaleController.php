@@ -1289,12 +1289,12 @@ class SaleController extends Controller
             $userDefaultWhId = (int) ($user?->warehouse_id ?: 1);
 
             $headerWhId = $canSelectWarehouse
-                ? (is_numeric($request->warehouse_id) ? (int)$request->warehouse_id : $userDefaultWhId)
+                ? (is_numeric($request->warehouse_id) ? (int)$request->warehouse_id : (is_array($request->warehouse_id) ? (int)($request->warehouse_id[0] ?? $userDefaultWhId) : $userDefaultWhId))
                 : $userDefaultWhId;
 
             $warehouses = ($canSelectWarehouse && is_array($request->warehouse_id))
                 ? $request->warehouse_id
-                : array_fill(0, count($productIds), $userDefaultWhId);
+                : array_fill(0, count($productIds), $headerWhId);
 
             $defaultWhId = $headerWhId;
             $discounts = $request->item_disc ?? [];
@@ -2200,12 +2200,15 @@ class SaleController extends Controller
                 ->first();
 
             if (! $stock) {
-                $stock = WarehouseStock::where('product_id', $item->product_id)->lockForUpdate()->first();
-            }
-
-            if (! $stock) {
-                // Create if missing? Or fail? User said "Validate warehouse stock".
-                throw new \Exception('Stock not found for product: '.$item->product_name);
+                // Create a zero-stock record for this product+warehouse so the deduction can proceed
+                $stock = WarehouseStock::create([
+                    'product_id' => $item->product_id,
+                    'warehouse_id' => $targetWhId,
+                    'quantity' => 0,
+                    'total_pieces' => 0,
+                ]);
+                // Re-lock it
+                $stock = WarehouseStock::where('id', $stock->id)->lockForUpdate()->first();
             }
 
             // Calculate stock deduction quantity (for Kg products, total_pieces in WarehouseStock = total Kg)

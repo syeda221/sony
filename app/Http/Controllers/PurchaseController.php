@@ -1512,7 +1512,7 @@ class PurchaseController extends Controller
             'vendor_id' => 'nullable|exists:vendors,id',
             'purchase_date' => 'nullable|date',
             'branch_id' => 'nullable|exists:branches,id',
-            'warehouse_id' => 'required|exists:warehouses,id',
+            'warehouse_id' => 'nullable', // Note: can be array (from items) or scalar (from header)
             'note' => 'nullable|string',
             'discount' => 'nullable|numeric|min:0',
             'scheme_discount' => 'nullable|numeric|min:0',
@@ -1523,6 +1523,12 @@ class PurchaseController extends Controller
             'product_id.*' => 'nullable|string',
             'item_scheme_discount' => 'nullable|array',
             'item_scheme_discount.*' => 'nullable|numeric|min:0',
+            'backup_percent' => 'nullable|array',
+            'backup_percent.*' => 'nullable|numeric|min:0|max:100',
+            'annual_percent' => 'nullable|array',
+            'annual_percent.*' => 'nullable|numeric|min:0|max:100',
+            'gst_percent' => 'nullable|array',
+            'gst_percent.*' => 'nullable|numeric|min:0|max:100',
             'qty' => 'array',
             'qty.*' => 'nullable|required_with:product_id.*|numeric|min:0',
             'price' => 'array',
@@ -1823,7 +1829,7 @@ class PurchaseController extends Controller
             if ($oldVendorId && $oldVendorId != $purchase->vendor_id) {
                 \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)
                     ->where('vendor_id', $oldVendorId)
-                    ->delete();
+                    ->forceDelete();
             }
 
             if ($purchase->vendor_id && $totalBackupAmount > 0) {
@@ -1831,10 +1837,10 @@ class PurchaseController extends Controller
                     [
                         'purchase_id' => $purchase->id,
                         'type' => 'backup',
-                        'entry_type' => 'claim',
                     ],
                     [
                         'vendor_id' => $purchase->vendor_id,
+                        'entry_type' => 'claim',
                         'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
                         'reference_no' => $purchase->invoice_no,
                         'debit' => $totalBackupAmount,
@@ -1844,7 +1850,7 @@ class PurchaseController extends Controller
                     ]
                 );
             } else {
-                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'backup')->where('entry_type', 'claim')->delete();
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'backup')->forceDelete();
             }
 
             if ($purchase->vendor_id && $totalAnnualAmount > 0) {
@@ -1852,10 +1858,10 @@ class PurchaseController extends Controller
                     [
                         'purchase_id' => $purchase->id,
                         'type' => 'annual',
-                        'entry_type' => 'claim',
                     ],
                     [
                         'vendor_id' => $purchase->vendor_id,
+                        'entry_type' => 'claim',
                         'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
                         'reference_no' => $purchase->invoice_no,
                         'debit' => $totalAnnualAmount,
@@ -1865,7 +1871,7 @@ class PurchaseController extends Controller
                     ]
                 );
             } else {
-                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'annual')->where('entry_type', 'claim')->delete();
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'annual')->forceDelete();
             }
 
             // Stock movements & Warehouse stock updates
@@ -2225,8 +2231,14 @@ class PurchaseController extends Controller
                 $voucher->delete();
             }
 
-            // Clean up any incentive ledger claims (Backup & Annual)
-            \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->delete();
+            // Clean up any incentive ledger claims (Backup & Annual) permanently
+            \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)
+                ->orWhere(function ($q) use ($purchase) {
+                    if (!empty($purchase->invoice_no)) {
+                        $q->where('reference_no', $purchase->invoice_no);
+                    }
+                })
+                ->forceDelete();
 
             // 5. Adjust Vendor Ledger closing balance
             if ($purchase->vendor_id && $purchase->status_purchase !== 'draft') {

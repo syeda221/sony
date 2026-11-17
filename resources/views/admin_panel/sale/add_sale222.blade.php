@@ -1588,7 +1588,7 @@
                     {{-- Warehouse Selector --}}
                     <div class="d-flex align-items-center gap-2">
                         <label class="field-label mb-0 fw-bold text-secondary" for="headerWarehouseSelect"><i class="fas fa-warehouse text-primary me-1"></i>Warehouse:</label>
-                        <select name="warehouse_id" id="headerWarehouseSelect" class="form-select form-select-sm fw-bold border-primary shadow-sm" style="min-width: 170px; height: 38px;">
+                        <select name="header_warehouse_id" id="headerWarehouseSelect" class="form-select form-select-sm fw-bold border-primary shadow-sm" style="min-width: 170px; height: 38px;">
                             @if(isset($warehouse) && count($warehouse) > 0)
                                 @foreach($warehouse as $wh)
                                     <option value="{{ $wh->id }}" {{ ($userWarehouseId ?? 1) == $wh->id ? 'selected' : '' }}>
@@ -1599,7 +1599,7 @@
                         </select>
                     </div>
                     @else
-                        <input type="hidden" name="warehouse_id" id="headerWarehouseSelect" value="{{ $userWarehouseId ?? 1 }}">
+                        <input type="hidden" name="header_warehouse_id" id="headerWarehouseSelect" value="{{ $userWarehouseId ?? 1 }}">
                     @endif
 
                     {{-- Date --}}
@@ -2524,7 +2524,13 @@
         $(document).on('change', '#headerWarehouseSelect', function() {
             const selectedWh = $(this).val();
             $('.sales-table tbody tr').each(function() {
-                $(this).find('.warehouse').val(selectedWh);
+                const $row = $(this);
+                $row.find('.warehouse').val(selectedWh);
+                // Reload stock for the new warehouse
+                const productId = $row.find('.product-id-hidden').val() || $row.find('.product').val();
+                if (productId) {
+                    loadWarehousesForProduct($row, productId, selectedWh);
+                }
             });
         });
     // Terms Select All / Clear Handlers
