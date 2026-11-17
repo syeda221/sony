@@ -57,6 +57,46 @@
         display: flex;
         flex-direction: column;
     }
+    
+    /* Drill-down Clickable Rows */
+    .drilldown-row {
+        cursor: pointer;
+        transition: all 0.18s ease-in-out;
+    }
+    .drilldown-row:hover {
+        background-color: #f1f5f9 !important;
+        box-shadow: inset 3px 0 0 #3b82f6;
+    }
+    .drilldown-icon {
+        font-size: 10px;
+        opacity: 0.35;
+        margin-left: 6px;
+        transition: all 0.18s ease;
+        vertical-align: middle;
+    }
+    .drilldown-row:hover .drilldown-icon {
+        opacity: 1 !important;
+        color: #2563eb !important;
+        transform: translate(2px, -2px);
+    }
+    .drilldown-badge {
+        font-size: 9px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #f1f5f9;
+        color: #64748b;
+        margin-left: 6px;
+        border: 1px solid #e2e8f0;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        vertical-align: middle;
+    }
+    .drilldown-row:hover .drilldown-badge {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+    }
     .statement-header {
         padding: 12px 16px;
         background: #1e293b;
@@ -364,12 +404,20 @@
                                 {{-- Dynamically Loaded Cash & Bank Accounts --}}
                             </tbody>
                             <tbody>
-                                <tr>
-                                    <td class="bs-sub-row"><i class="fas fa-users-line text-info me-2"></i>Accounts Receivable</td>
+                                <tr id="rowReceivables" class="drilldown-row" title="Click to view Customer Balances">
+                                    <td class="bs-sub-row">
+                                        <i class="fas fa-users-line text-info me-2"></i>Accounts Receivable
+                                        <span class="drilldown-badge"><i class="fa-solid fa-users me-1"></i>Customers</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
                                     <td class="bs-amount text-primary" id="lblReceivables">Rs 0.00</td>
                                 </tr>
-                                <tr>
-                                    <td class="bs-sub-row"><i class="fas fa-boxes-stacked text-warning me-2"></i>Inventory on Hand</td>
+                                <tr id="rowInventory" class="drilldown-row" title="Click to view Item Stock Valuation Report">
+                                    <td class="bs-sub-row">
+                                        <i class="fas fa-boxes-stacked text-warning me-2"></i>Inventory on Hand
+                                        <span class="drilldown-badge"><i class="fa-solid fa-warehouse me-1"></i>Stock Report</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
                                     <td class="bs-amount text-dark" id="lblInventory">Rs 0.00</td>
                                 </tr>
                                 <tr class="bs-subtotal-row">
@@ -387,8 +435,12 @@
 
                         <table class="bs-table">
                             <tbody>
-                                <tr>
-                                    <td class="bs-sub-row text-muted italic" style="font-size: 11px;">Property, Plant & Equipment</td>
+                                <tr id="rowFixedAssets" class="drilldown-row" title="Click to view Chart of Accounts">
+                                    <td class="bs-sub-row text-muted" style="font-size: 11px;">
+                                        <i class="fas fa-building text-secondary me-2"></i>Property, Plant & Equipment
+                                        <span class="drilldown-badge"><i class="fa-solid fa-sitemap me-1"></i>Accounts</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
                                     <td class="bs-amount text-muted">Rs 0.00</td>
                                 </tr>
                                 <tr class="bs-subtotal-row">
@@ -429,8 +481,12 @@
 
                         <table class="bs-table">
                             <tbody>
-                                <tr>
-                                    <td class="bs-sub-row"><i class="fas fa-truck-field text-danger me-2"></i>Accounts Payable (Vendors)</td>
+                                <tr id="rowPayables" class="drilldown-row" title="Click to view Vendor Balances">
+                                    <td class="bs-sub-row">
+                                        <i class="fas fa-truck-field text-danger me-2"></i>Accounts Payable (Vendors)
+                                        <span class="drilldown-badge"><i class="fa-solid fa-truck-moving me-1"></i>Vendors</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
                                     <td class="bs-amount text-danger" id="lblPayables">Rs 0.00</td>
                                 </tr>
                                 <tr class="bs-subtotal-row">
@@ -448,8 +504,12 @@
 
                         <table class="bs-table">
                             <tbody>
-                                <tr>
-                                    <td class="bs-sub-row"><i class="fas fa-user-shield text-success me-2"></i>Owner's Capital & Retained Earnings</td>
+                                <tr id="rowEquity" class="drilldown-row" title="Click to view Profit & Loss Statement">
+                                    <td class="bs-sub-row">
+                                        <i class="fas fa-user-shield text-success me-2"></i>Owner's Capital & Retained Earnings
+                                        <span class="drilldown-badge"><i class="fa-solid fa-chart-line me-1"></i>P&L Report</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
                                     <td class="bs-amount text-success" id="lblEquity">Rs 0.00</td>
                                 </tr>
                                 <tr class="bs-subtotal-row">
@@ -509,8 +569,13 @@
                 if (res.assets && res.assets.cash_bank && res.assets.cash_bank.length > 0) {
                     res.assets.cash_bank.forEach(a => {
                         let icon = a.name.toLowerCase().includes('bank') ? 'fa-building-columns text-primary' : 'fa-money-bill-1 text-success';
-                        cbHtml += `<tr>
-                            <td class="bs-sub-row"><i class="fa-solid ${icon} me-2"></i>${a.name}</td>
+                        let url = a.ledger_url || '';
+                        cbHtml += `<tr class="drilldown-row" data-url="${url}" title="Click to view Account Ledger">
+                            <td class="bs-sub-row">
+                                <i class="fa-solid ${icon} me-2"></i>${a.name}
+                                <span class="drilldown-badge"><i class="fa-solid fa-book-open me-1"></i>Ledger</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                            </td>
                             <td class="bs-amount text-dark">${fmt(a.balance)}</td>
                         </tr>`;
                     });
@@ -543,7 +608,16 @@
                 $("#lblEquityTotal").text(fmt(equity));
                 $("#lblLiabEquityGrandTotal").text(fmt(liabEquityTotal));
 
-                // 3. Update Stat Pills (Desktop & Mobile)
+                // 3. Drill-down URLs binding
+                if (res.urls) {
+                    $('#rowReceivables').data('url', res.urls.receivables || '');
+                    $('#rowInventory').data('url', res.urls.inventory || '');
+                    $('#rowFixedAssets').data('url', res.urls.chart_of_accounts || '');
+                    $('#rowPayables').data('url', res.urls.payables || '');
+                    $('#rowEquity').data('url', res.urls.equity || '');
+                }
+
+                // 4. Update Stat Pills (Desktop & Mobile)
                 $("#pillAssets, #mobPillAssets").text(fmt(assetsTotal));
                 $("#pillLiabilities, #mobPillLiabilities").text(fmt(liabTotal));
                 $("#pillEquity, #mobPillEquity").text(fmt(equity));
@@ -557,6 +631,14 @@
                 }
             });
         }
+
+        // Drill-down click redirect (opens in new tab)
+        $(document).on('click', '.drilldown-row', function() {
+            let url = $(this).data('url');
+            if (url) {
+                window.open(url, '_blank');
+            }
+        });
 
         $(".btnGenerateTrigger").click(function() {
             loadData();

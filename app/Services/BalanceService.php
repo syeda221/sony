@@ -137,6 +137,26 @@ class BalanceService
     }
 
     /**
+     * Get customer balance as of (inclusive of) a specific date
+     */
+    public function getCustomerBalanceAsOfDate(int $customerId, string $date): float
+    {
+        $customer = Customer::find($customerId);
+        if ($customer) {
+            $this->ensureCustomerOpeningBalance($customer);
+        }
+
+        $dateOnly = substr($date, 0, 10);
+        $journalBalance = JournalEntry::where('party_type', Customer::class)
+            ->where('party_id', $customerId)
+            ->whereDate('entry_date', '<=', $dateOnly)
+            ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as balance')
+            ->value('balance') ?? 0;
+
+        return (float) $journalBalance;
+    }
+
+    /**
      * Get customer ledger entries for a date range
      */
     public function getCustomerLedger(int $customerId, string $startDate, string $endDate): array
@@ -283,6 +303,29 @@ class BalanceService
             ->where('party_id', $vendorId)
             ->where('account_id', $apId)
             ->where('entry_date', '<', $date)
+            ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as balance')
+            ->value('balance') ?? 0;
+
+        return (float) $balance;
+    }
+
+    /**
+     * Get vendor balance as of (inclusive of) a specific date
+     */
+    public function getVendorBalanceAsOfDate(int $vendorId, string $date): float
+    {
+        $vendor = \App\Models\Vendor::find($vendorId);
+        if ($vendor) {
+            $this->ensureVendorOpeningBalance($vendor);
+        }
+
+        $apId = $this->getAccountsPayableId();
+        $dateOnly = substr($date, 0, 10);
+
+        $balance = JournalEntry::where('party_type', \App\Models\Vendor::class)
+            ->where('party_id', $vendorId)
+            ->where('account_id', $apId)
+            ->whereDate('entry_date', '<=', $dateOnly)
             ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as balance')
             ->value('balance') ?? 0;
 

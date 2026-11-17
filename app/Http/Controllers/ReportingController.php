@@ -3152,77 +3152,84 @@ class ReportingController extends Controller
     public function fetch_balance_sheet(Request $request)
     {
         $date = $request->date ?: date('Y-m-d');
-        // Let's get "As Of Date" balances. If a future date is given, it still acts up to that point.
-        // We will include ending day inclusive so we add time OR use <=
-        $dateEnd = $date . ' 23:59:59';
+        $dateOnly = substr($date, 0, 10);
+        $dateEnd = $dateOnly . ' 23:59:59';
 
         $balanceService = app(\App\Services\BalanceService::class);
 
-        // 1. Current Assets
-        // Cash in Hand (head_id = 1)
-        // Cash at Bank (Usually head_id = 1, we can split them if we can identify them, but we'll show all assets)
-        $assetAccounts = DB::table('accounts')->whereIn('head_id', [1, 2])->get();
+        // 1. Current Assets: Cash & Bank Accounts
+        $assetAccounts = DB::table('accounts')
+            ->where(function($q) {
+                $q->whereIn('head_id', [1, 2])
+                  ->orWhere('account_code', 'CASH')
+                  ->orWhere('title', 'like', '%cash%')
+                  ->orWhere('title', 'like', '%bank%');
+            })
+            ->whereNotIn('account_code', ['AP', 'AR', 'PURCHASE', 'SALES'])
+            ->get();
+
         $cashAccounts = [];
         $totalCashBank = 0;
 
         foreach ($assetAccounts as $acc) {
-            // Need balance up to Date from Journal Entries
             $balance = DB::table('journal_entries')
                 ->where('account_id', $acc->id)
-                ->where('entry_date', '<=', $dateEnd)
+                ->whereDate('entry_date', '<=', $dateOnly)
                 ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as total')
                 ->value('total') ?? 0;
-            
-            $computed_balance = $acc->opening_balance + $balance;
+
+            $computed_balance = (float)$acc->opening_balance + (float)$balance;
             if ($computed_balance != 0) {
                 $cashAccounts[] = [
-                    'name' => $acc->title,
-                    'balance' => $computed_balance
+                    'id'           => $acc->id,
+                    'name'         => $acc->title,
+                    'code'         => $acc->account_code ?? '',
+                    'balance'      => $computed_balance,
+                    'ledger_url'   => route('accounts.ledger', ['id' => $acc->id]),
                 ];
                 $totalCashBank += $computed_balance;
             }
         }
 
-        // Account Receivables
+        // Account Receivables (Customers)
         $custQuery = DB::table('customers');
-            if ($request->province && $request->province !== 'all') $custQuery->where('province', $request->province);
-            if ($request->city && $request->city !== 'all') $custQuery->where('city', $request->city);
-            if ($request->area && $request->area !== 'all') $custQuery->where('area', $request->area);
-            $customers = $custQuery->get();
+        if ($request->province && $request->province !== 'all') $custQuery->where('province', $request->province);
+        if ($request->city && $request->city !== 'all') $custQuery->where('city', $request->city);
+        if ($request->area && $request->area !== 'all') $custQuery->where('area', $request->area);
+        $customers = $custQuery->get();
         $totalReceivables = 0;
         foreach ($customers as $c) {
-            $bal = $balanceService->getCustomerBalanceBeforeDate($c->id, $dateEnd);
+            $bal = $balanceService->getCustomerBalanceAsOfDate($c->id, $dateOnly);
             $totalReceivables += $bal;
         }
 
-        // Stock in Trade / Inventory on Hand
-        // Synchronized with Item Stock Report valuation logic (includes returns, physical warehouse stocks, and exact avg cost)
+        // Stock in Trade / Inventory on Hand (Exact valuation synchronized with Item Stock Report)
         $stockReq = new Request([
             'product_id'   => 'all',
             'category_id'  => 'all',
             'warehouse_id' => 'all',
             'unit_type'    => 'all',
             'report_mode'  => 'summary',
-            'date_to'      => substr($dateEnd, 0, 10),
+            'date_to'      => $dateOnly,
         ]);
         $stockRes = $this->fetchItemStock($stockReq);
         $stockData = $stockRes->getData(true);
         $totalInventory = (float) ($stockData['grand_total'] ?? 0);
 
         $currentAssetsTotal = $totalCashBank + $totalReceivables + $totalInventory;
-        $fixedAssetsTotal = 0; // if you have fixed assets head, you can add here
+        $fixedAssetsTotal = 0; // Fixed assets head
         $totalAssets = $currentAssetsTotal + $fixedAssetsTotal;
 
-        // 2. Liabilities
+        // 2. Liabilities: Accounts Payable (Vendors)
         $vendQuery = DB::table('vendors');
-            if ($request->province && $request->province !== 'all') $vendQuery->where('province', $request->province);
-            if ($request->city && $request->city !== 'all') $vendQuery->where('city', $request->city);
-            if ($request->area && $request->area !== 'all') $vendQuery->where('area', $request->area);
-            $vendors = $vendQuery->get();
+        if ($request->province && $request->province !== 'all') $vendQuery->where('province', $request->province);
+        if ($request->city && $request->city !== 'all') $vendQuery->where('city', $request->city);
+        if ($request->area && $request->area !== 'all') $vendQuery->where('area', $request->area);
+        $vendors = $vendQuery->get();
         $totalPayables = 0;
         foreach ($vendors as $v) {
-            $bal = $balanceService->getVendorBalanceBeforeDate($v->id, $dateEnd);
-            $totalPayables += $bal; // Vendor Balance (Cr is positive from BalanceService view)
+            $bal = $balanceService->getVendorBalanceAsOfDate($v->id, $dateOnly);
+            $totalPayables += $bal;
         }
         $currentLiabilitiesTotal = $totalPayables;
 
@@ -3231,21 +3238,31 @@ class ReportingController extends Controller
         $totalLiabilitiesAndEquity = $currentLiabilitiesTotal + $equityTotal;
 
         return response()->json([
-            'date' => date('d-M-Y', strtotime($date)),
+            'date' => date('d-M-Y', strtotime($dateOnly)),
+            'raw_date' => $dateOnly,
             'assets' => [
-                'cash_bank' => $cashAccounts,
+                'cash_bank'       => $cashAccounts,
                 'total_cash_bank' => $totalCashBank,
-                'receivables' => $totalReceivables,
-                'inventory' => $totalInventory,
-                'current_total' => $currentAssetsTotal,
-                'fixed_total' => $fixedAssetsTotal,
-                'total' => $totalAssets
+                'receivables'     => $totalReceivables,
+                'inventory'       => $totalInventory,
+                'current_total'   => $currentAssetsTotal,
+                'fixed_total'     => $fixedAssetsTotal,
+                'total'           => $totalAssets
             ],
             'liabilities' => [
-                'payables' => $totalPayables,
-                'current_total' => $currentLiabilitiesTotal,
-                'equity' => $equityTotal,
-                'total' => $totalLiabilitiesAndEquity
+                'payables'        => $totalPayables,
+                'current_total'   => $currentLiabilitiesTotal,
+                'equity'          => $equityTotal,
+                'total'           => $totalLiabilitiesAndEquity
+            ],
+            'urls' => [
+                'receivables' => route('report.parties_balance') . '?report_type=RECEIVABLE',
+                'customer_ledger' => route('report.customer.ledger'),
+                'inventory' => route('report.item_stock') . '?date_to=' . $dateOnly,
+                'payables' => route('report.parties_balance') . '?report_type=PAYABLE',
+                'vendor_ledger' => route('report.vendor.ledger'),
+                'equity' => route('report.profit_loss') . '?date_to=' . $dateOnly,
+                'chart_of_accounts' => route('view_all'),
             ]
         ]);
     }
