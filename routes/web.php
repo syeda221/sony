@@ -332,12 +332,12 @@ Route::middleware('auth')->group(function () {
     Route::get('zones/delete/{id}', [ZoneController::class, 'destroy'])->middleware('permission:zones.delete')->name('zone.delete');
 
     // Province
-    Route::get('province', [ProvinceController::class, 'index'])->middleware('permission:provinces.view')->name('province.index');
-    Route::get('provinces', [ProvinceController::class, 'index'])->middleware('permission:provinces.view')->name('provinces.index');
-    Route::post('provinces/store', [ProvinceController::class, 'store'])->middleware('permission:provinces.create|provinces.edit')->name('province.store');
-    Route::get('provinces/edit/{id}', [ProvinceController::class, 'edit'])->middleware('permission:provinces.edit')->name('province.edit');
-    Route::delete('provinces/{id}', [ProvinceController::class, 'destroy'])->middleware('permission:provinces.delete')->name('province.destroy');
-    Route::get('provinces/delete/{id}', [ProvinceController::class, 'destroy'])->middleware('permission:provinces.delete')->name('province.delete');
+    Route::get('province', [ProvinceController::class, 'index'])->name('province.index');
+    Route::get('provinces', [ProvinceController::class, 'index'])->name('provinces.index');
+    Route::post('provinces/store', [ProvinceController::class, 'store'])->name('province.store');
+    Route::get('provinces/edit/{id}', [ProvinceController::class, 'edit'])->name('province.edit');
+    Route::delete('provinces/{id}', [ProvinceController::class, 'destroy'])->name('province.destroy');
+    Route::get('provinces/delete/{id}', [ProvinceController::class, 'destroy'])->name('province.delete');
 
     // Sales Officer
     Route::get('sales-officers', [SalesOfficerController::class, 'index'])->middleware('permission:sales.officers.view')->name('sales.officer.index');

@@ -7,12 +7,10 @@
                     <div class="col-lg-12">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h3 class="font-weight-bold">Province Management</h3>
-                            @can('provinces.create')
-                                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createModal"
-                                    id="reset">
-                                    <i class="fas fa-plus mr-1"></i> Add Province
-                                </button>
-                            @endcan
+                            <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#createModal"
+                                id="reset">
+                                <i class="fas fa-plus mr-1"></i> Add Province
+                            </button>
                         </div>
 
                         <div class="border mt-1 shadow-sm rounded" style="background-color: white;">
@@ -39,18 +37,13 @@
                                                             <span class="badge badge-secondary px-2 py-1"><i class="fas fa-pause-circle mr-1"></i>Inactive</span>
                                                         @endif
                                                     </td>
-                                                    <td class="align-middle">
-                                                        @include('admin_panel.partials.action_buttons', [
-                                                            'editRoute' => route('province.edit', $province->id),
-                                                            'deleteRoute' => route('province.delete', $province->id),
-                                                            'editIsLink' => false,
-                                                            'permissions' => [
-                                                                'edit' => 'provinces.edit',
-                                                                'delete' => 'provinces.delete',
-                                                            ],
-                                                            'dataId' => $province->id,
-                                                            'deleteMsg' => 'Are you sure you want to delete this province?',
-                                                        ])
+                                                    <td class="align-middle text-center">
+                                                        <button type="button" class="btn btn-sm btn-info edit-btn" data-id="{{ $province->id }}">
+                                                            <i class="fas fa-edit"></i> Edit
+                                                        </button>
+                                                        <a href="{{ route('province.delete', $province->id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this province?');">
+                                                            <i class="fas fa-trash"></i> Delete
+                                                        </a>
                                                     </td>
                                                 </tr>
                                             @endforeach
@@ -93,11 +86,9 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        @can('provinces.create')
-                            <button type="submit" class="btn btn-primary save-btn">
-                                <i class="fas fa-save mr-1"></i> Save
-                            </button>
-                        @endcan
+                        <button type="submit" class="btn btn-primary save-btn">
+                            <i class="fas fa-save mr-1"></i> Save
+                        </button>
                     </div>
                 </div>
             </form>
@@ -132,11 +123,9 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        @can('provinces.edit')
-                            <button type="submit" class="btn btn-primary save-btn">
-                                <i class="fas fa-sync-alt mr-1"></i> Update
-                            </button>
-                        @endcan
+                        <button type="submit" class="btn btn-primary save-btn">
+                            <i class="fas fa-sync-alt mr-1"></i> Update
+                        </button>
                     </div>
                 </div>
             </form>
