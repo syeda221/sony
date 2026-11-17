@@ -1313,6 +1313,9 @@
                                         @can('website-settings.view')
                                             <li><a href="{{ route('website_settings.index') }}"><i class="fa-solid fa-cogs"></i> Website Settings</a></li>
                                         @endcan
+                                        @canany(['settings.view', 'settings.read'])
+                                            <li><a href="{{ route('settings.index') }}"><i class="fas fa-sliders-h text-primary"></i> Company / ERP Settings</a></li>
+                                        @endcan
                                         @canany(['web_products.view', 'web_products.read'])
                                             <li><a href="{{ route('web_products.index') }}"><i class="fa-solid fa-box"></i> Web Products</a></li>
                                         @endcan
