@@ -3157,15 +3157,13 @@ class ReportingController extends Controller
 
         $balanceService = app(\App\Services\BalanceService::class);
 
-        // 1. Current Assets: Cash & Bank Accounts
+        // 1. Current Assets: Cash & Bank / Liquid Accounts
+        // Include all active user accounts from Chart of Accounts (excluding only internal control accounts AP, AR, PURCHASE, SALES)
         $assetAccounts = DB::table('accounts')
-            ->where(function($q) {
-                $q->whereIn('head_id', [1, 2])
-                  ->orWhere('account_code', 'CASH')
-                  ->orWhere('title', 'like', '%cash%')
-                  ->orWhere('title', 'like', '%bank%');
-            })
             ->whereNotIn('account_code', ['AP', 'AR', 'PURCHASE', 'SALES'])
+            ->whereNotIn('title', ['Accounts Receivable', 'Accounts Payable', 'Sales Revenue', 'Purchase Expense'])
+            ->where('status', 1)
+            ->orderBy('id', 'asc')
             ->get();
 
         $cashAccounts = [];
@@ -3179,16 +3177,20 @@ class ReportingController extends Controller
                 ->value('total') ?? 0;
 
             $computed_balance = (float)$acc->opening_balance + (float)$balance;
-            if ($computed_balance != 0) {
-                $cashAccounts[] = [
-                    'id'           => $acc->id,
-                    'name'         => $acc->title,
-                    'code'         => $acc->account_code ?? '',
-                    'balance'      => $computed_balance,
-                    'ledger_url'   => route('accounts.ledger', ['id' => $acc->id]),
-                ];
-                $totalCashBank += $computed_balance;
+
+            // If no journal entries exist, use current_balance as fallback
+            if ($balance == 0 && (float)$acc->current_balance != 0) {
+                $computed_balance = (float)$acc->current_balance;
             }
+
+            $cashAccounts[] = [
+                'id'           => $acc->id,
+                'name'         => $acc->title,
+                'code'         => $acc->account_code ?? '',
+                'balance'      => $computed_balance,
+                'ledger_url'   => route('accounts.ledger', ['id' => $acc->id]),
+            ];
+            $totalCashBank += $computed_balance;
         }
 
         // Account Receivables (Customers)
@@ -3261,7 +3263,7 @@ class ReportingController extends Controller
                 'inventory' => route('report.item_stock') . '?date_to=' . $dateOnly,
                 'payables' => route('report.parties_balance') . '?report_type=PAYABLE',
                 'vendor_ledger' => route('report.vendor.ledger'),
-                'equity' => route('report.profit_loss') . '?date_to=' . $dateOnly,
+                'equity' => route('report.profit_loss') . '?start_date=2000-01-01T00:00&end_date=' . $dateOnly . 'T23:59',
                 'chart_of_accounts' => route('view_all'),
             ]
         ]);

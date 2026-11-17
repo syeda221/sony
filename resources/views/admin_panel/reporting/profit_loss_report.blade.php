@@ -126,11 +126,11 @@
                     <div class="d-flex align-items-center me-auto flex-wrap" style="gap: 16px !important;">
                         <div class="d-flex align-items-center gap-1">
                             <label for="start_date_desk" class="sale-filter-label mb-0 ms-1 me-1">From:</label>
-                            <input type="datetime-local" id="start_date_desk" class="form-control form-control-sm fw-bold startDateInput" value="{{ date('Y-m-d\T00:00') }}" style="height: 32px; width: 175px; font-size: .78rem; border-radius: 6px;">
+                            <input type="datetime-local" id="start_date_desk" class="form-control form-control-sm fw-bold startDateInput" value="{{ request('start_date') ? date('Y-m-d\TH:i', strtotime(request('start_date'))) : date('Y-m-d\T00:00') }}" style="height: 32px; width: 175px; font-size: .78rem; border-radius: 6px;">
                         </div>
                         <div class="d-flex align-items-center gap-1">
                             <label for="end_date_desk" class="sale-filter-label mb-0 ms-2 me-1">To:</label>
-                            <input type="datetime-local" id="end_date_desk" class="form-control form-control-sm fw-bold endDateInput" value="{{ date('Y-m-d\T23:59') }}" style="height: 32px; width: 175px; font-size: .78rem; border-radius: 6px;">
+                            <input type="datetime-local" id="end_date_desk" class="form-control form-control-sm fw-bold endDateInput" value="{{ request('end_date') ? date('Y-m-d\TH:i', strtotime(request('end_date'))) : date('Y-m-d\T23:59') }}" style="height: 32px; width: 175px; font-size: .78rem; border-radius: 6px;">
                         </div>
                     </div>
 
@@ -197,11 +197,11 @@
                     {{-- 1. Start & End Date --}}
                     <div class="col-6 mb-1">
                         <label class="form-label mb-1 fw-bold text-secondary" style="font-size: 11px;">From</label>
-                        <input type="datetime-local" id="start_date_mob" class="form-control form-control-sm startDateInput" value="{{ date('Y-m-d\T00:00') }}" style="font-size: 11px;">
+                        <input type="datetime-local" id="start_date_mob" class="form-control form-control-sm startDateInput" value="{{ request('start_date') ? date('Y-m-d\TH:i', strtotime(request('start_date'))) : date('Y-m-d\T00:00') }}" style="font-size: 11px;">
                     </div>
                     <div class="col-6 mb-1">
                         <label class="form-label mb-1 fw-bold text-secondary" style="font-size: 11px;">To</label>
-                        <input type="datetime-local" id="end_date_mob" class="form-control form-control-sm endDateInput" value="{{ date('Y-m-d\T23:59') }}" style="font-size: 11px;">
+                        <input type="datetime-local" id="end_date_mob" class="form-control form-control-sm endDateInput" value="{{ request('end_date') ? date('Y-m-d\TH:i', strtotime(request('end_date'))) : date('Y-m-d\T23:59') }}" style="font-size: 11px;">
                     </div>
 
                     {{-- 2. Category --}}
