@@ -137,12 +137,23 @@ class AccountsHeadController extends Controller
     {
         $account = Account::findOrFail($id);
 
+        // Dynamically calculate accurate live balance from journal entries + opening balance
+        $totalDebits = (float) JournalEntry::where('account_id', $id)->sum('debit');
+        $totalCredits = (float) JournalEntry::where('account_id', $id)->sum('credit');
+        $calculatedBalance = (float) ($account->opening_balance ?? 0) + $totalDebits - $totalCredits;
+
+        // Auto-heal current_balance in database if it went out of sync
+        if (round((float) $account->current_balance, 2) !== round($calculatedBalance, 2)) {
+            $account->current_balance = $calculatedBalance;
+            $account->save();
+        }
+
         $query = JournalEntry::where('account_id', $id)
             ->with('party')
             ->orderBy('entry_date', 'asc')
             ->orderBy('id', 'asc');
 
-        if ($request->has('from_date') && $request->has('to_date')) {
+        if ($request->has('from_date') && $request->has('to_date') && $request->from_date && $request->to_date) {
             $query->whereBetween('entry_date', [$request->from_date, $request->to_date]);
         }
 

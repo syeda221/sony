@@ -56,9 +56,14 @@
                             </p>
                         </div>
                         <div class="text-end">
-                            <h3 class="{{ $account->current_balance >= 0 ? 'balance-positive' : 'balance-negative' }}">
-                                {{ number_format(abs($account->current_balance), 2) }}
-                                <small class="fs-6 text-muted">{{ $account->current_balance >= 0 ? 'Dr' : 'Cr' }}</small>
+                            @php
+                                $displayBal = (float) $account->current_balance;
+                                $isDr = $displayBal > 0;
+                                $isCr = $displayBal < 0;
+                            @endphp
+                            <h3 class="{{ $isDr ? 'balance-positive' : ($isCr ? 'balance-negative' : 'text-dark') }}">
+                                {{ number_format(abs($displayBal), 2) }}
+                                <small class="fs-6 text-muted">{{ $isDr ? 'Dr' : ($isCr ? 'Cr' : '') }}</small>
                             </h3>
                             <div class="d-flex align-items-center justify-content-end gap-2 mt-1">
                                 <span class="badge bg-secondary">Current Balance</span>
