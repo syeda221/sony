@@ -144,11 +144,16 @@
         color: #ffffff !important;
         border: none !important;
     }
+    .btn-ledger-tab.active-scheme {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+    }
 </style>
 
 <div class="sale-report-container">
 
-    {{-- MULTI-LEDGER TABS (Main Ledger, Backup Claim Ledger, Annual Rebate Ledger) --}}
+    {{-- MULTI-LEDGER TABS (Main Ledger, Backup Claim Ledger, Annual Rebate Ledger, Scheme Discount Ledger) --}}
     <div class="d-flex align-items-center gap-2 mb-2 no-print flex-wrap">
         <button type="button" class="btn btn-sm px-3 py-2 fw-bold btn-ledger-tab active-main shadow-sm" data-tab="main" id="tabMainLedger">
             <i class="fas fa-file-invoice me-1"></i> 1. Main Ledger (Bills & Payments)
@@ -158,6 +163,9 @@
         </button>
         <button type="button" class="btn btn-sm px-3 py-2 fw-bold btn-ledger-tab text-secondary border bg-white shadow-sm" data-tab="annual" id="tabAnnualLedger">
             <i class="fas fa-bullseye text-primary me-1"></i> 3. Annual Rebate Ledger
+        </button>
+        <button type="button" class="btn btn-sm px-3 py-2 fw-bold btn-ledger-tab text-secondary border bg-white shadow-sm" data-tab="scheme" id="tabSchemeLedger">
+            <i class="fas fa-percentage text-warning me-1"></i> 4. Scheme Discount Ledger
         </button>
         <input type="hidden" id="reportLedgerType" value="main">
     </div>
@@ -526,13 +534,15 @@
             $(document).on('click', '.btn-ledger-tab', function() {
                 let tab = $(this).data('tab');
                 $('#reportLedgerType').val(tab);
-                $('.btn-ledger-tab').removeClass('active-main active-backup active-annual text-white').addClass('text-secondary border bg-white');
+                $('.btn-ledger-tab').removeClass('active-main active-backup active-annual active-scheme text-white').addClass('text-secondary border bg-white');
                 if (tab === 'main') {
                     $(this).removeClass('text-secondary border bg-white').addClass('active-main text-white');
                 } else if (tab === 'backup') {
                     $(this).removeClass('text-secondary border bg-white').addClass('active-backup text-white');
                 } else if (tab === 'annual') {
                     $(this).removeClass('text-secondary border bg-white').addClass('active-annual text-white');
+                } else if (tab === 'scheme') {
+                    $(this).removeClass('text-secondary border bg-white').addClass('active-scheme text-white');
                 }
                 loadLedger();
             });
@@ -558,9 +568,9 @@
                     let displayStart = formatDisplayDate(start);
                     let displayEnd = formatDisplayDate(end);
 
-                    let isInc = (res.ledger_type === 'backup' || res.ledger_type === 'annual');
-                    let incTitle = res.ledger_type === 'backup' ? 'Backup Claim' : (res.ledger_type === 'annual' ? 'Annual Rebate' : 'Ledger');
-                    let badgeColor = res.ledger_type === 'backup' ? 'success' : (res.ledger_type === 'annual' ? 'primary' : 'primary');
+                    let isInc = (res.ledger_type === 'backup' || res.ledger_type === 'annual' || res.ledger_type === 'scheme');
+                    let incTitle = res.ledger_type === 'backup' ? 'Backup Claim' : (res.ledger_type === 'annual' ? 'Annual Rebate' : (res.ledger_type === 'scheme' ? 'Scheme Discount' : 'Ledger'));
+                    let badgeColor = res.ledger_type === 'backup' ? 'success' : (res.ledger_type === 'annual' ? 'primary' : (res.ledger_type === 'scheme' ? 'warning' : 'primary'));
 
                     updateReportTitle(res.vendor ? (res.vendor.name + ' - ' + incTitle) : null);
 
@@ -588,7 +598,7 @@
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <div>
                                     <h6 class="fw-bold text-dark mb-0">
-                                        <i class="fas ${res.ledger_type === 'backup' ? 'fa-shield-alt text-success' : (res.ledger_type === 'annual' ? 'fa-bullseye text-primary' : 'fa-truck text-primary')} me-1"></i>
+                                        <i class="fas ${res.ledger_type === 'backup' ? 'fa-shield-alt text-success' : (res.ledger_type === 'annual' ? 'fa-bullseye text-primary' : (res.ledger_type === 'scheme' ? 'fa-percentage text-warning' : 'fa-truck text-primary'))} me-1"></i>
                                         ${res.vendor.name} ${bothBadge}
                                     </h6>
                                     <small class="text-muted">Period: <strong>${displayStart}</strong> to <strong>${displayEnd}</strong></small>
@@ -618,6 +628,14 @@
                         $('#colDebitHeader').text('Rebate Accrued (Dr)');
                         $('#colCreditHeader').text('Received / Settled (Cr)');
                         $('#colBalanceHeader').text('Rebate Due (Receivable)');
+                    } else if (res.ledger_type === 'scheme') {
+                        $('#pillOpeningLabel, #mobPillOpeningLabel').text('Opening Scheme Balance');
+                        $('#pillDebitLabel, #mobPillDebitLabel').text('Total Accrued (Dr +)');
+                        $('#pillCreditLabel, #mobPillCreditLabel').text('Total Settled (Cr -)');
+                        $('#pillClosingLabel, #mobPillClosingLabel').text('Outstanding Scheme Due');
+                        $('#colDebitHeader').text('Scheme Claim (Dr)');
+                        $('#colCreditHeader').text('Received / Settled (Cr)');
+                        $('#colBalanceHeader').text('Scheme Due (Receivable)');
                     } else {
                         $('#pillOpeningLabel, #mobPillOpeningLabel').text('Opening Balance');
                         $('#pillDebitLabel, #mobPillDebitLabel').text('Total Debit (Dr)');
@@ -780,7 +798,7 @@
 
                     // --- POPULATE PRINT LAYOUT ---
                     let printTitle = isInc 
-                        ? (res.ledger_type === 'backup' ? 'VENDOR BACKUP CLAIM LEDGER (OFF-INVOICE)' : 'VENDOR ANNUAL REBATE LEDGER (OFF-INVOICE)') 
+                        ? (res.ledger_type === 'backup' ? 'VENDOR BACKUP CLAIM LEDGER (OFF-INVOICE)' : (res.ledger_type === 'annual' ? 'VENDOR ANNUAL REBATE LEDGER (OFF-INVOICE)' : 'VENDOR SCHEME DISCOUNT LEDGER (OFF-INVOICE)')) 
                         : 'VENDOR LEDGER';
                     $('#printReportTitle').text(printTitle);
                     $('#printVendName').text(res.vendor.name);
@@ -811,7 +829,7 @@
                         
                         if (isInc) {
                             if (t.entry_type === 'claim') {
-                                type = res.ledger_type === 'backup' ? 'Backup Claim' : 'Annual Rebate';
+                                type = res.ledger_type === 'backup' ? 'Backup Claim' : (res.ledger_type === 'annual' ? 'Annual Rebate' : 'Scheme Claim');
                             } else if (t.entry_type === 'received') {
                                 type = 'Payout Received';
                             } else if (t.entry_type === 'adjusted') {

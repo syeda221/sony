@@ -2836,10 +2836,10 @@ class ReportingController extends Controller
         $vendorId = $request->vendor_id;
         $start = $request->start_date ?: '2000-01-01';
         $end = $request->end_date ?: date('Y-m-d');
-        $ledgerType = $request->ledger_type ?: 'main'; // 'main', 'backup', 'annual'
+        $ledgerType = $request->ledger_type ?: 'main'; // 'main', 'backup', 'annual', 'scheme'
 
-        // Handle Incentive Ledgers: Backup or Annual
-        if ($ledgerType === 'backup' || $ledgerType === 'annual') {
+        // Handle Incentive Ledgers: Backup, Annual or Scheme
+        if ($ledgerType === 'backup' || $ledgerType === 'annual' || $ledgerType === 'scheme') {
             return $this->fetch_vendor_incentive_ledger($vendorId, $ledgerType, $start, $end);
         }
 
@@ -3074,7 +3074,7 @@ class ReportingController extends Controller
                     'invoice_url'       => $invoiceUrl,
                     'vendor_invoice_no' => null,
                     'source_type'       => $row->entry_type,
-                    'description'       => $row->notes ?: ($row->entry_type === 'claim' ? ($type === 'backup' ? 'Backup Incentive Claim' : 'Annual Rebate Claim') : 'Payout / Adjustment Settlement'),
+                    'description'       => $row->notes ?: ($row->entry_type === 'claim' ? ($type === 'backup' ? 'Backup Incentive Claim' : ($type === 'annual' ? 'Annual Rebate Claim' : 'Scheme Discount Claim')) : 'Payout / Adjustment Settlement'),
                     'vendor_name'       => $row->vendor->name ?? 'Unknown',
                     'debit'             => $debit,
                     'credit'            => $credit,
