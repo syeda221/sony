@@ -65,205 +65,205 @@
                             <div class="tab-content" id="settingsTabContent">
                                 <!-- Company Tab -->
                                 <div class="tab-pane fade show active" id="company" role="tabpanel">
-                                    @if (isset($settings['company']))
-                                        @php
-                                            $compByKey = [];
-                                            foreach ($settings['company'] as $s) {
-                                                $compByKey[$s['key']] = $s;
-                                            }
-                                        @endphp
+                                    @php
+                                        $compSettings = $settings['company'] ?? [];
+                                        $compByKey = [];
+                                        foreach ($compSettings as $s) {
+                                            $compByKey[$s['key']] = $s;
+                                        }
 
-                                        <!-- Section 1: Business Identity & Tax Details -->
-                                        <div class="card mb-3 border shadow-sm" style="border-radius: 8px;">
-                                            <div class="card-header bg-light py-2 px-3">
-                                                <strong class="text-primary font-weight-bold" style="font-size: 13.5px;">
-                                                    <i class="fas fa-building mr-1"></i> Business Identity & Tax Information
-                                                </strong>
-                                            </div>
-                                            <div class="card-body p-3">
-                                                <div class="row">
-                                                    <!-- Company Name (4 cols) -->
-                                                    @if(isset($compByKey['company_name']))
-                                                        <div class="col-md-4 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12.5px;">{{ $compByKey['company_name']['label'] }} <span class="text-danger">*</span></label>
-                                                                <input type="text" name="settings[company_name]" class="form-control form-control-sm" value="{{ $compByKey['company_name']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. Innot Tech" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
+                                        $valName = \App\Models\Setting::get('company_name', $compByKey['company_name']['value'] ?? '');
+                                        $valPhone = \App\Models\Setting::get('company_phone', $compByKey['company_phone']['value'] ?? '');
+                                        $valEmail = \App\Models\Setting::get('company_email', $compByKey['company_email']['value'] ?? '');
+                                        $valNtn = \App\Models\Setting::get('company_ntn', $compByKey['company_ntn']['value'] ?? '');
+                                        $valStrn = \App\Models\Setting::get('company_strn', $compByKey['company_strn']['value'] ?? '');
+                                        $valCurrency = \App\Models\Setting::get('currency_symbol', $compByKey['currency_symbol']['value'] ?? 'PKR');
+                                        $valAddress = \App\Models\Setting::get('company_address', $compByKey['company_address']['value'] ?? '');
 
-                                                    <!-- Phone Number (3 cols) -->
-                                                    @if(isset($compByKey['company_phone']))
-                                                        <div class="col-md-3 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-phone-alt text-secondary mr-1"></i> {{ $compByKey['company_phone']['label'] }}</label>
-                                                                <input type="text" name="settings[company_phone]" class="form-control form-control-sm" value="{{ $compByKey['company_phone']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. 0333-6722263" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
+                                        $valWebsite = \App\Models\Setting::get('website_link', $compByKey['website_link']['value'] ?? '');
+                                        $valFacebook = \App\Models\Setting::get('facebook_link', $compByKey['facebook_link']['value'] ?? '');
+                                        $valInstagram = \App\Models\Setting::get('instagram_link', $compByKey['instagram_link']['value'] ?? '');
+                                        $valTiktok = \App\Models\Setting::get('tiktok_link', $compByKey['tiktok_link']['value'] ?? '');
+                                    @endphp
 
-                                                    <!-- NTN Number (3 cols) -->
-                                                    @if(isset($compByKey['company_ntn']))
-                                                        <div class="col-md-3 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-id-card text-info mr-1"></i> {{ $compByKey['company_ntn']['label'] }}</label>
-                                                                <input type="text" name="settings[company_ntn]" class="form-control form-control-sm font-weight-bold" value="{{ $compByKey['company_ntn']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. H126850-4" style="height: 35px; letter-spacing: 0.5px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-
-                                                    <!-- Currency Symbol (2 cols) -->
-                                                    @if(isset($compByKey['currency_symbol']))
-                                                        <div class="col-md-2 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-money-bill-wave text-success mr-1"></i> {{ $compByKey['currency_symbol']['label'] }}</label>
-                                                                <input type="text" name="settings[currency_symbol]" class="form-control form-control-sm text-center font-weight-bold" value="{{ $compByKey['currency_symbol']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="PKR" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-
-                                                    <!-- STRN Number (4 cols) -->
-                                                    @if(isset($compByKey['company_strn']))
-                                                        <div class="col-md-4 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-file-invoice text-warning mr-1"></i> {{ $compByKey['company_strn']['label'] }}</label>
-                                                                <input type="text" name="settings[company_strn]" class="form-control form-control-sm font-weight-bold" value="{{ $compByKey['company_strn']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. 32-77-8763-950-94" style="height: 35px; letter-spacing: 0.5px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-
-                                                    <!-- Company Address (8 cols) -->
-                                                    @if(isset($compByKey['company_address']))
-                                                        <div class="col-md-8 col-sm-12 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-map-marker-alt text-danger mr-1"></i> {{ $compByKey['company_address']['label'] }}</label>
-                                                                <input type="text" name="settings[company_address]" class="form-control form-control-sm" value="{{ $compByKey['company_address']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. 7/A, Block-B, Unit No 10, Latifabad, Hyderabad" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-
-                                                    <!-- Company Logo (Invoice & Header) (12 cols) -->
-                                                    <div class="col-md-12 mb-2 mt-2">
-                                                        <div class="p-3 border rounded shadow-sm" style="background: #f8fafc;">
-                                                            <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 15px;">
-                                                                <div>
-                                                                    <label class="font-weight-bold mb-1 text-dark d-flex align-items-center" style="font-size: 13px;">
-                                                                        <i class="fas fa-image text-primary mr-2"></i> Company Logo (Displayed on Sale Invoices & Receipts)
-                                                                    </label>
-                                                                    <div class="text-muted" style="font-size: 11.5px; line-height: 1.4;">
-                                                                        Yeh logo aapki tamam <strong>Sales Invoices, Quotations, DC aur Receipts</strong> ke header par dynamically print hoga.<br>
-                                                                        <span class="text-secondary">Allowed formats: PNG, JPG, JPEG, SVG, WEBP (Transparent background recommended).</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                @php
-                                                                    $currentLogo = \App\Models\Setting::get('company_logo');
-                                                                    $hasLogo = !empty($currentLogo) && (file_exists(public_path($currentLogo)) || file_exists(base_path($currentLogo)));
-                                                                @endphp
-
-                                                                <div class="d-flex align-items-center" style="gap: 12px;">
-                                                                    <div class="border rounded bg-white p-2 d-flex align-items-center justify-content-center shadow-sm" style="min-width: 140px; min-height: 52px; max-width: 200px;">
-                                                                        <img id="logoPreviewImg" src="{{ $hasLogo ? asset($currentLogo) : '' }}" alt="Company Logo" style="max-height: 48px; max-width: 100%; object-fit: contain; {{ $hasLogo ? '' : 'display: none;' }}">
-                                                                        <span id="noLogoBadge" class="badge badge-light text-muted border py-1 px-2" style="{{ $hasLogo ? 'display: none;' : '' }}">
-                                                                            <i class="fas fa-image mr-1"></i> No Logo Set
-                                                                        </span>
-                                                                    </div>
-
-                                                                    @if($canEditSettings)
-                                                                        <div class="d-flex flex-column" style="gap: 6px;">
-                                                                            <label class="btn btn-sm btn-primary mb-0 cursor-pointer font-weight-bold shadow-sm" style="font-size: 12px;">
-                                                                                <i class="fas fa-upload mr-1"></i> Upload Logo
-                                                                                <input type="file" name="company_logo" id="companyLogoInput" accept="image/*" class="d-none" onchange="previewCompanyLogo(this)">
-                                                                            </label>
-                                                                            <button type="button" class="btn btn-sm btn-outline-danger font-weight-bold" id="removeLogoBtn" style="{{ $hasLogo ? '' : 'display: none;' }}; font-size: 11.5px;" onclick="removeCompanyLogo()">
-                                                                                <i class="fas fa-trash-alt mr-1"></i> Remove Logo
-                                                                            </button>
-                                                                            <input type="hidden" name="remove_company_logo" id="removeCompanyLogoInput" value="0">
-                                                                        </div>
-                                                                    @endif
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                    <!-- Section 1: Business Identity & Tax Details -->
+                                    <div class="card mb-3 border shadow-sm" style="border-radius: 8px;">
+                                        <div class="card-header bg-light py-2 px-3">
+                                            <strong class="text-primary font-weight-bold" style="font-size: 13.5px;">
+                                                <i class="fas fa-building mr-1"></i> Business Identity & Tax Information
+                                            </strong>
                                         </div>
-
-                                        <!-- Section 2: Social Media & Website Profiles -->
-                                        <div class="card mb-3 border shadow-sm" style="border-radius: 8px;">
-                                            <div class="card-header bg-light py-2 px-3">
-                                                <strong class="text-secondary font-weight-bold" style="font-size: 13.5px;">
-                                                    <i class="fas fa-share-alt mr-1"></i> Online & Social Profiles (Shown on Receipts/Website)
-                                                </strong>
-                                            </div>
-                                            <div class="card-body p-3">
-                                                <div class="row">
-                                                    <!-- Website Link (3 cols) -->
-                                                    @if(isset($compByKey['website_link']))
-                                                        <div class="col-md-3 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fas fa-globe text-primary mr-1"></i> Website URL</label>
-                                                                <input type="text" name="settings[website_link]" class="form-control form-control-sm" value="{{ $compByKey['website_link']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://yourwebsite.com" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-
-                                                    <!-- Facebook Link (3 cols) -->
-                                                    @if(isset($compByKey['facebook_link']))
-                                                        <div class="col-md-3 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fab fa-facebook text-primary mr-1"></i> Facebook</label>
-                                                                <input type="text" name="settings[facebook_link]" class="form-control form-control-sm" value="{{ $compByKey['facebook_link']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://facebook.com/page" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-
-                                                    <!-- Instagram Link (3 cols) -->
-                                                    @if(isset($compByKey['instagram_link']))
-                                                        <div class="col-md-3 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fab fa-instagram text-danger mr-1"></i> Instagram</label>
-                                                                <input type="text" name="settings[instagram_link]" class="form-control form-control-sm" value="{{ $compByKey['instagram_link']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://instagram.com/page" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-
-                                                    <!-- TikTok Link (3 cols) -->
-                                                    @if(isset($compByKey['tiktok_link']))
-                                                        <div class="col-md-3 col-sm-6 mb-2">
-                                                            <div class="form-group mb-2">
-                                                                <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fab fa-tiktok text-dark mr-1"></i> TikTok</label>
-                                                                <input type="text" name="settings[tiktok_link]" class="form-control form-control-sm" value="{{ $compByKey['tiktok_link']['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://tiktok.com/@page" style="height: 35px;">
-                                                            </div>
-                                                        </div>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Fallback for any other custom company settings -->
-                                        @php
-                                            $handledKeys = ['company_name', 'company_address', 'company_phone', 'currency_symbol', 'company_ntn', 'company_strn', 'website_link', 'facebook_link', 'instagram_link', 'tiktok_link', 'company_logo'];
-                                            $unhandled = array_filter($settings['company'], function($item) use ($handledKeys) {
-                                                return !in_array($item['key'], $handledKeys);
-                                            });
-                                        @endphp
-                                        @if(count($unhandled) > 0)
+                                        <div class="card-body p-3">
                                             <div class="row">
-                                                @foreach ($unhandled as $setting)
-                                                    <div class="col-md-4 col-sm-6 mb-2">
-                                                        <div class="form-group mb-2">
-                                                            <label class="font-weight-bold mb-1" style="font-size: 12px;">{{ $setting['label'] }}</label>
-                                                            @if ($setting['type'] === 'text')
-                                                                <textarea name="settings[{{ $setting['key'] }}]" class="form-control form-control-sm" rows="2" {{ !$canEditSettings ? 'disabled' : '' }}>{{ $setting['value'] }}</textarea>
-                                                            @else
-                                                                <input type="text" name="settings[{{ $setting['key'] }}]" class="form-control form-control-sm" value="{{ $setting['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} style="height: 35px;">
-                                                            @endif
+                                                <!-- Company Name (4 cols) -->
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12.5px;">Company Name <span class="text-danger">*</span></label>
+                                                        <input type="text" name="settings[company_name]" class="form-control form-control-sm" value="{{ $valName }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. Innot Tech" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Phone Number (4 cols) -->
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-phone-alt text-secondary mr-1"></i> Phone Number</label>
+                                                        <input type="text" name="settings[company_phone]" class="form-control form-control-sm" value="{{ $valPhone }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. 0333-6722263" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Company Email (4 cols) -->
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-envelope text-primary mr-1"></i> Company Email</label>
+                                                        <input type="email" name="settings[company_email]" class="form-control form-control-sm" value="{{ $valEmail }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. info@company.com" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- NTN Number (4 cols) -->
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-id-card text-info mr-1"></i> NTN Number</label>
+                                                        <input type="text" name="settings[company_ntn]" class="form-control form-control-sm font-weight-bold" value="{{ $valNtn }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. H126850-4" style="height: 35px; letter-spacing: 0.5px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- STRN Number (4 cols) -->
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-file-invoice text-warning mr-1"></i> STRN Number</label>
+                                                        <input type="text" name="settings[company_strn]" class="form-control form-control-sm font-weight-bold" value="{{ $valStrn }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. 32-77-8763-950-94" style="height: 35px; letter-spacing: 0.5px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Currency Symbol (4 cols) -->
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-money-bill-wave text-success mr-1"></i> Currency Symbol</label>
+                                                        <input type="text" name="settings[currency_symbol]" class="form-control form-control-sm text-center font-weight-bold" value="{{ $valCurrency }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="PKR" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Company Address (12 cols) -->
+                                                <div class="col-md-12 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12.5px;"><i class="fas fa-map-marker-alt text-danger mr-1"></i> Company Address</label>
+                                                        <input type="text" name="settings[company_address]" class="form-control form-control-sm" value="{{ $valAddress }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="e.g. 7/A, Block-B, Unit No 10, Latifabad, Hyderabad" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Company Logo (Invoice & Header) (12 cols) -->
+                                                <div class="col-md-12 mb-2 mt-2">
+                                                    <div class="p-3 border rounded shadow-sm" style="background: #f8fafc;">
+                                                        <div class="d-flex align-items-center justify-content-between flex-wrap" style="gap: 15px;">
+                                                            <div>
+                                                                <label class="font-weight-bold mb-1 text-dark d-flex align-items-center" style="font-size: 13px;">
+                                                                    <i class="fas fa-image text-primary mr-2"></i> Company Logo (Displayed on Sale Invoices & Receipts)
+                                                                </label>
+                                                                <div class="text-muted" style="font-size: 11.5px; line-height: 1.4;">
+                                                                    Yeh logo aapki tamam <strong>Sales Invoices, Quotations, DC aur Receipts</strong> ke header par dynamically print hoga.<br>
+                                                                    <span class="text-secondary">Allowed formats: PNG, JPG, JPEG, SVG, WEBP (Transparent background recommended).</span>
+                                                                </div>
+                                                            </div>
+
+                                                            @php
+                                                                $currentLogo = \App\Models\Setting::get('company_logo');
+                                                                $hasLogo = !empty($currentLogo) && (file_exists(public_path($currentLogo)) || file_exists(base_path($currentLogo)));
+                                                            @endphp
+
+                                                            <div class="d-flex align-items-center" style="gap: 12px;">
+                                                                <div class="border rounded bg-white p-2 d-flex align-items-center justify-content-center shadow-sm" style="min-width: 140px; min-height: 52px; max-width: 200px;">
+                                                                    <img id="logoPreviewImg" src="{{ $hasLogo ? asset($currentLogo) : '' }}" alt="Company Logo" style="max-height: 48px; max-width: 100%; object-fit: contain; {{ $hasLogo ? '' : 'display: none;' }}">
+                                                                    <span id="noLogoBadge" class="badge badge-light text-muted border py-1 px-2" style="{{ $hasLogo ? 'display: none;' : '' }}">
+                                                                        <i class="fas fa-image mr-1"></i> No Logo Set
+                                                                    </span>
+                                                                </div>
+
+                                                                @if($canEditSettings)
+                                                                    <div class="d-flex flex-column" style="gap: 6px;">
+                                                                        <label class="btn btn-sm btn-primary mb-0 cursor-pointer font-weight-bold shadow-sm" style="font-size: 12px;">
+                                                                            <i class="fas fa-upload mr-1"></i> Upload Logo
+                                                                            <input type="file" name="company_logo" id="companyLogoInput" accept="image/*" class="d-none" onchange="previewCompanyLogo(this)">
+                                                                        </label>
+                                                                        <button type="button" class="btn btn-sm btn-outline-danger font-weight-bold" id="removeLogoBtn" style="{{ $hasLogo ? '' : 'display: none;' }}; font-size: 11.5px;" onclick="removeCompanyLogo()">
+                                                                            <i class="fas fa-trash-alt mr-1"></i> Remove Logo
+                                                                        </button>
+                                                                        <input type="hidden" name="remove_company_logo" id="removeCompanyLogoInput" value="0">
+                                                                    </div>
+                                                                @endif
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                @endforeach
+                                                </div>
                                             </div>
-                                        @endif
+                                        </div>
+                                    </div>
+
+                                    <!-- Section 2: Social Media & Website Profiles -->
+                                    <div class="card mb-3 border shadow-sm" style="border-radius: 8px;">
+                                        <div class="card-header bg-light py-2 px-3">
+                                            <strong class="text-secondary font-weight-bold" style="font-size: 13.5px;">
+                                                <i class="fas fa-share-alt mr-1"></i> Online & Social Profiles (Shown on Receipts/Website)
+                                            </strong>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="row">
+                                                <!-- Website Link (3 cols) -->
+                                                <div class="col-md-3 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fas fa-globe text-primary mr-1"></i> Website URL</label>
+                                                        <input type="text" name="settings[website_link]" class="form-control form-control-sm" value="{{ $valWebsite }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://yourwebsite.com" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Facebook Link (3 cols) -->
+                                                <div class="col-md-3 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fab fa-facebook text-primary mr-1"></i> Facebook</label>
+                                                        <input type="text" name="settings[facebook_link]" class="form-control form-control-sm" value="{{ $valFacebook }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://facebook.com/page" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Instagram Link (3 cols) -->
+                                                <div class="col-md-3 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fab fa-instagram text-danger mr-1"></i> Instagram</label>
+                                                        <input type="text" name="settings[instagram_link]" class="form-control form-control-sm" value="{{ $valInstagram }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://instagram.com/page" style="height: 35px;">
+                                                    </div>
+                                                </div>
+
+                                                <!-- TikTok Link (3 cols) -->
+                                                <div class="col-md-3 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12px;"><i class="fab fa-tiktok text-dark mr-1"></i> TikTok</label>
+                                                        <input type="text" name="settings[tiktok_link]" class="form-control form-control-sm" value="{{ $valTiktok }}" {{ !$canEditSettings ? 'disabled' : '' }} placeholder="https://tiktok.com/@page" style="height: 35px;">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Fallback for any other custom company settings -->
+                                    @php
+                                        $handledKeys = ['company_name', 'company_address', 'company_phone', 'company_email', 'currency_symbol', 'company_ntn', 'company_strn', 'website_link', 'facebook_link', 'instagram_link', 'tiktok_link', 'company_logo'];
+                                        $unhandled = array_filter($compSettings, function($item) use ($handledKeys) {
+                                            return !in_array($item['key'], $handledKeys);
+                                        });
+                                    @endphp
+                                    @if(count($unhandled) > 0)
+                                        <div class="row">
+                                            @foreach ($unhandled as $setting)
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-group mb-2">
+                                                        <label class="font-weight-bold mb-1" style="font-size: 12px;">{{ $setting['label'] }}</label>
+                                                        @if ($setting['type'] === 'text')
+                                                            <textarea name="settings[{{ $setting['key'] }}]" class="form-control form-control-sm" rows="2" {{ !$canEditSettings ? 'disabled' : '' }}>{{ $setting['value'] }}</textarea>
+                                                        @else
+                                                            <input type="text" name="settings[{{ $setting['key'] }}]" class="form-control form-control-sm" value="{{ $setting['value'] }}" {{ !$canEditSettings ? 'disabled' : '' }} style="height: 35px;">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
                                     @endif
                                 </div>
 

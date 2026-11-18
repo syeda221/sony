@@ -1251,6 +1251,9 @@
                 $companyName = \App\Models\Setting::get('company_name', config('app.name', 'Innot Tech'));
                 $companyAddress = \App\Models\Setting::get('company_address');
                 $companyPhone = \App\Models\Setting::get('company_phone');
+                $companyEmail = \App\Models\Setting::get('company_email');
+                $companyNtn = \App\Models\Setting::get('company_ntn');
+                $companyStrn = \App\Models\Setting::get('company_strn');
                 $companyLogo = \App\Models\Setting::get('company_logo') ?? \App\Models\Setting::get('web_site_logo');
             @endphp
 
@@ -1265,11 +1268,27 @@
                     @if(!empty($companyAddress))
                         <span>{{ $companyAddress }}</span>
                     @endif
-                    @if(!empty($companyAddress) && !empty($companyPhone))
+                    @if(!empty($companyAddress) && (!empty($companyPhone) || !empty($companyEmail)))
                         <span class="mx-1">•</span>
                     @endif
                     @if(!empty($companyPhone))
                         <span class="fw-bold"><i class="fas fa-phone-alt me-1" style="font-size: 10px;"></i>{{ $companyPhone }}</span>
+                    @endif
+                    @if(!empty($companyEmail))
+                        @if(!empty($companyPhone))
+                            <span class="mx-1">•</span>
+                        @endif
+                        <span><i class="fas fa-envelope me-1" style="font-size: 10px;"></i>{{ $companyEmail }}</span>
+                    @endif
+                    @if($showCompTax && (!empty($companyNtn) || !empty($companyStrn)))
+                        <div class="mt-1" style="font-size: 11px;">
+                            @if(!empty($companyNtn))
+                                <span class="badge bg-light text-dark border px-2 py-1 me-1"><strong>NTN:</strong> {{ $companyNtn }}</span>
+                            @endif
+                            @if(!empty($companyStrn))
+                                <span class="badge bg-light text-dark border px-2 py-1"><strong>STRN:</strong> {{ $companyStrn }}</span>
+                            @endif
+                        </div>
                     @endif
                 </div>
             </div>
@@ -1303,6 +1322,7 @@
                 $compNtn = \App\Models\Setting::get('company_ntn', null);
                 $compStrn = \App\Models\Setting::get('company_strn', null);
                 $compPhone = \App\Models\Setting::get('company_phone', null);
+                $compEmail = \App\Models\Setting::get('company_email', null);
 
                 $salesOfficerName = $sale->salesOfficer->name ?? ($relCust->salesOfficer->name ?? null);
             @endphp
@@ -1418,21 +1438,29 @@
                             @endif
 
                             @if($showCompTax)
-                                @if(!empty($compNtn) && $isNtnEnabled)
+                                @if(!empty($compNtn))
                                 <tr>
                                     <td class="lbl">NTN Number</td>
                                     <td class="col">:</td>
-                                    <td class="val">{{ $compNtn }}</td>
+                                    <td class="val fw-bold">{{ $compNtn }}</td>
                                 </tr>
                                 @endif
 
-                                @if(!empty($compStrn) && $isStrnEnabled)
+                                @if(!empty($compStrn))
                                 <tr>
                                     <td class="lbl">STRN Number</td>
                                     <td class="col">:</td>
-                                    <td class="val">{{ $compStrn }}</td>
+                                    <td class="val fw-bold">{{ $compStrn }}</td>
                                 </tr>
                                 @endif
+                            @endif
+
+                            @if(!empty($compEmail))
+                            <tr>
+                                <td class="lbl">Email</td>
+                                <td class="col">:</td>
+                                <td class="val">{{ $compEmail }}</td>
+                            </tr>
                             @endif
 
                             @if($showSalesRef && (!empty($salesOfficerName) || !empty($sale->reference)))
@@ -2080,6 +2108,15 @@
             @endif
             @if(\App\Models\Setting::get('company_phone'))
                 <div>Ph: {{ \App\Models\Setting::get('company_phone') }}</div>
+            @endif
+            @if(\App\Models\Setting::get('company_email'))
+                <div>Email: {{ \App\Models\Setting::get('company_email') }}</div>
+            @endif
+            @if(\App\Models\Setting::get('company_ntn'))
+                <div>NTN: {{ \App\Models\Setting::get('company_ntn') }}</div>
+            @endif
+            @if(\App\Models\Setting::get('company_strn'))
+                <div>STRN: {{ \App\Models\Setting::get('company_strn') }}</div>
             @endif
         </div>
 

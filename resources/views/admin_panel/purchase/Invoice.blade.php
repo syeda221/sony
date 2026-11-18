@@ -357,7 +357,17 @@
         <!-- Company Header -->
         <div class="company-info">
             <div class="company-name">{{ \App\Models\Setting::get('company_name', 'prowave technogies') }} - {{ date('Y') }}</div>
-            <div style="font-size: 12px; color: #475569;">{{ \App\Models\Setting::get('company_address', 'Hyderabad') }}</div>
+            <div style="font-size: 12px; color: #475569;">
+                {{ \App\Models\Setting::get('company_address', 'Hyderabad') }}
+                @if(\App\Models\Setting::get('company_phone')) • Ph: {{ \App\Models\Setting::get('company_phone') }} @endif
+                @if(\App\Models\Setting::get('company_email')) • Email: {{ \App\Models\Setting::get('company_email') }} @endif
+            </div>
+            @if(\App\Models\Setting::get('company_ntn') || \App\Models\Setting::get('company_strn'))
+                <div style="font-size: 11px; color: #475569; margin-top: 2px;">
+                    @if(\App\Models\Setting::get('company_ntn')) <span class="me-2"><strong>NTN:</strong> {{ \App\Models\Setting::get('company_ntn') }}</span> @endif
+                    @if(\App\Models\Setting::get('company_strn')) <span><strong>STRN:</strong> {{ \App\Models\Setting::get('company_strn') }}</span> @endif
+                </div>
+            @endif
         </div>
 
         <div class="invoice-title">Purchase Invoice</div>
