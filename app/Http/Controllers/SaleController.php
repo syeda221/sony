@@ -1288,13 +1288,20 @@ class SaleController extends Controller
             );
             $userDefaultWhId = (int) ($user?->warehouse_id ?: 1);
 
+            // Read the header-level warehouse from the dedicated field sent by the form
             $headerWhId = $canSelectWarehouse
-                ? (is_numeric($request->warehouse_id) ? (int)$request->warehouse_id : (is_array($request->warehouse_id) ? (int)($request->warehouse_id[0] ?? $userDefaultWhId) : $userDefaultWhId))
+                ? (int) ($request->input('header_warehouse_id') ?: $userDefaultWhId)
                 : $userDefaultWhId;
 
-            $warehouses = ($canSelectWarehouse && is_array($request->warehouse_id))
-                ? $request->warehouse_id
-                : array_fill(0, count($productIds), $headerWhId);
+            // Per-row warehouses: use the row-level array; fall back to header warehouse for any empty/missing row
+            $rowWarehouses = $request->input('warehouse_id', []);
+            $warehouses = [];
+            foreach ($productIds as $i => $pid) {
+                $rowWh = isset($rowWarehouses[$i]) && is_numeric($rowWarehouses[$i]) && (int)$rowWarehouses[$i] > 0
+                    ? (int)$rowWarehouses[$i]
+                    : $headerWhId;
+                $warehouses[$i] = $rowWh;
+            }
 
             $defaultWhId = $headerWhId;
             $discounts = $request->item_disc ?? [];
