@@ -1,6 +1,6 @@
 @extends('admin_panel.layout.app')
 
-@section('title', ($vendor->name ?? 'Vendor') . ' - ' . ($activeTab === 'backup' ? 'Backup Ledger' : ($activeTab === 'annual' ? 'Annual Rebate Ledger' : 'Ledger')))
+@section('title', ($vendor->name ?? 'Vendor') . ' - ' . ($activeTab === 'backup' ? 'Backup Ledger' : ($activeTab === 'annual' ? 'Annual Rebate Ledger' : ($activeTab === 'scheme' ? 'Scheme Discount Ledger' : 'Ledger'))))
 
 @section('content')
 
@@ -80,6 +80,19 @@
         border-color: #6d28d9;
         box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
     }
+    .v-tab-btn.active-scheme {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: #ffffff !important;
+        border-color: #d97706;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+    }
+    .kpi-closing-scheme {
+        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+        color: #ffffff;
+    }
+    .kpi-closing-scheme .kpi-lbl {
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
     .v-tab-badge {
         font-size: 0.72rem;
         padding: 3px 8px;
@@ -88,7 +101,8 @@
     }
     .v-tab-btn.active-main .v-tab-badge,
     .v-tab-btn.active-backup .v-tab-badge,
-    .v-tab-btn.active-annual .v-tab-badge {
+    .v-tab-btn.active-annual .v-tab-badge,
+    .v-tab-btn.active-scheme .v-tab-badge {
         background: rgba(255, 255, 255, 0.25);
         color: #ffffff;
     }
@@ -302,8 +316,8 @@
     <div class="vdetail-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
         <div>
             <h3 class="vdetail-title">
-                <i class="fas {{ $activeTab === 'backup' ? 'fa-shield-alt text-success' : ($activeTab === 'annual' ? 'fa-bullseye text-primary' : 'fa-receipt text-primary') }} me-2"></i>
-                {{ $activeTab === 'backup' ? 'Vendor Backup Claim Ledger' : ($activeTab === 'annual' ? 'Vendor Annual Rebate Ledger' : 'Vendor Main Ledger') }}
+                <i class="fas {{ $activeTab === 'backup' ? 'fa-shield-alt text-success' : ($activeTab === 'annual' ? 'fa-bullseye text-primary' : ($activeTab === 'scheme' ? 'fa-percentage text-warning' : 'fa-receipt text-primary')) }} me-2"></i>
+                {{ $activeTab === 'backup' ? 'Vendor Backup Claim Ledger' : ($activeTab === 'annual' ? 'Vendor Annual Rebate Ledger' : ($activeTab === 'scheme' ? 'Vendor Scheme Discount Ledger' : 'Vendor Main Ledger')) }}
             </h3>
             <div class="vdetail-sub">Transaction history for <span class="fw-bold text-primary">{{ $vendor->name }}</span></div>
         </div>
@@ -342,6 +356,14 @@
             <i class="fas fa-bullseye"></i> 3. Annual Rebate Ledger
             <span class="v-tab-badge bg-light text-primary fw-bold">
                 Rs. {{ number_format($annualBalance, 2) }} Due
+            </span>
+        </a>
+
+        <a href="{{ route('vendor.ledger', ['vendor' => $vendor->id, 'tab' => 'scheme', 'start_date' => request('start_date'), 'end_date' => request('end_date')]) }}" 
+           class="v-tab-btn {{ $activeTab === 'scheme' ? 'active-scheme' : '' }}">
+            <i class="fas fa-percentage"></i> 4. Scheme Discount Ledger
+            <span class="v-tab-badge bg-light text-warning fw-bold">
+                Rs. {{ number_format($schemeBalance, 2) }} Due
             </span>
         </a>
     </div>
@@ -477,12 +499,12 @@
         </div>
 
     @else
-        {{-- ==================== TAB 2 & 3: BACKUP / ANNUAL INCENTIVE LEDGER ==================== --}}
+        {{-- ==================== TAB 2, 3 & 4: BACKUP / ANNUAL / SCHEME INCENTIVE LEDGER ==================== --}}
         @php
-            $currData = ($activeTab === 'backup') ? $backupData : $annualData;
-            $themeColor = ($activeTab === 'backup') ? 'success' : 'primary';
-            $kpiClass = ($activeTab === 'backup') ? 'kpi-closing-receivable' : 'kpi-closing-annual';
-            $labelTitle = ($activeTab === 'backup') ? 'Backup Incentive Claims' : 'Annual Volume Rebates';
+            $currData = ($activeTab === 'backup') ? $backupData : (($activeTab === 'annual') ? $annualData : $schemeData);
+            $themeColor = ($activeTab === 'backup') ? 'success' : (($activeTab === 'annual') ? 'primary' : 'warning');
+            $kpiClass = ($activeTab === 'backup') ? 'kpi-closing-receivable' : (($activeTab === 'annual') ? 'kpi-closing-annual' : 'kpi-closing-scheme');
+            $labelTitle = ($activeTab === 'backup') ? 'Backup Incentive Claims' : (($activeTab === 'annual') ? 'Annual Volume Rebates' : 'Scheme Discount Claims');
         @endphp
 
         {{-- Summary KPI Cards for Incentive --}}
@@ -521,7 +543,7 @@
         <div class="vdetail-card">
             <div class="vdetail-card-header">
                 <div>
-                    <span class="fw-bold text-dark fs-6"><i class="fas {{ $activeTab === 'backup' ? 'fa-shield-alt text-success' : 'fa-bullseye text-primary' }} me-1"></i> {{ $labelTitle }} Statement</span>
+                    <span class="fw-bold text-dark fs-6"><i class="fas {{ $activeTab === 'backup' ? 'fa-shield-alt text-success' : ($activeTab === 'annual' ? 'fa-bullseye text-primary' : 'fa-percentage text-warning') }} me-1"></i> {{ $labelTitle }} Statement</span>
                     <span class="badge bg-{{ $themeColor }}-subtle text-{{ $themeColor }} ms-2 px-2 py-1">Off-Invoice Backend Ledger</span>
                 </div>
                 <div>
@@ -624,6 +646,7 @@
                         <select name="claim_type" id="modalClaimType" class="form-select fw-semibold" required>
                             <option value="backup" {{ $activeTab === 'backup' ? 'selected' : '' }}>Backup Incentive Ledger (Current Due: Rs. {{ number_format($backupBalance, 2) }})</option>
                             <option value="annual" {{ $activeTab === 'annual' ? 'selected' : '' }}>Annual Rebate Ledger (Current Due: Rs. {{ number_format($annualBalance, 2) }})</option>
+                            <option value="scheme" {{ $activeTab === 'scheme' ? 'selected' : '' }}>Scheme Discount Ledger (Current Due: Rs. {{ number_format($schemeBalance, 2) }})</option>
                         </select>
                     </div>
 
@@ -665,7 +688,7 @@
                         <div class="col-6">
                             <label class="form-label fw-bold small text-muted">Amount (Rs) <span class="text-danger">*</span></label>
                             <input type="number" step="0.01" min="0.01" name="amount" id="modalAmount" class="form-control fw-bold text-end" 
-                                   value="{{ $activeTab === 'backup' ? ($backupBalance > 0 ? $backupBalance : '') : ($annualBalance > 0 ? $annualBalance : '') }}" 
+                                   value="{{ $activeTab === 'backup' ? ($backupBalance > 0 ? $backupBalance : '') : (($activeTab === 'annual') ? ($annualBalance > 0 ? $annualBalance : '') : ($schemeBalance > 0 ? $schemeBalance : '')) }}" 
                                    placeholder="0.00" required>
                         </div>
                     </div>
@@ -693,7 +716,7 @@
     function printVendorLedger() {
         let name = "{{ addslashes($vendor->name ?? 'Vendor') }}";
         let tab = "{{ $activeTab }}";
-        let titleSuffix = tab === 'backup' ? 'Backup Claim Ledger' : (tab === 'annual' ? 'Annual Rebate Ledger' : 'Ledger');
+        let titleSuffix = tab === 'backup' ? 'Backup Claim Ledger' : (tab === 'annual' ? 'Annual Rebate Ledger' : (tab === 'scheme' ? 'Scheme Discount Ledger' : 'Ledger'));
         let cleanName = name.replace(/[\/\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
         document.title = (cleanName || 'Vendor') + ' - ' + titleSuffix;
         window.print();
@@ -714,8 +737,10 @@
         const type = $(this).val();
         if (type === 'backup') {
             $('#modalAmount').val("{{ $backupBalance > 0 ? $backupBalance : '' }}");
-        } else {
+        } else if (type === 'annual') {
             $('#modalAmount').val("{{ $annualBalance > 0 ? $annualBalance : '' }}");
+        } else {
+            $('#modalAmount').val("{{ $schemeBalance > 0 ? $schemeBalance : '' }}");
         }
     });
 

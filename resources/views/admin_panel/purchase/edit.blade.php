@@ -612,7 +612,7 @@
                                 <th style="width: 120px;">Price</th>
                                 <th style="width: 85px;">Disc %</th>
                                 <th style="width: 95px;">Disc Amt</th>
-                                <th style="width: 100px;">Scheme (Rs)</th>
+                                <th style="width: 85px;" class="text-center" title="Scheme Discount (%)">Scheme %</th>
                                 <th style="width: 85px;" class="text-center" title="Vendor Backup Support (%)">Backup %</th>
                                 <th style="width: 85px;" class="text-center" title="Annual Volume Rebate (%)">Annual %</th>
                                 @if($purchaseGstEnabled ?? true)
@@ -727,7 +727,8 @@
                                         <input type="number" class="form-control text-end input-readonly item-disc-amt" value="{{ number_format($item->item_discount, 2, '.', '') }}" readonly tabindex="-1">
                                     </td>
                                     <td>
-                                        <input type="number" step="0.01" min="0" name="item_scheme_discount[]" class="form-control text-end item-scheme-amt" value="{{ number_format($item->scheme_discount ?? 0, 2, '.', '') }}" placeholder="0">
+                                        <input type="number" step="0.01" min="0" max="100" name="scheme_percent[]" class="form-control text-end item-scheme-percent" value="{{ (float)($item->scheme_percent ?? 0) }}" placeholder="0%">
+                                        <input type="hidden" name="item_scheme_discount[]" class="item-scheme-amt" value="{{ number_format($item->scheme_discount ?? 0, 2, '.', '') }}">
                                     </td>
                                     <td>
                                         <input type="number" step="0.01" min="0" max="100" name="backup_percent[]" class="form-control text-end item-backup-percent" value="{{ (float)($item->backup_percent ?? 0) }}" placeholder="0%">
@@ -1415,7 +1416,8 @@
                         <input type="number" class="form-control text-end input-readonly item-disc-amt" value="0.00" readonly tabindex="-1">
                     </td>
                     <td>
-                        <input type="number" step="0.01" min="0" name="item_scheme_discount[]" class="form-control text-end item-scheme-amt" value="0" placeholder="0">
+                        <input type="number" step="0.01" min="0" max="100" name="scheme_percent[]" class="form-control text-end item-scheme-percent" value="0" placeholder="0%">
+                        <input type="hidden" name="item_scheme_discount[]" class="item-scheme-amt" value="0.00">
                     </td>
                     <td>
                         <input type="number" step="0.01" min="0" max="100" name="backup_percent[]" class="form-control text-end item-backup-percent" value="0" placeholder="0%">
@@ -1676,7 +1678,7 @@
             });
 
             // Grid Inputs -> Recalculate
-            $('#purchaseTableBody').on('input', '.main-qty-input, .price, .item-disc-percent, .item-scheme-amt, .item-backup-percent, .item-annual-percent, .item-gst-percent', function() {
+            $('#purchaseTableBody').on('input', '.main-qty-input, .price, .item-disc-percent, .item-scheme-percent, .item-scheme-amt, .item-backup-percent, .item-annual-percent, .item-gst-percent', function() {
                 recalcRow($(this).closest('tr'));
                 recalcAll();
             });
@@ -1699,10 +1701,10 @@
                         // Price -> Disc %
                         $row.find('.item-disc-percent').focus().select();
                     } else if ($input.hasClass('item-disc-percent')) {
-                        // Disc % -> Scheme (Rs)
-                        $row.find('.item-scheme-amt').focus().select();
-                    } else if ($input.hasClass('item-scheme-amt')) {
-                        // Scheme (Rs) -> Backup %
+                        // Disc % -> Scheme %
+                        $row.find('.item-scheme-percent').focus().select();
+                    } else if ($input.hasClass('item-scheme-percent') || $input.hasClass('item-scheme-amt')) {
+                        // Scheme % -> Backup %
                         $row.find('.item-backup-percent').focus().select();
                     } else if ($input.hasClass('item-backup-percent')) {
                         // Backup % -> Annual %
@@ -1781,7 +1783,14 @@
                 }
 
                 const discAmt = gross * (discPct / 100);
-                const schemeAmt = parseFloat($row.find('.item-scheme-amt').val()) || 0;
+                const schemePct = parseFloat($row.find('.item-scheme-percent').val()) || 0;
+                let schemeAmt = 0;
+                if (schemePct > 0) {
+                    schemeAmt = gross * (schemePct / 100);
+                } else {
+                    schemeAmt = parseFloat($row.find('.item-scheme-amt').val()) || 0;
+                }
+                $row.find('.item-scheme-amt').val(schemeAmt.toFixed(2));
                 const totalRowDisc = discAmt + schemeAmt;
                 const exclGst = Math.max(0, gross - totalRowDisc);
                 const gstPct = parseFloat($row.find('.item-gst-percent').val()) || 0;

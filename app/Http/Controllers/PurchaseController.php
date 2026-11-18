@@ -540,7 +540,8 @@ class PurchaseController extends Controller
         }
 
         // 2. Vendor Ledger
-        $netAmount = $purchase->net_amount;
+        $schemeClaim = (float)($purchase->total_scheme_amount ?? 0);
+        $vendorBillAmount = (float)$purchase->net_amount + $schemeClaim;
         $prevClosing = \App\Models\VendorLedger::where('vendor_id', $purchase->vendor_id)
             ->value('closing_balance') ?? 0;
 
@@ -551,11 +552,11 @@ class PurchaseController extends Controller
                 'admin_or_user_id' => auth()->id() ?? 1,
                 'previous_balance' => $prevClosing,
                 'opening_balance' => $prevClosing,
-                'closing_balance' => $prevClosing + $netAmount,
+                'closing_balance' => $prevClosing + $vendorBillAmount,
             ]
         );
 
-        // 2B. Vendor Incentive Ledgers (Backup & Annual Claims)
+        // 2B. Vendor Incentive Ledgers (Backup, Annual & Scheme Claims)
         if ($purchase->vendor_id && (float)($purchase->total_backup_amount ?? 0) > 0) {
             \App\Models\VendorIncentiveLedger::updateOrCreate(
                 [
@@ -590,6 +591,25 @@ class PurchaseController extends Controller
                     'credit' => 0,
                     'admin_or_user_id' => auth()->id() ?? 1,
                     'notes' => "Annual Rebate Claim from Purchase #{$purchase->invoice_no}",
+                ]
+            );
+        }
+
+        if ($purchase->vendor_id && $schemeClaim > 0) {
+            \App\Models\VendorIncentiveLedger::updateOrCreate(
+                [
+                    'vendor_id' => $purchase->vendor_id,
+                    'purchase_id' => $purchase->id,
+                    'type' => 'scheme',
+                ],
+                [
+                    'entry_type' => 'claim',
+                    'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                    'reference_no' => $purchase->invoice_no,
+                    'debit' => $schemeClaim,
+                    'credit' => 0,
+                    'admin_or_user_id' => auth()->id() ?? 1,
+                    'notes' => "Scheme Discount Claim from Purchase #{$purchase->invoice_no}",
                 ]
             );
         }
@@ -768,6 +788,8 @@ class PurchaseController extends Controller
                 'product_id.*' => 'nullable|exists:products,id',
                 'item_scheme_discount' => 'nullable|array',
                 'item_scheme_discount.*' => 'nullable|numeric|min:0',
+                'scheme_percent' => 'nullable|array',
+                'scheme_percent.*' => 'nullable|numeric|min:0|max:100',
                 'backup_percent' => 'nullable|array',
                 'backup_percent.*' => 'nullable|numeric|min:0|max:100',
                 'annual_percent' => 'nullable|array',
@@ -848,6 +870,7 @@ class PurchaseController extends Controller
             $units = $validated['unit'] ?? [];
             $itemDiscs = $validated['item_discount'] ?? [];
             $itemSchemeDiscs = $request->item_scheme_discount ?? [];
+            $schemePercents = $request->scheme_percent ?? [];
             $totalSchemeDiscount = 0;
             $totalItemDiscount = 0;
             $backupPercents = $request->backup_percent ?? [];
@@ -910,7 +933,13 @@ class PurchaseController extends Controller
                 // Calculate absolute discount from percentage + scheme discount
                 $discAmount = $grossTotal * ($discPercent / 100);
                 $totalItemDiscount += $discAmount;
+
+                // Scheme discount calculation (from scheme_percent if provided, else item_scheme_discount)
+                $schemePercent = isset($schemePercents[$i]) && is_numeric($schemePercents[$i]) ? (float)$schemePercents[$i] : 0;
                 $itemSchemeDiscount = (float) ($itemSchemeDiscs[$i] ?? 0);
+                if ($schemePercent > 0) {
+                    $itemSchemeDiscount = round($grossTotal * ($schemePercent / 100), 2);
+                }
                 $totalSchemeDiscount += $itemSchemeDiscount;
                 $totalRowDiscount = $discAmount + $itemSchemeDiscount;
                 $exclusiveGstAmount = max(0, $grossTotal - $totalRowDiscount);
@@ -964,6 +993,7 @@ class PurchaseController extends Controller
                     'unit' => $unit,
                     'price' => $price,
                     'item_discount' => $discAmount, // Store calculated amount
+                    'scheme_percent' => $schemePercent,
                     'scheme_discount' => $itemSchemeDiscount,
                     'backup_percent' => $backupPercent,
                     'backup_amount' => $backupAmount,
@@ -1018,6 +1048,7 @@ class PurchaseController extends Controller
                 'due_amount' => $netAmount,
                 'total_backup_amount' => $totalBackupAmount,
                 'total_annual_amount' => $totalAnnualAmount,
+                'total_scheme_amount' => $totalSchemeDiscount + $overallSchemeDiscount,
             ]);
 
             // Check if payment was submitted (array or scalar)
@@ -1523,6 +1554,8 @@ class PurchaseController extends Controller
             'product_id.*' => 'nullable|string',
             'item_scheme_discount' => 'nullable|array',
             'item_scheme_discount.*' => 'nullable|numeric|min:0',
+            'scheme_percent' => 'nullable|array',
+            'scheme_percent.*' => 'nullable|numeric|min:0|max:100',
             'backup_percent' => 'nullable|array',
             'backup_percent.*' => 'nullable|numeric|min:0|max:100',
             'annual_percent' => 'nullable|array',
@@ -1601,6 +1634,7 @@ class PurchaseController extends Controller
             $units = $validated['unit'] ?? [];
             $itemDiscs = $validated['item_discount'] ?? [];
             $itemSchemeDiscs = $request->item_scheme_discount ?? [];
+            $schemePercents = $request->scheme_percent ?? [];
             $totalSchemeDiscount = 0;
             $totalItemDiscountUpdate = 0;
             $backupPercents = $request->backup_percent ?? [];
@@ -1675,7 +1709,13 @@ class PurchaseController extends Controller
                 // Calculate absolute discount from percentage + scheme discount
                 $discAmount = $grossTotal * ($discPercent / 100);
                 $totalItemDiscountUpdate += $discAmount;
+
+                // Scheme discount calculation (from scheme_percent if provided, else item_scheme_discount)
+                $schemePercent = isset($schemePercents[$i]) && is_numeric($schemePercents[$i]) ? (float)$schemePercents[$i] : 0;
                 $itemSchemeDiscount = (float) ($itemSchemeDiscs[$i] ?? 0);
+                if ($schemePercent > 0) {
+                    $itemSchemeDiscount = round($grossTotal * ($schemePercent / 100), 2);
+                }
                 $totalSchemeDiscount += $itemSchemeDiscount;
                 $totalRowDiscount = $discAmount + $itemSchemeDiscount;
                 $exclusiveGstAmount = max(0, $grossTotal - $totalRowDiscount);
@@ -1739,6 +1779,7 @@ class PurchaseController extends Controller
                     'unit' => $unit,
                     'price' => $price,
                     'item_discount' => $discAmount,
+                    'scheme_percent' => $schemePercent,
                     'scheme_discount' => $itemSchemeDiscount,
                     'backup_percent' => $backupPercent,
                     'backup_amount' => $backupAmount,
@@ -1822,9 +1863,10 @@ class PurchaseController extends Controller
                 'due_amount' => $dueAmount,
                 'total_backup_amount' => $totalBackupAmount,
                 'total_annual_amount' => $totalAnnualAmount,
+                'total_scheme_amount' => $totalSchemeDiscount + $overallSchemeDiscount,
             ]);
 
-            // Sync Vendor Incentive Ledgers (Backup & Annual Claims)
+            // Sync Vendor Incentive Ledgers (Backup, Annual & Scheme Claims)
             // If vendor was changed, delete claims recorded for old vendor on this purchase
             if ($oldVendorId && $oldVendorId != $purchase->vendor_id) {
                 \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)
@@ -1872,6 +1914,28 @@ class PurchaseController extends Controller
                 );
             } else {
                 \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'annual')->forceDelete();
+            }
+
+            $totalSchemeClaim = $totalSchemeDiscount + $overallSchemeDiscount;
+            if ($purchase->vendor_id && $totalSchemeClaim > 0) {
+                \App\Models\VendorIncentiveLedger::updateOrCreate(
+                    [
+                        'purchase_id' => $purchase->id,
+                        'type' => 'scheme',
+                    ],
+                    [
+                        'vendor_id' => $purchase->vendor_id,
+                        'entry_type' => 'claim',
+                        'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                        'reference_no' => $purchase->invoice_no,
+                        'debit' => $totalSchemeClaim,
+                        'credit' => 0,
+                        'admin_or_user_id' => auth()->id() ?? 1,
+                        'notes' => "Scheme Discount Claim from Purchase #{$purchase->invoice_no}",
+                    ]
+                );
+            } else {
+                \App\Models\VendorIncentiveLedger::where('purchase_id', $purchase->id)->where('type', 'scheme')->forceDelete();
             }
 
             // Stock movements & Warehouse stock updates
@@ -1952,7 +2016,9 @@ class PurchaseController extends Controller
 
             if ($purchaseVoucher) {
                 $purchaseVoucher->remarks = "Purchase Voucher #{$purchase->invoice_no}";
-                $purchaseVoucher->total_amount = $netAmount;
+                $schemeClaim = (float)($purchase->total_scheme_amount ?? 0);
+                $vendorGrossPayable = $netAmount + $schemeClaim;
+                $purchaseVoucher->total_amount = $vendorGrossPayable;
                 $purchaseVoucher->date = $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d');
                 $purchaseVoucher->party_type = \App\Models\Vendor::class;
                 $purchaseVoucher->party_id = $purchase->vendor_id;
@@ -1967,7 +2033,7 @@ class PurchaseController extends Controller
                 \App\Models\VoucherDetail::create([
                     'voucher_master_id' => $purchaseVoucher->id,
                     'account_id' => $expenseAccountId,
-                    'debit' => $netAmount,
+                    'debit' => $vendorGrossPayable,
                     'credit' => 0,
                     'narration' => "Purchase Invoice #{$purchase->invoice_no}",
                 ]);
@@ -1975,7 +2041,7 @@ class PurchaseController extends Controller
                     'voucher_master_id' => $purchaseVoucher->id,
                     'account_id' => $apAccountId,
                     'debit' => 0,
-                    'credit' => $netAmount,
+                    'credit' => $vendorGrossPayable,
                     'narration' => "Payable to Vendor " . ($purchase->vendor->name ?? ''),
                 ]);
 

@@ -278,12 +278,15 @@ class TransactionService
             $expenseAccountId = $balanceService->getPurchaseExpenseId();
             $apAccountId = $balanceService->getAccountsPayableId();
 
+            $schemeAmount = (float) ($purchase->total_scheme_amount ?? 0);
+            $grossBillAmount = (float) $purchase->net_amount + $schemeAmount;
+
             $lines = [];
 
             // 1. Debit Purchase Expense
             $lines[] = [
                 'account_id' => $expenseAccountId,
-                'debit' => $purchase->net_amount,
+                'debit' => $grossBillAmount,
                 'credit' => 0,
                 'narration' => "Purchase Invoice #{$purchase->invoice_no}",
             ];
@@ -292,7 +295,7 @@ class TransactionService
             $lines[] = [
                 'account_id' => $apAccountId,
                 'debit' => 0,
-                'credit' => $purchase->net_amount,
+                'credit' => $grossBillAmount,
                 'narration' => "Payable to Vendor " . ($purchase->vendor->name ?? ''),
             ];
 

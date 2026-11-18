@@ -533,7 +533,7 @@ class VendorController extends Controller
         $vendor = Vendor::findOrFail($vendorId);
         $startDate = request('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = request('end_date', now()->endOfMonth()->format('Y-m-d'));
-        $activeTab = request('tab', 'main'); // 'main', 'backup', 'annual'
+        $activeTab = request('tab', 'main'); // 'main', 'backup', 'annual', 'scheme'
         
         $balanceService = app(\App\Services\BalanceService::class);
         $ledgerData = $balanceService->getVendorLedger($vendorId, $startDate, $endDate);
@@ -542,11 +542,14 @@ class VendorController extends Controller
         $backupData = $balanceService->getVendorIncentiveLedger($vendorId, 'backup', $startDate, $endDate);
         // Annual Ledger Data
         $annualData = $balanceService->getVendorIncentiveLedger($vendorId, 'annual', $startDate, $endDate);
+        // Scheme Ledger Data
+        $schemeData = $balanceService->getVendorIncentiveLedger($vendorId, 'scheme', $startDate, $endDate);
 
         // Overall Balances
         $mainBalance = $balanceService->getVendorBalance($vendorId);
         $backupBalance = $balanceService->getVendorIncentiveBalance($vendorId, 'backup');
         $annualBalance = $balanceService->getVendorIncentiveBalance($vendorId, 'annual');
+        $schemeBalance = $balanceService->getVendorIncentiveBalance($vendorId, 'scheme');
 
         $cashAccounts = \App\Models\Account::whereHas('head', function($q) {
             $q->whereIn('name', ['Cash', 'Bank']);
@@ -559,20 +562,22 @@ class VendorController extends Controller
             'activeTab' => $activeTab,
             'backupData' => $backupData,
             'annualData' => $annualData,
+            'schemeData' => $schemeData,
             'mainBalance' => $mainBalance,
             'backupBalance' => $backupBalance,
             'annualBalance' => $annualBalance,
+            'schemeBalance' => $schemeBalance,
             'cashAccounts' => $cashAccounts,
         ]));
     }
 
     /**
-     * Settle Vendor Incentive (Backup or Annual Claim) via Cash/Bank or Main Ledger Adjustment
+     * Settle Vendor Incentive (Backup, Annual or Scheme Claim) via Cash/Bank or Main Ledger Adjustment
      */
     public function settleIncentive(Request $request, $vendorId)
     {
         $validated = $request->validate([
-            'claim_type' => 'required|in:backup,annual',
+            'claim_type' => 'required|in:backup,annual,scheme',
             'settlement_type' => 'required|in:cash_bank,adjust_payable',
             'amount' => 'required|numeric|min:0.01',
             'date' => 'required|date',
@@ -588,7 +593,7 @@ class VendorController extends Controller
         $notes = $validated['notes'] ?? '';
 
         DB::transaction(function () use ($vendor, $amount, $claimType, $settlementType, $date, $notes, $validated) {
-            $typeLabel = $claimType === 'backup' ? 'Backup Incentive' : 'Annual Rebate';
+            $typeLabel = $claimType === 'backup' ? 'Backup Incentive' : ($claimType === 'annual' ? 'Annual Rebate' : 'Scheme Discount');
             $refNo = 'SET-' . strtoupper($claimType[0]) . '-' . time();
 
             // 1. Record in vendor_incentive_ledgers (Credit reduces the claim receivable)
