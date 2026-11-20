@@ -234,12 +234,12 @@
     {{-- Tabs: Summary Breakdown by Officer VS Detailed Sale Log --}}
     <ul class="nav nav-pills mb-3 no-print" id="pills-tab" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active fw-bold py-1 px-3 btn-sm" id="pills-summary-tab" data-bs-toggle="pill" data-bs-target="#pills-summary" type="button" role="tab">
+            <button class="nav-link active fw-bold py-1 px-3 btn-sm" id="pills-summary-tab" data-toggle="pill" data-target="#pills-summary" data-bs-toggle="pill" data-bs-target="#pills-summary" type="button" role="tab" style="cursor: pointer;">
                 <i class="fas fa-users-cog me-1"></i> Officer Summary Breakdown
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link fw-bold py-1 px-3 btn-sm" id="pills-detailed-tab" data-bs-toggle="pill" data-bs-target="#pills-detailed" type="button" role="tab">
+            <button class="nav-link fw-bold py-1 px-3 btn-sm" id="pills-detailed-tab" data-toggle="pill" data-target="#pills-detailed" data-bs-toggle="pill" data-bs-target="#pills-detailed" type="button" role="tab" style="cursor: pointer;">
                 <i class="fas fa-list-alt me-1"></i> Detailed Sales Log
             </button>
         </li>
@@ -504,6 +504,23 @@
                 }
             });
         }
+
+        // Tab switching handler for Bootstrap 4 & 5 compatibility
+        $('#pills-summary-tab').on('click', function(e) {
+            e.preventDefault();
+            $('#pills-detailed-tab').removeClass('active');
+            $(this).addClass('active');
+            $('#pills-detailed').removeClass('show active').css('display', 'none');
+            $('#pills-summary').addClass('show active').css('display', 'block');
+        });
+
+        $('#pills-detailed-tab').on('click', function(e) {
+            e.preventDefault();
+            $('#pills-summary-tab').removeClass('active');
+            $(this).addClass('active');
+            $('#pills-summary').removeClass('show active').css('display', 'none');
+            $('#pills-detailed').addClass('show active').css('display', 'block');
+        });
 
         // Trigger load
         loadReport();
