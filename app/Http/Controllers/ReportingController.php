@@ -3201,17 +3201,65 @@ class ReportingController extends Controller
             $totalCashBank += $computed_balance;
         }
 
-        // Account Receivables (Customers)
+        // Fetch all customers & vendors to calculate net receivables & payables
+        // For linked parties (Customer linked to Vendor / Both), we net-off:
+        // Net Payable (>0) goes to Liabilities, Net Receivable (>0) goes to Assets.
         $custQuery = DB::table('customers');
         if ($request->province && $request->province !== 'all') $custQuery->where('province', $request->province);
         if ($request->city && $request->city !== 'all') $custQuery->where('city', $request->city);
         if ($request->area && $request->area !== 'all') $custQuery->where('area', $request->area);
         $customers = $custQuery->get();
+
+        $vendQuery = DB::table('vendors');
+        if ($request->province && $request->province !== 'all') $vendQuery->where('province', $request->province);
+        if ($request->city && $request->city !== 'all') $vendQuery->where('city', $request->city);
+        if ($request->area && $request->area !== 'all') $vendQuery->where('area', $request->area);
+        $vendors = $vendQuery->get();
+
+        // Track linked processed vendor IDs so they are not double-counted
+        $processedLinkedVendorIds = [];
         $totalReceivables = 0;
+        $totalPayables = 0;
+
         foreach ($customers as $c) {
-            $bal = $balanceService->getCustomerBalanceAsOfDate($c->id, $dateOnly);
-            $totalReceivables += $bal;
+            $custBal = (float) $balanceService->getCustomerBalanceAsOfDate($c->id, $dateOnly);
+            
+            // Check if this customer is linked to a vendor (Party Type = Both)
+            $linkedVendorId = $c->linked_vendor_id;
+            if (!$linkedVendorId) {
+                // Also check reverse link from vendors table
+                $revVend = $vendors->firstWhere('linked_customer_id', $c->id);
+                if ($revVend) $linkedVendorId = $revVend->id;
+            }
+
+            if ($linkedVendorId) {
+                $processedLinkedVendorIds[] = $linkedVendorId;
+                $vendBal = (float) $balanceService->getVendorBalanceAsOfDate($linkedVendorId, $dateOnly);
+                
+                // Net balance: (Receivable - Payable)
+                // If Net > 0 => We still have net receivable from this party (goes to Assets)
+                // If Net < 0 => We owe them net payable (goes to Liabilities)
+                $net = $custBal - $vendBal;
+                if ($net > 0) {
+                    $totalReceivables += $net;
+                } elseif ($net < 0) {
+                    $totalPayables += abs($net);
+                }
+            } else {
+                $totalReceivables += $custBal;
+            }
         }
+
+        // Now process remaining standalone vendors (not linked to any customer)
+        foreach ($vendors as $v) {
+            if (in_array($v->id, $processedLinkedVendorIds)) {
+                continue;
+            }
+            $vendBal = (float) $balanceService->getVendorBalanceAsOfDate($v->id, $dateOnly);
+            $totalPayables += $vendBal;
+        }
+
+        $currentLiabilitiesTotal = $totalPayables;
 
         // Stock in Trade / Inventory on Hand (Exact valuation synchronized with Item Stock Report)
         $stockReq = new Request([
@@ -3229,19 +3277,6 @@ class ReportingController extends Controller
         $currentAssetsTotal = $totalCashBank + $totalReceivables + $totalInventory;
         $fixedAssetsTotal = 0; // Fixed assets head
         $totalAssets = $currentAssetsTotal + $fixedAssetsTotal;
-
-        // 2. Liabilities: Accounts Payable (Vendors)
-        $vendQuery = DB::table('vendors');
-        if ($request->province && $request->province !== 'all') $vendQuery->where('province', $request->province);
-        if ($request->city && $request->city !== 'all') $vendQuery->where('city', $request->city);
-        if ($request->area && $request->area !== 'all') $vendQuery->where('area', $request->area);
-        $vendors = $vendQuery->get();
-        $totalPayables = 0;
-        foreach ($vendors as $v) {
-            $bal = $balanceService->getVendorBalanceAsOfDate($v->id, $dateOnly);
-            $totalPayables += $bal;
-        }
-        $currentLiabilitiesTotal = $totalPayables;
 
         // 3. Owner's Equity — Accounting correct:
         //    Retained Earnings = Net Profit from P&L (Sales - COGS - Expenses) since inception
