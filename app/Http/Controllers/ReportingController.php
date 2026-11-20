@@ -3178,16 +3178,28 @@ class ReportingController extends Controller
         $totalCashBank = 0;
 
         foreach ($assetAccounts as $acc) {
+            // Include all journal entries up to the end of the selected day
             $balance = DB::table('journal_entries')
                 ->where('account_id', $acc->id)
-                ->whereDate('entry_date', '<=', $dateOnly)
+                ->where(function ($q) use ($dateOnly, $dateEnd) {
+                    $q->whereDate('entry_date', '<=', $dateOnly)
+                      ->orWhere('entry_date', '<=', $dateEnd)
+                      ->orWhere('created_at', '<=', $dateEnd);
+                })
                 ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as total')
                 ->value('total') ?? 0;
 
             $computed_balance = (float)$acc->opening_balance + (float)$balance;
 
-            // If no journal entries exist, use current_balance as fallback
-            if ($balance == 0 && (float)$acc->current_balance != 0) {
+            // If selected date is today (or future) and account has live current_balance, sync with it
+            $isTodayOrFuture = $dateOnly >= date('Y-m-d');
+            if ($isTodayOrFuture && isset($acc->current_balance)) {
+                // Live current balance from AccountsHeadController@showLedger
+                $liveDebits = (float) DB::table('journal_entries')->where('account_id', $acc->id)->sum('debit');
+                $liveCredits = (float) DB::table('journal_entries')->where('account_id', $acc->id)->sum('credit');
+                $liveCalculated = (float)($acc->opening_balance ?? 0) + $liveDebits - $liveCredits;
+                $computed_balance = $liveCalculated;
+            } elseif ($balance == 0 && (float)$acc->current_balance != 0) {
                 $computed_balance = (float)$acc->current_balance;
             }
 
