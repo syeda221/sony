@@ -1426,7 +1426,7 @@
             @csrf
             @method('PUT')
             <input type="hidden" id="booking_id" name="booking_id" value="{{ $sale->id }}">
-            <input type="hidden" id="action" name="action" value="sale">
+            <input type="hidden" id="action" name="action" value="{{ ($sale->sale_status === 'quotation' || request('type') === 'quotation') ? 'quotation' : (($sale->sale_status === 'booked' || request('type') === 'booking') ? 'booking' : 'sale') }}">
             <input type="hidden" name="cash" value="{{ number_format($sale->cash ?? 0, 2, '.', '') }}">
             <input type="hidden" id="totalBalance" value="{{ number_format($sale->total_net ?? 0, 2, '.', '') }}">
             <input type="hidden" name="total_extra_cost" id="discountAmount" value="{{ number_format($sale->total_extradiscount ?? 0, 2, '.', '') }}">
@@ -2434,13 +2434,15 @@
                 $('#btnPosted').addClass('d-none');
                 $('#btnHeaderPosted').addClass('d-none');
             }
-            if (urlParams.get('type') === 'quotation') {
+            if (urlParams.get('type') === 'quotation' || '{{ $sale->sale_status }}' === 'quotation') {
                 $('.header-text').html('<i class="fas fa-file-alt text-warning me-2"></i>Edit Quotation');
                 $('#action').val('quotation');
                 $('#btnPosted').addClass('d-none');
                 $('#btnHeaderPosted').addClass('d-none');
                 $('#btnSave').addClass('d-none');
                 $('#btnHeaderSaveDraft').addClass('d-none');
+                $('#btnSaveAndComplete').html('<i class="fas fa-print me-1"></i> Update &amp; Print Quotation');
+                $('#btnHeaderSaveSale').html('<i class="fas fa-print me-1"></i> Update &amp; Print Quotation');
             }
 
             // ============================================================

@@ -1165,7 +1165,21 @@ class SaleController extends Controller
         //     throw \Illuminate\Validation\ValidationException::withMessages(['product_id' => 'Duplicate products are not allowed in a single sale. Please merge quantities.']);
         // }
 
-        $status = in_array($request->action, ['post', 'sale', 'posted']) ? 'posted' : ($request->action === 'quotation' || ($sale->exists && $sale->sale_status === 'quotation' && empty($request->action)) ? 'quotation' : 'booked');
+        $invInput = $request->input('Invoice_no') ?: $request->input('invoice_no');
+        $isQuotation = $request->action === 'quotation'
+            || $request->input('type') === 'quotation'
+            || (!empty($invInput) && \Illuminate\Support\Str::startsWith(strtoupper(trim($invInput)), 'QUOT-'))
+            || ($sale->exists && $sale->sale_status === 'quotation' && !in_array($request->action, ['convert_to_sale', 'confirm']));
+
+        if ($isQuotation) {
+            $status = 'quotation';
+        } elseif (in_array($request->action, ['post', 'sale', 'posted'])) {
+            $status = 'posted';
+        } elseif ($request->action === 'booking' || ($sale->exists && $sale->sale_status === 'booked')) {
+            $status = 'booked';
+        } else {
+            $status = 'booked';
+        }
 
         // Concurrency Safe Transaction
         try {
@@ -2155,11 +2169,15 @@ class SaleController extends Controller
 
             // If AJAX/JSON response needed
             if ($request->ajax() || $request->wantsJson()) {
-                $receiptUrl = route('sales.receipt', $sale->id) . '?from=pos';
+                $receiptUrl = ($status === 'quotation')
+                    ? route('sales.invoice', $sale->id)
+                    : (route('sales.receipt', $sale->id) . '?from=pos');
                 return response()->json([
                     'ok' => true,
                     'booking_id' => $sale->id,
-                    'msg' => 'Sale '.ucfirst($status).' Successfully',
+                    'status' => $status,
+                    'is_quotation' => ($status === 'quotation'),
+                    'msg' => ($status === 'quotation') ? 'Quotation saved successfully' : ('Sale '.ucfirst($status).' Successfully'),
                     'invoice_url' => $receiptUrl,
                     'receipt_url' => $receiptUrl,
                 ]);

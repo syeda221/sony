@@ -1890,6 +1890,52 @@
             ensureSaved();
         });
 
+        // Helper: Save and Print Quotation
+        window.saveAndPrintQuotation = function() {
+            cleanupEmptyRows();
+            updateGrandTotals();
+            refreshPostedState();
+
+            const v = validateFormAll();
+            if (!v.ok) {
+                showAlert('warning', v.message);
+                if (v.el && v.el.length) {
+                    v.el.focus();
+                    if (v.el.hasClass('js-customer')) v.el.select2?.('open');
+                }
+                return;
+            }
+            $('#action').val('quotation');
+            let curInv = ($('#inputInvoiceNo').val() || '').toUpperCase();
+            if (!curInv.startsWith('QUOT-')) {
+                $.ajax({
+                    url: "{{ route('invoice_series.generate_no') }}",
+                    type: "GET",
+                    data: { prefix: 'QUOT' },
+                    async: false,
+                    success: function(res) {
+                        if (res.invoice_no) {
+                            $('#inputInvoiceNo').val(res.invoice_no);
+                            if (typeof window.switchInvoicePrefix === 'function') {
+                                window.switchInvoicePrefix('QUOT');
+                            }
+                        }
+                    }
+                });
+            }
+            ensureSaved().then(function(res) {
+                Swal.fire({
+                    title: 'Quotation Saved',
+                    text: 'Quotation saved successfully (no stock or ledger impact)',
+                    icon: 'success',
+                    timer: 1200,
+                    showConfirmButton: false
+                });
+                const redirectUrl = (res && res.invoice_url) ? res.invoice_url : ("{{ route('sales.invoice', ':id') }}".replace(':id', res.booking_id));
+                setTimeout(() => window.location.href = redirectUrl, 1200);
+            });
+        };
+
         // Buttons: Quotation (No stock / no ledger)
         $('#btnQuotation').off('click').on('click', function() {
             cleanupEmptyRows();
@@ -1923,7 +1969,7 @@
                     }
                 });
             }
-            ensureSaved().then(function() {
+            ensureSaved().then(function(res) {
                 Swal.fire({
                     title: 'Quotation Saved',
                     text: 'Quotation saved successfully (no stock or ledger impact)',
@@ -1931,7 +1977,7 @@
                     timer: 1500,
                     showConfirmButton: false
                 });
-                setTimeout(() => window.location.href = "{{ route('sale.index') }}", 1500);
+                setTimeout(() => window.location.href = "{{ route('sale.index', ['status' => 'quotation']) }}", 1500);
             });
         });
 
@@ -2282,7 +2328,16 @@
 
         // --- Save & Complete (F9) Handler ---
         $('#btnSaveAndComplete, #btnHeaderSaveSale').on('click', function() {
-            $('#btnPosted').trigger('click');
+            const isQuot = $('#action').val() === 'quotation' 
+                || (new URLSearchParams(window.location.search)).get('type') === 'quotation'
+                || ($('#inputInvoiceNo').val() || '').toUpperCase().startsWith('QUOT-');
+
+            if (isQuot) {
+                $('#action').val('quotation');
+                saveAndPrintQuotation();
+            } else {
+                $('#btnPosted').trigger('click');
+            }
         });
 
         $(document).on('keydown', function(e) {
@@ -2304,6 +2359,13 @@
         // --- Product Tracking (Batch / Serial IMEI Modals) ---
         window.checkAndOpenProductTracking = function($row, productId, warehouseId) {
             if (!productId) return;
+            const isQuotation = $('#action').val() === 'quotation' 
+                || (new URLSearchParams(window.location.search)).get('type') === 'quotation'
+                || ($('#inputInvoiceNo').val() || '').toUpperCase().startsWith('QUOT-');
+            if (isQuotation) {
+                // Quotations are price estimates and do not dispatch physical stock, so bypass batch/serial modals
+                return;
+            }
             warehouseId = warehouseId || $row.find('.warehouse').val() || 1;
 
             // Check Batches first

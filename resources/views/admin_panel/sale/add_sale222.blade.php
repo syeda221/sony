@@ -1505,7 +1505,7 @@
         <form id="saleForm" autocomplete="off">
             @csrf
             <input type="hidden" id="booking_id" name="booking_id" value="">
-            <input type="hidden" id="action" name="action" value="sale">
+            <input type="hidden" id="action" name="action" value="{{ request('type') === 'quotation' ? 'quotation' : (request('type') === 'booking' ? 'booking' : 'sale') }}">
             <input type="hidden" name="cash" value="0">
             <input type="hidden" id="totalBalance" value="0">
             <input type="hidden" name="total_extra_cost" id="discountAmount" value="0">
@@ -2565,6 +2565,8 @@
                 $('#btnHeaderPosted').addClass('d-none');
                 $('#btnSave').addClass('d-none');
                 $('#btnHeaderSaveDraft').addClass('d-none');
+                $('#btnSaveAndComplete').html('<i class="fas fa-print me-1"></i> Save &amp; Print Quotation');
+                $('#btnHeaderSaveSale').html('<i class="fas fa-print me-1"></i> Save &amp; Print Quotation');
             }
 
             // ============================================================
