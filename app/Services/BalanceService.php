@@ -458,6 +458,8 @@ class BalanceService
         $transactions = $all->map(function ($row) use (&$runningBalance) {
             // Credit = payable increases | Debit = payable decreases
             $runningBalance += $row['credit'] - $row['debit'];
+            // Format date cleanly
+            $row['date'] = $row['date'] ? \Carbon\Carbon::parse($row['date'])->format('d M Y') : '-';
             return array_merge($row, ['balance' => $runningBalance]);
         });
 
@@ -511,7 +513,7 @@ class BalanceService
 
             foreach ($custEntries as $entry) {
                 $allRows->push([
-                    'date'        => $entry->entry_date,
+                    'date'        => $entry->entry_date ? \Carbon\Carbon::parse($entry->entry_date)->format('d M Y') : '-',
                     'type'        => 'Customer',
                     'ref_no'      => $entry->source_type ? (class_basename($entry->source_type) . ' #' . $entry->source_id) : '-',
                     'description' => '[Sale/Cust] ' . $entry->description,
@@ -531,9 +533,9 @@ class BalanceService
                 // tx['credit'] = Purchase (Payable increases) -> In net combined view, this is Credit (Cr)
                 // tx['debit']  = Payment/Return (Payable decreases) -> In net combined view, this is Debit (Dr)
                 $allRows->push([
-                    'date'        => $tx['date'],
+                    'date'        => $tx['date'] ? \Carbon\Carbon::parse($tx['date'])->format('d M Y') : '-',
                     'type'        => 'Vendor',
-                    'ref_no'      => $tx['invoice_no'] ?: ($tx['source_type'] ? ($tx['source_type'] . ' #' . $tx['source_id']) : '-'),
+                    'ref_no'      => $tx['invoice_no'] ?: ($tx['source_type'] ? (class_basename($tx['source_type']) . ' #' . $tx['source_id']) : '-'),
                     'description' => '[Purchase/Vend] ' . $tx['description'],
                     'debit'       => (float) $tx['debit'],  // Dr = Payment to vendor or Purch Return (We reduce what we owe)
                     'credit'      => (float) $tx['credit'], // Cr = Purchase (We owe them)
