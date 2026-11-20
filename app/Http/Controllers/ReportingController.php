@@ -2196,18 +2196,44 @@ class ReportingController extends Controller
         $totalGrossSales = $totalNetRevenue + $totalDiscountsAllowed;
         $totalCogs = array_sum(array_column($productStats, 'cogs'));
 
+        // 6. Vendor Incentives & Rebates Income (Backup, Annual, Scheme Claims received from vendors via Cash/Bank)
+        $backupIncome = 0;
+        $annualIncome = 0;
+        $schemeIncome = 0;
+        $totalIncentiveIncome = 0;
+
+        if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
+            $startDateOnly = substr($start, 0, 10);
+            $endDateOnly = substr($end, 0, 10);
+
+            $incBase = DB::table('vendor_incentive_ledgers')
+                ->where('entry_type', 'received')
+                ->whereBetween('date', [$startDateOnly, $endDateOnly]);
+
+            $backupIncome = (float) (clone $incBase)->where('type', 'backup')->sum('credit');
+            $annualIncome = (float) (clone $incBase)->where('type', 'annual')->sum('credit');
+            $schemeIncome = (float) (clone $incBase)->where('type', 'scheme')->sum('credit');
+            $totalIncentiveIncome = $backupIncome + $annualIncome + $schemeIncome;
+        }
+
+        $netProfit = $totalGrossProfit + $totalIncentiveIncome - $totalExpenses;
+
         return response()->json([
-            'products'                => $productStats,
-            'total_gross_sales'       => round($totalGrossSales, 2),
-            'total_discounts_allowed' => round($totalDiscountsAllowed, 2),
-            'net_sales'               => round($totalNetRevenue, 2),
-            'total_cogs'              => round($totalCogs, 2),
-            'total_extradiscount'     => round($totalOrderDiscount, 2),
-            'total_item_discount'     => round($totalItemDiscount, 2),
-            'total_gross_profit'      => round($totalGrossProfit, 2),
-            'total_expenses'          => round($totalExpenses, 2),
-            'net_profit'              => round($totalGrossProfit - $totalExpenses, 2),
-            'top_customers'           => $topCustomers
+            'products'                 => $productStats,
+            'total_gross_sales'        => round($totalGrossSales, 2),
+            'total_discounts_allowed'  => round($totalDiscountsAllowed, 2),
+            'net_sales'                => round($totalNetRevenue, 2),
+            'total_cogs'               => round($totalCogs, 2),
+            'total_extradiscount'      => round($totalOrderDiscount, 2),
+            'total_item_discount'      => round($totalItemDiscount, 2),
+            'total_gross_profit'       => round($totalGrossProfit, 2),
+            'vendor_incentive_income'  => round($totalIncentiveIncome, 2),
+            'backup_income'            => round($backupIncome, 2),
+            'annual_income'            => round($annualIncome, 2),
+            'scheme_income'            => round($schemeIncome, 2),
+            'total_expenses'           => round($totalExpenses, 2),
+            'net_profit'               => round($netProfit, 2),
+            'top_customers'            => $topCustomers
         ]);
     }
 
@@ -3380,12 +3406,19 @@ class ReportingController extends Controller
         $equityTotal         = round($capitalAccountBalance + $retainedEarnings, 2);
         $totalLiabilitiesAndEquity = round($currentLiabilitiesTotal + $equityTotal, 2);
 
+        // Pending uncollected vendor claims (Backup, Annual, Scheme) as of date
+        $pendingVendorClaims = (float) DB::table('vendor_incentive_ledgers')
+            ->whereDate('date', '<=', $dateOnly)
+            ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as balance')
+            ->value('balance') ?? 0;
+
         // Balance Check: Assets should = Liabilities + Equity
         $balanceDifference = round($totalAssets - $totalLiabilitiesAndEquity, 2);
 
         return response()->json([
             'date'     => date('d-M-Y', strtotime($dateOnly)),
             'raw_date' => $dateOnly,
+            'pending_vendor_claims' => round($pendingVendorClaims, 2),
             'assets'   => [
                 'cash_bank'       => $cashAccounts,
                 'total_cash_bank' => $totalCashBank,

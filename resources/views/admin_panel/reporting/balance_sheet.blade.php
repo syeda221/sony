@@ -420,6 +420,14 @@
                                     </td>
                                     <td class="bs-amount text-dark" id="lblInventory">Rs 0.00</td>
                                 </tr>
+                                <tr id="rowVendorClaims" class="drilldown-row" title="Click to view Vendor Multi-Ledger Claims" style="display: none;">
+                                    <td class="bs-sub-row">
+                                        <i class="fas fa-hand-holding-usd text-success me-2"></i>Pending Vendor Claims (Backup / Rebate / Scheme)
+                                        <span class="drilldown-badge text-success"><i class="fa-solid fa-file-invoice me-1"></i>Uncollected</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
+                                    <td class="bs-amount text-success" id="lblVendorClaims">Rs 0.00</td>
+                                </tr>
                                 <tr class="bs-subtotal-row">
                                     <td class="fw-bold text-dark">Total Current Assets</td>
                                     <td class="bs-amount text-primary fs-6" id="lblCurrentAssetsTotal">Rs 0.00</td>
@@ -600,6 +608,15 @@
 
                 $("#lblReceivables").text(fmt(receivables));
                 $("#lblInventory").text(fmt(inventory));
+
+                let pendingClaims = parseFloat(res.pending_vendor_claims || 0);
+                if (pendingClaims > 0) {
+                    $("#rowVendorClaims").show();
+                    $("#lblVendorClaims").text(fmt(pendingClaims));
+                } else {
+                    $("#rowVendorClaims").hide();
+                }
+
                 $("#lblCurrentAssetsTotal").text(fmt(currentAssetsTotal));
                 $("#lblFixedAssetsTotal").text(fmt(fixedAssetsTotal));
                 $("#lblAssetsGrandTotal").text(fmt(assetsTotal));

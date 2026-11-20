@@ -290,6 +290,11 @@
                     <div class="stat-val text-success" id="cardGrossProfit">Rs 0.00</div>
                 </div>
 
+                <div class="stat-pill" style="background: #ecfdf5; border-color: #a7f3d0;" id="cardIncentiveIncomeWrap" title="Backup, Annual Rebates & Scheme Claims Received from Vendors">
+                    <div class="stat-label" style="color: #059669;"><i class="fas fa-hand-holding-usd me-1"></i>Incentives Income</div>
+                    <div class="stat-val" style="color: #047857;" id="cardIncentiveIncome">Rs 0.00</div>
+                </div>
+
                 <div class="stat-pill" style="background: #fef2f2; border-color: #fca5a5;">
                     <div class="stat-label text-danger">Total Expenses</div>
                     <div class="stat-val text-danger" id="cardExpenses">Rs 0.00</div>
@@ -337,8 +342,14 @@
             </div>
         </div>
         <div class="col-6">
+            <div class="mob-metric-card p-2" style="background: #ecfdf5; border-color: #a7f3d0;">
+                <span class="mob-metric-label" style="font-size: 11px; color: #059669;"><i class="fas fa-hand-holding-usd me-1"></i>Incentives Income</span>
+                <div class="mob-metric-val mt-1" id="mobCardIncentiveIncome" style="font-size: 14px; color: #047857;">Rs 0</div>
+            </div>
+        </div>
+        <div class="col-12 mt-1">
             <div class="mob-metric-card p-2">
-                <span class="mob-metric-label" style="font-size: 11px;"><i class="fas fa-arrow-down text-danger me-1"></i>Expenses</span>
+                <span class="mob-metric-label" style="font-size: 11px;"><i class="fas fa-arrow-down text-danger me-1"></i>Total Expenses</span>
                 <div class="mob-metric-val text-danger mt-1" id="mobCardExpenses" style="font-size: 14px;">Rs 0</div>
             </div>
         </div>
@@ -591,6 +602,7 @@ $(document).ready(function() {
         let netSales    = parseFloat(data.net_sales || 0);
         let cogs        = parseFloat(data.total_cogs || 0);
         let grossProfit = parseFloat(data.total_gross_profit || 0);
+        let incentives  = parseFloat(data.vendor_incentive_income || 0);
         let expenses    = parseFloat(data.total_expenses || 0);
         let netProfit   = parseFloat(data.net_profit || 0);
 
@@ -598,6 +610,9 @@ $(document).ready(function() {
         $('#cardTotalDiscount, #mobCardTotalDiscount').text('Rs ' + fmt(discounts));
         $('#cardNetSales, #mobCardNetSales').text('Rs ' + fmt(netSales));
         $('#cardCogs, #mobCardCogs').text('Rs ' + fmt(cogs));
+        $('#cardIncentiveIncome, #mobCardIncentiveIncome').text('Rs ' + fmt(incentives));
+        let incDetails = 'Backup: Rs ' + fmt(data.backup_income || 0) + ' | Annual: Rs ' + fmt(data.annual_income || 0) + ' | Scheme: Rs ' + fmt(data.scheme_income || 0);
+        $('#cardIncentiveIncomeWrap').attr('title', incDetails);
         $('#cardExpenses, #mobCardExpenses').text('Rs ' + fmt(expenses));
 
         // Gross Profit / Loss styling
