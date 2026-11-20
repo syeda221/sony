@@ -1139,6 +1139,13 @@
                 $('#pillTotalCredit, #mobPillTotalCredit').text(formattedCredit);
                 $('#pillClosingBalance, #mobPillClosingBalance').text(formattedClosing);
             }
+
+            // Check URL parameters on page load (e.g. from Balance Sheet drill-down)
+            let urlParams = new URLSearchParams(window.location.search);
+            let initialLedgerType = urlParams.get('ledger_type');
+            if (initialLedgerType && ['main', 'backup', 'annual', 'scheme'].includes(initialLedgerType)) {
+                $('.btn-ledger-tab[data-tab="' + initialLedgerType + '"]').trigger('click');
+            }
         });
     </script>
 @endsection

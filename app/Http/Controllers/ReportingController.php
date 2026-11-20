@@ -3455,6 +3455,7 @@ class ReportingController extends Controller
                 'receivables'       => route('report.parties_balance') . '?report_type=RECEIVABLE',
                 'customer_ledger'   => route('report.customer.ledger'),
                 'inventory'         => route('report.item_stock') . '?date_to=' . $dateOnly,
+                'scheme_discount'   => route('report.vendor.ledger') . '?ledger_type=scheme',
                 'payables'          => route('report.parties_balance') . '?report_type=PAYABLE',
                 'vendor_ledger'     => route('report.vendor.ledger'),
                 'retained_earnings' => route('report.profit_loss') . '?start_date=2000-01-01T00:00&end_date=' . $dateOnly . 'T23:59',

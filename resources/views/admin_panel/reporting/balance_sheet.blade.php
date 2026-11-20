@@ -640,6 +640,7 @@
                 if (res.urls) {
                     $('#rowReceivables').data('url', res.urls.receivables || '');
                     $('#rowInventory').data('url', res.urls.inventory || '');
+                    $('#rowSchemeDiscount').data('url', res.urls.scheme_discount || '');
                     $('#rowFixedAssets').data('url', res.urls.chart_of_accounts || '');
                     $('#rowPayables').data('url', res.urls.payables || '');
                     $('#rowCapital').data('url', res.urls.chart_of_accounts || '');
