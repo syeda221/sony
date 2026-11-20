@@ -4576,6 +4576,7 @@ class ReportingController extends Controller
             $inlineDisc = 0;
             $totalQty = 0;
             $itemsList = [];
+            $totalSaleCogs = 0;
 
             foreach ($sale->items as $it) {
                 $inlineDisc += (float) ($it->discount_amount ?? 0);
@@ -4583,6 +4584,14 @@ class ReportingController extends Controller
                 $totalQty += $itQty;
                 $pName = $it->product ? $it->product->item_name : ($it->is_manual ? $it->product_name : 'Item');
                 $itemsList[] = $pName . ' (' . $itQty . ')';
+
+                // Cost calculation for line item
+                $itemCost = (float)($it->purchase_price ?? 0);
+                if ($itemCost <= 0 && $it->product) {
+                    $itemCost = (float)($it->product->purchase_price_per_piece ?? $it->product->purchase_price ?? 0);
+                }
+                $pieces = (float)($it->total_pieces > 0 ? $it->total_pieces : $itQty);
+                $totalSaleCogs += ($pieces * $itemCost);
             }
 
             $addDisc = (float) ($sale->total_extradiscount ?? 0);
@@ -4609,67 +4618,95 @@ class ReportingController extends Controller
             // Net Realized Sale = Bill Net - Return Amount
             $netRealized = max(0, $billNet - $retAmount);
 
-            // Commission amount on realized net sale
-            $commAmount = ($netRealized * $commissionRate) / 100;
+            // Realized Gross Profit = Net Realized Sale - COGS
+            $saleGrossProfit = max(0, $netRealized - $totalSaleCogs);
+
+            // Dual-Tier Commission Rates
+            $saleCommRate = (float)($sale->sales_officer_sale_comm_rate ?? $officerObj->sale_commission_rate ?? $officerObj->commission_rate ?? 0);
+            $profitCommRate = (float)($sale->sales_officer_profit_comm_rate ?? $officerObj->profit_commission_rate ?? 0);
+
+            // 1. Volume Commission on realized net sales
+            $volumeCommAmount = ($netRealized * $saleCommRate) / 100;
+            // 2. Profit Commission on gross profit
+            $profitCommAmount = ($saleGrossProfit * $profitCommRate) / 100;
+            // Total Combined Commission
+            $totalCommAmount = $volumeCommAmount + $profitCommAmount;
 
             if (!isset($officerSummary[$officerId])) {
                 $officerSummary[$officerId] = [
-                    'officer_id' => $officerId,
-                    'officer_name' => $officerName,
-                    'commission_rate' => $commissionRate,
-                    'total_invoices' => 0,
-                    'total_qty' => 0,
-                    'total_gross' => 0,
-                    'total_discount' => 0,
-                    'total_returns' => 0,
-                    'total_net' => 0,
-                    'commission_amount' => 0,
+                    'officer_id'               => $officerId,
+                    'officer_name'             => $officerName,
+                    'sale_commission_rate'     => $saleCommRate,
+                    'profit_commission_rate'   => $profitCommRate,
+                    'commission_rate'          => $saleCommRate,
+                    'total_invoices'           => 0,
+                    'total_qty'                => 0,
+                    'total_gross'              => 0,
+                    'total_discount'           => 0,
+                    'total_returns'            => 0,
+                    'total_net'                => 0,
+                    'total_profit'             => 0,
+                    'volume_commission_amount' => 0,
+                    'profit_commission_amount' => 0,
+                    'commission_amount'        => 0,
                 ];
             }
 
-            $officerSummary[$officerId]['total_invoices'] += 1;
-            $officerSummary[$officerId]['total_qty'] += $totalQty;
-            $officerSummary[$officerId]['total_gross'] += $gross;
-            $officerSummary[$officerId]['total_discount'] += $totalDiscount;
-            $officerSummary[$officerId]['total_returns'] += $retAmount;
-            $officerSummary[$officerId]['total_net'] += $netRealized;
-            $officerSummary[$officerId]['commission_amount'] += $commAmount;
+            $officerSummary[$officerId]['total_invoices']           += 1;
+            $officerSummary[$officerId]['total_qty']                += $totalQty;
+            $officerSummary[$officerId]['total_gross']              += $gross;
+            $officerSummary[$officerId]['total_discount']           += $totalDiscount;
+            $officerSummary[$officerId]['total_returns']            += $retAmount;
+            $officerSummary[$officerId]['total_net']                += $netRealized;
+            $officerSummary[$officerId]['total_profit']             += $saleGrossProfit;
+            $officerSummary[$officerId]['volume_commission_amount'] += $volumeCommAmount;
+            $officerSummary[$officerId]['profit_commission_amount'] += $profitCommAmount;
+            $officerSummary[$officerId]['commission_amount']        += $totalCommAmount;
 
             $transformed[] = [
-                'id' => $sale->id,
-                'invoice_no' => $sale->invoice_no,
-                'created_at_formatted' => $sale->created_at ? $sale->created_at->format('d/m/Y h:i A') : '',
-                'customer_name' => $sale->customer_relation ? $sale->customer_relation->customer_name : ($sale->walkin_name ?: 'Walk-in'),
-                'customer_province' => $sale->customer_relation->province ?? '',
-                'customer_city' => $sale->customer_relation->city ?? '',
-                'customer_area' => $sale->customer_relation->area ?? '',
-                'customer_code' => $sale->customer_relation->customer_id ?? '',
-                'sales_officer_id' => $officerId,
-                'sales_officer_name' => $officerName,
-                'po_no' => $sale->po_no ?? '',
-                'po_date' => $sale->po_date ? \Carbon\Carbon::parse($sale->po_date)->format('d/m/Y') : '',
-                'reference' => $sale->reference ?? '',
-                'status' => $sale->sale_status,
-                'products' => implode(', ', $itemsList),
-                'total_qty' => $totalQty,
-                'gross_amount' => $gross,
-                'discount' => $totalDiscount,
-                'returns' => $retAmount,
-                'net_amount' => $netRealized,
+                'id'                     => $sale->id,
+                'invoice_no'             => $sale->invoice_no,
+                'created_at_formatted'   => $sale->created_at ? $sale->created_at->format('d/m/Y h:i A') : '',
+                'customer_name'          => $sale->customer_relation ? $sale->customer_relation->customer_name : ($sale->walkin_name ?: 'Walk-in'),
+                'customer_province'      => $sale->customer_relation->province ?? '',
+                'customer_city'          => $sale->customer_relation->city ?? '',
+                'customer_area'          => $sale->customer_relation->area ?? '',
+                'customer_code'          => $sale->customer_relation->customer_id ?? '',
+                'sales_officer_id'       => $officerId,
+                'sales_officer_name'     => $officerName,
+                'po_no'                  => $sale->po_no ?? '',
+                'po_date'                => $sale->po_date ? \Carbon\Carbon::parse($sale->po_date)->format('d/m/Y') : '',
+                'reference'              => $sale->reference ?? '',
+                'status'                 => $sale->sale_status,
+                'products'               => implode(', ', $itemsList),
+                'total_qty'              => $totalQty,
+                'gross_amount'           => $gross,
+                'discount'               => $totalDiscount,
+                'returns'                => $retAmount,
+                'net_amount'             => $netRealized,
+                'gross_profit'           => $saleGrossProfit,
+                'sale_commission_rate'   => $saleCommRate,
+                'volume_commission'      => $volumeCommAmount,
+                'profit_commission_rate' => $profitCommRate,
+                'profit_commission'      => $profitCommAmount,
+                'total_commission'       => $totalCommAmount,
             ];
         }
 
         return response()->json([
-            'sales' => $transformed,
+            'sales'   => $transformed,
             'summary' => array_values($officerSummary),
-            'totals' => [
-                'total_sales' => count($transformed),
-                'total_qty' => array_sum(array_column($officerSummary, 'total_qty')),
-                'total_gross' => array_sum(array_column($officerSummary, 'total_gross')),
-                'total_discount' => array_sum(array_column($officerSummary, 'total_discount')),
-                'total_returns' => array_sum(array_column($officerSummary, 'total_returns')),
-                'total_net' => array_sum(array_column($officerSummary, 'total_net')),
-                'total_commission' => array_sum(array_column($officerSummary, 'commission_amount')),
+            'totals'  => [
+                'total_sales'             => count($transformed),
+                'total_qty'               => array_sum(array_column($officerSummary, 'total_qty')),
+                'total_gross'             => array_sum(array_column($officerSummary, 'total_gross')),
+                'total_discount'          => array_sum(array_column($officerSummary, 'total_discount')),
+                'total_returns'           => array_sum(array_column($officerSummary, 'total_returns')),
+                'total_net'               => array_sum(array_column($officerSummary, 'total_net')),
+                'total_profit'            => array_sum(array_column($officerSummary, 'total_profit')),
+                'total_volume_commission' => array_sum(array_column($officerSummary, 'volume_commission_amount')),
+                'total_profit_commission' => array_sum(array_column($officerSummary, 'profit_commission_amount')),
+                'total_commission'        => array_sum(array_column($officerSummary, 'commission_amount')),
             ]
         ]);
     }

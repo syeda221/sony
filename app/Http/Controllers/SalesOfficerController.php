@@ -20,27 +20,31 @@ class SalesOfficerController extends Controller
             'name_urdu' => 'nullable|string|max:255',
             'mobile' => 'required|string|max:50',
             'commission_rate' => 'nullable|numeric|min:0|max:100',
+            'sale_commission_rate' => 'nullable|numeric|min:0|max:100',
+            'profit_commission_rate' => 'nullable|numeric|min:0|max:100',
             'edit_id' => 'nullable|integer|exists:sales_officers,id',
         ]);
 
-        $commRate = isset($validated['commission_rate']) ? (float)$validated['commission_rate'] : 0.00;
+        $saleCommRate = isset($validated['sale_commission_rate']) 
+            ? (float)$validated['sale_commission_rate'] 
+            : (isset($validated['commission_rate']) ? (float)$validated['commission_rate'] : 0.00);
+        $profitCommRate = isset($validated['profit_commission_rate']) ? (float)$validated['profit_commission_rate'] : 0.00;
+
+        $officerData = [
+            'name' => $validated['name'],
+            'name_urdu' => $validated['name_urdu'] ?? null,
+            'mobile' => $validated['mobile'],
+            'commission_rate' => $saleCommRate, // maintain backward compatibility
+            'sale_commission_rate' => $saleCommRate,
+            'profit_commission_rate' => $profitCommRate,
+        ];
 
         if (!empty($request->edit_id)) {
             $officer = SalesOfficer::findOrFail($request->edit_id);
-            $officer->update([
-                'name' => $validated['name'],
-                'name_urdu' => $validated['name_urdu'] ?? null,
-                'mobile' => $validated['mobile'],
-                'commission_rate' => $commRate,
-            ]);
+            $officer->update($officerData);
             $message = 'Sales Officer updated successfully.';
         } else {
-            $officer = SalesOfficer::create([
-                'name' => $validated['name'],
-                'name_urdu' => $validated['name_urdu'] ?? null,
-                'mobile' => $validated['mobile'],
-                'commission_rate' => $commRate,
-            ]);
+            $officer = SalesOfficer::create($officerData);
             $message = 'Sales Officer created successfully.';
         }
 

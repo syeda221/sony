@@ -172,7 +172,7 @@
                     <select id="sales_officer_id" name="sales_officer_id" class="form-select form-select-sm select2-officer">
                         <option value="all">-- All Sales Officers --</option>
                         @foreach($salesOfficers as $officer)
-                            <option value="{{ $officer->id }}">{{ $officer->name }} {{ $officer->mobile ? '(' . $officer->mobile . ')' : '' }} {{ $officer->commission_rate ? '[' . number_format($officer->commission_rate, 1) . '% Comm]' : '' }}</option>
+                            <option value="{{ $officer->id }}">{{ $officer->name }} {{ $officer->mobile ? '(' . $officer->mobile . ')' : '' }} [Sale: {{ number_format($officer->sale_commission_rate ?? $officer->commission_rate ?? 0, 1) }}% | Profit: {{ number_format($officer->profit_commission_rate ?? 0, 1) }}%]</option>
                         @endforeach
                     </select>
                 </div>
@@ -213,6 +213,18 @@
             <div class="stat-label text-secondary">Net Realized Sale</div>
             <div class="stat-val text-success" id="statNet">Rs 0</div>
         </div>
+        <div class="stat-pill">
+            <div class="stat-label text-secondary">Gross Profit</div>
+            <div class="stat-val text-info" id="statProfit">Rs 0</div>
+        </div>
+        <div class="stat-pill">
+            <div class="stat-label text-secondary">Sale Comm (Vol)</div>
+            <div class="stat-val text-primary" id="statVolumeComm">Rs 0</div>
+        </div>
+        <div class="stat-pill">
+            <div class="stat-label text-secondary">Profit Comm</div>
+            <div class="stat-val text-success" id="statProfitComm">Rs 0</div>
+        </div>
         <div class="stat-pill" style="border-color: #8b5cf6;">
             <div class="stat-label text-purple" style="color: #7c3aed;">Total Commission</div>
             <div class="stat-val" style="color: #7c3aed;" id="statCommission">Rs 0</div>
@@ -240,21 +252,23 @@
                 <table class="table table-hover report-table align-middle" id="tableOfficerSummary">
                     <thead>
                         <tr>
-                            <th class="text-center" style="width: 50px;">#</th>
+                            <th class="text-center" style="width: 45px;">#</th>
                             <th>Sales Officer Name</th>
                             <th class="text-center">Invoices</th>
-                            <th class="text-center">Total Qty</th>
+                            <th class="text-center">Qty</th>
                             <th class="text-end">Gross Sale</th>
                             <th class="text-end">Discounts</th>
                             <th class="text-end">Returns</th>
-                            <th class="text-end">Net Sale</th>
-                            <th class="text-center">Commission %</th>
-                            <th class="text-end">Commission (Rs)</th>
-                            <th class="text-center">Contribution</th>
+                            <th class="text-end">Net Realized</th>
+                            <th class="text-end">Gross Profit</th>
+                            <th class="text-center">Sale Comm (Rate / Amt)</th>
+                            <th class="text-center">Profit Comm (Rate / Amt)</th>
+                            <th class="text-end">Total Comm (Rs)</th>
+                            <th class="text-center">Share</th>
                         </tr>
                     </thead>
                     <tbody id="summaryBody">
-                        <tr><td colspan="11" class="text-center py-4 text-muted">Loading officer summary...</td></tr>
+                        <tr><td colspan="13" class="text-center py-4 text-muted">Loading officer summary...</td></tr>
                     </tbody>
                     <tfoot class="bg-light fw-bold" id="summaryFoot"></tfoot>
                 </table>
@@ -267,7 +281,7 @@
                 <table class="table table-hover report-table align-middle" id="tableDetailedSales">
                     <thead>
                         <tr>
-                            <th class="text-center" style="width: 40px;">#</th>
+                            <th class="text-center" style="width: 35px;">#</th>
                             <th>Date</th>
                             <th>Invoice #</th>
                             <th>Sales Officer</th>
@@ -279,11 +293,15 @@
                             <th class="text-end">Disc</th>
                             <th class="text-end">Returns</th>
                             <th class="text-end">Net Total</th>
+                            <th class="text-end">Gross Profit</th>
+                            <th class="text-end">Sale Comm</th>
+                            <th class="text-end">Profit Comm</th>
+                            <th class="text-end">Total Comm</th>
                             <th class="text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody id="detailedBody">
-                        <tr><td colspan="13" class="text-center py-4 text-muted">Click Filter to load data...</td></tr>
+                        <tr><td colspan="17" class="text-center py-4 text-muted">Click Filter to load data...</td></tr>
                     </tbody>
                     <tfoot class="bg-light fw-bold" id="detailedFoot"></tfoot>
                 </table>
@@ -300,8 +318,8 @@
         if ($('.select2-customer').length > 0) $('.select2-customer').select2({ width: '100%' });
 
         function loadReport() {
-            $('#summaryBody').html('<tr><td colspan="11" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Calculating officer metrics & deductions...</td></tr>');
-            $('#detailedBody').html('<tr><td colspan="13" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Fetching sales log...</td></tr>');
+            $('#summaryBody').html('<tr><td colspan="13" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Calculating officer metrics & deductions...</td></tr>');
+            $('#detailedBody').html('<tr><td colspan="17" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Fetching sales log...</td></tr>');
 
             $.ajax({
                 url: '{{ route('report.sales_officer_sale.fetch') }}',
@@ -318,6 +336,9 @@
                     $('#statDiscounts').text('Rs ' + Number(totals.total_discount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                     $('#statReturns').text('Rs ' + Number(totals.total_returns || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                     $('#statNet').text('Rs ' + Number(totals.total_net || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                    $('#statProfit').text('Rs ' + Number(totals.total_profit || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                    $('#statVolumeComm').text('Rs ' + Number(totals.total_volume_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                    $('#statProfitComm').text('Rs ' + Number(totals.total_profit_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                     $('#statCommission').text('Rs ' + Number(totals.total_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
 
                     // 2. Render Officer Summary Table
@@ -325,7 +346,7 @@
                     let totalNetSum = totals.total_net || 0;
 
                     if (summary.length === 0) {
-                        sumHtml = '<tr><td colspan="11" class="text-center py-4 text-muted">No sales found for the selected criteria.</td></tr>';
+                        sumHtml = '<tr><td colspan="13" class="text-center py-4 text-muted">No sales found for the selected criteria.</td></tr>';
                     } else {
                         summary.forEach((item, idx) => {
                             let sharePct = totalNetSum > 0 ? ((item.total_net / totalNetSum) * 100).toFixed(1) : 0;
@@ -341,14 +362,18 @@
                                     <td class="text-end font-monospace text-danger">Rs ${Number(item.total_discount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-end font-monospace text-danger">Rs ${Number(item.total_returns).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-end font-monospace fw-bold text-success">Rs ${Number(item.total_net).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                    <td class="text-end font-monospace fw-bold text-info">Rs ${Number(item.total_profit || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-center">
-                                        <span class="badge bg-light text-dark border font-monospace">${Number(item.commission_rate || 0).toFixed(1)}%</span>
+                                        <span class="badge bg-light text-primary border font-monospace">${Number(item.sale_commission_rate || 0).toFixed(1)}%</span>
+                                        <div class="fw-bold text-primary font-monospace mt-1">Rs ${Number(item.volume_commission_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-success border font-monospace">${Number(item.profit_commission_rate || 0).toFixed(1)}%</span>
+                                        <div class="fw-bold text-success font-monospace mt-1">Rs ${Number(item.profit_commission_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                                     </td>
                                     <td class="text-end font-monospace fw-bold" style="color: #7c3aed;">Rs ${Number(item.commission_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-center">
-                                        <div class="d-flex align-items-center justify-content-center gap-1">
-                                            <span class="badge bg-primary text-white" style="font-size:10px;">${sharePct}%</span>
-                                        </div>
+                                        <span class="badge bg-primary text-white" style="font-size:10px;">${sharePct}%</span>
                                     </td>
                                 </tr>
                             `;
@@ -367,7 +392,9 @@
                                 <td class="text-end font-monospace text-danger">Rs ${Number(totals.total_discount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-end font-monospace text-danger">Rs ${Number(totals.total_returns || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-end font-monospace fw-bold text-success">Rs ${Number(totals.total_net || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td class="text-center font-monospace">—</td>
+                                <td class="text-end font-monospace fw-bold text-info">Rs ${Number(totals.total_profit || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-center font-monospace text-primary fw-bold">Rs ${Number(totals.total_volume_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-center font-monospace text-success fw-bold">Rs ${Number(totals.total_profit_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-end font-monospace fw-bold" style="color: #7c3aed;">Rs ${Number(totals.total_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-center font-monospace">100%</td>
                             </tr>
@@ -383,9 +410,13 @@
                     let detTotalDisc = 0;
                     let detTotalReturns = 0;
                     let detTotalNet = 0;
+                    let detTotalProfit = 0;
+                    let detTotalVolComm = 0;
+                    let detTotalProfComm = 0;
+                    let detTotalComm = 0;
 
                     if (sales.length === 0) {
-                        detHtml = '<tr><td colspan="13" class="text-center py-4 text-muted">No transactions recorded.</td></tr>';
+                        detHtml = '<tr><td colspan="17" class="text-center py-4 text-muted">No transactions recorded.</td></tr>';
                     } else {
                         sales.forEach((s, idx) => {
                             detTotalQty += Number(s.total_qty || 0);
@@ -393,6 +424,10 @@
                             detTotalDisc += Number(s.discount || 0);
                             detTotalReturns += Number(s.returns || 0);
                             detTotalNet += Number(s.net_amount || 0);
+                            detTotalProfit += Number(s.gross_profit || 0);
+                            detTotalVolComm += Number(s.volume_commission || 0);
+                            detTotalProfComm += Number(s.profit_commission || 0);
+                            detTotalComm += Number(s.total_commission || 0);
 
                             let poText = s.po_no ? `<span class="badge bg-light text-dark border">${s.po_no}</span>` : '—';
                             if (s.po_date) poText += `<br><small class="text-muted" style="font-size:9.5px;">${s.po_date}</small>`;
@@ -417,12 +452,24 @@
                                         ${s.customer_code ? `<small class="text-muted">(${s.customer_code})</small>` : ''}
                                     </td>
                                     <td>${poText}</td>
-                                    <td style="max-width: 240px; font-size:11px;" class="text-truncate" title="${s.products}">${s.products}</td>
+                                    <td style="max-width: 200px; font-size:11px;" class="text-truncate" title="${s.products}">${s.products}</td>
                                     <td class="text-center font-monospace">${s.total_qty}</td>
                                     <td class="text-end font-monospace">Rs ${Number(s.gross_amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-end font-monospace text-danger">Rs ${Number(s.discount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-end font-monospace text-danger">Rs ${Number(s.returns).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-end font-monospace fw-bold text-success">Rs ${Number(s.net_amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                    <td class="text-end font-monospace fw-bold text-info">Rs ${Number(s.gross_profit || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                    <td class="text-end font-monospace">
+                                        <small class="text-muted">${Number(s.sale_commission_rate || 0).toFixed(1)}%</small><br>
+                                        <span class="fw-bold text-primary">Rs ${Number(s.volume_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                    </td>
+                                    <td class="text-end font-monospace">
+                                        <small class="text-muted">${Number(s.profit_commission_rate || 0).toFixed(1)}%</small><br>
+                                        <span class="fw-bold text-success">Rs ${Number(s.profit_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                    </td>
+                                    <td class="text-end font-monospace fw-bold" style="color: #7c3aed;">
+                                        Rs ${Number(s.total_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </td>
                                     <td class="text-center">${statusBadge}</td>
                                 </tr>
                             `;
@@ -440,6 +487,10 @@
                                 <td class="text-end font-monospace text-danger">Rs ${Number(detTotalDisc).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-end font-monospace text-danger">Rs ${Number(detTotalReturns).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-end font-monospace fw-bold text-success">Rs ${Number(detTotalNet).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-end font-monospace fw-bold text-info">Rs ${Number(detTotalProfit).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-end font-monospace text-primary fw-bold">Rs ${Number(detTotalVolComm).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-end font-monospace text-success fw-bold">Rs ${Number(detTotalProfComm).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-end font-monospace fw-bold" style="color: #7c3aed;">Rs ${Number(detTotalComm).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-center font-monospace">—</td>
                             </tr>
                         `);
@@ -448,8 +499,8 @@
                     }
                 },
                 error: function() {
-                    $('#summaryBody').html('<tr><td colspan="11" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
-                    $('#detailedBody').html('<tr><td colspan="13" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
+                    $('#summaryBody').html('<tr><td colspan="13" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
+                    $('#detailedBody').html('<tr><td colspan="17" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
                 }
             });
         }

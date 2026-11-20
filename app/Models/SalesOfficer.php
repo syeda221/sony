@@ -14,9 +14,13 @@ class SalesOfficer extends Model
         'name_urdu',
         'mobile',
         'commission_rate',
+        'sale_commission_rate',
+        'profit_commission_rate',
     ];
 
     protected $casts = [
-        'commission_rate' => 'float',
+        'commission_rate'        => 'float',
+        'sale_commission_rate'   => 'float',
+        'profit_commission_rate' => 'float',
     ];
 }

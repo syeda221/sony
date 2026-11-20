@@ -1194,6 +1194,25 @@ class SaleController extends Controller
             $isNew = ! $sale->exists;
             $sale->customer_id = $request->customer;
             $sale->sales_officer_id = $request->filled('sales_officer_id') ? $request->sales_officer_id : null;
+            
+            // Snapshot Sales Officer commission rates at time of sale
+            if ($sale->sales_officer_id) {
+                $officer = \App\Models\SalesOfficer::find($sale->sales_officer_id);
+                if ($officer) {
+                    $sale->sales_officer_sale_comm_rate = (float)($officer->sale_commission_rate ?? $officer->commission_rate ?? 0);
+                    $sale->sales_officer_profit_comm_rate = (float)($officer->profit_commission_rate ?? 0);
+                }
+            } elseif ($sale->customer_id) {
+                $cust = \App\Models\Customer::find($sale->customer_id);
+                if ($cust && $cust->sales_officer_id) {
+                    $sale->sales_officer_id = $cust->sales_officer_id;
+                    $officer = \App\Models\SalesOfficer::find($cust->sales_officer_id);
+                    if ($officer) {
+                        $sale->sales_officer_sale_comm_rate = (float)($officer->sale_commission_rate ?? $officer->commission_rate ?? 0);
+                        $sale->sales_officer_profit_comm_rate = (float)($officer->profit_commission_rate ?? 0);
+                    }
+                }
+            }
             $sale->po_no = $request->filled('po_no') ? trim($request->po_no) : null;
             $sale->po_date = $request->filled('po_date') ? \Carbon\Carbon::parse($request->po_date)->format('Y-m-d') : null;
             $sale->walkin_name = $isWalkin ? $request->walkin_name : null;

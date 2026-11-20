@@ -9,7 +9,8 @@ class Sale extends Model
 {
     protected $casts = ['selected_terms' => 'array'];
     protected $fillable = [
-        'customer_id', 'sales_officer_id', 'reference', 'po_no', 'po_date', 'total_amount_Words', 'total_bill_amount',
+        'customer_id', 'sales_officer_id', 'sales_officer_sale_comm_rate', 'sales_officer_profit_comm_rate', 'sales_officer_comm_amount',
+        'reference', 'po_no', 'po_date', 'total_amount_Words', 'total_bill_amount',
         'total_extradiscount', 'total_net', 'cash', 'card', 'change', 'change_account_id',
         'total_items', 'discount_type', 'sale_status', 'invoice_no', 'is_booking',
         'freight_charges', 'freight_type', 'selected_terms',
