@@ -789,7 +789,8 @@ class VoucherController extends Controller
                 $v2Lines = [];
                 $adjustBackup = (float) ($request->adjust_backup_amount ?? 0);
                 $adjustAnnual = (float) ($request->adjust_annual_amount ?? 0);
-                $totalClaimsAdjusted = $adjustBackup + $adjustAnnual;
+                $adjustScheme = (float) ($request->adjust_scheme_amount ?? 0);
+                $totalClaimsAdjusted = $adjustBackup + $adjustAnnual + $adjustScheme;
 
                 // 1. DEBIT SIDE (AP / AR / Accounts) - Table Destinations
                 if ($request->vendor_id && $request->amount) {
@@ -843,7 +844,7 @@ class VoucherController extends Controller
                         'account_id' => $balanceService->getAccountsPayableId(),
                         'debit' => 0,
                         'credit' => $totalClaimsAdjusted,
-                        'narration' => "Vendor Claims Offset (Backup: Rs. {$adjustBackup}, Annual: Rs. {$adjustAnnual})",
+                        'narration' => "Vendor Claims Offset (Backup: Rs. {$adjustBackup}, Annual: Rs. {$adjustAnnual}, Scheme: Rs. {$adjustScheme})",
                     ];
                 }
 
@@ -914,6 +915,22 @@ class VoucherController extends Controller
                                     'credit'            => $adjustAnnual,
                                     'account_id'        => $request->header_account_id,
                                     'notes'             => "Annual Rebate Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
+                                    'admin_or_user_id'  => auth()->id(),
+                                ]);
+                            }
+
+                            if ($adjustScheme > 0) {
+                                \App\Models\VendorIncentiveLedger::create([
+                                    'vendor_id'         => (int) $partyId,
+                                    'purchase_id'       => null,
+                                    'type'              => 'scheme',
+                                    'entry_type'        => 'adjusted',
+                                    'date'              => $receiptDate,
+                                    'reference_no'      => $pvid,
+                                    'debit'             => 0,
+                                    'credit'            => $adjustScheme,
+                                    'account_id'        => $request->header_account_id,
+                                    'notes'             => "Scheme Discount Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
                                     'admin_or_user_id'  => auth()->id(),
                                 ]);
                             }

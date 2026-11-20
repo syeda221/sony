@@ -385,7 +385,7 @@
                                 <small class="text-muted">Deduct available claims from gross payable to reduce actual cash payout</small>
                             </div>
                             <div class="row g-2 align-items-center">
-                                <div class="col-md-5">
+                                <div class="col-md-3">
                                     <div class="p-2 border rounded bg-white">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                             <label class="form-check-label fw-bold text-success small mb-0" for="chkAdjustBackup">
@@ -400,7 +400,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-5">
+                                <div class="col-md-3">
                                     <div class="p-2 border rounded bg-white">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                             <label class="form-check-label fw-bold text-primary small mb-0" for="chkAdjustAnnual">
@@ -415,7 +415,22 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-3">
+                                    <div class="p-2 border rounded bg-white">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label class="form-check-label fw-bold text-warning small mb-0" for="chkAdjustScheme">
+                                                <input class="form-check-input me-1 chk-claim-adj" type="checkbox" id="chkAdjustScheme">
+                                                <i class="fas fa-tags me-1"></i> Scheme Claim
+                                            </label>
+                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle small font-monospace" id="pvAvailSchemeText">Avail: Rs. 0.00</span>
+                                        </div>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light text-muted">Deduct Rs.</span>
+                                            <input type="number" step="any" min="0" name="adjust_scheme_amount" id="inputAdjustScheme" class="form-control text-end fw-bold text-warning claim-adj-input" placeholder="0.00" value="0" disabled>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
                                     <div class="p-2 border rounded text-center bg-white">
                                         <small class="text-muted d-block" style="font-size: 11px;">Total Claims Offset</small>
                                         <strong class="text-danger fs-6" id="pvTotalClaimsDeductedDisplay">-Rs. 0.00</strong>
@@ -547,6 +562,7 @@
 
             window.pvAvailBackup = 0;
             window.pvAvailAnnual = 0;
+            window.pvAvailScheme = 0;
 
             // Check vendor claims when party changes
             $(document).on('change', '.rowParty', function() {
@@ -569,11 +585,13 @@
                     $.get('/voucher-balance/vendor/' + vendorId, function(res) {
                         window.pvAvailBackup = parseFloat(res.backup_balance) || 0;
                         window.pvAvailAnnual = parseFloat(res.annual_balance) || 0;
+                        window.pvAvailScheme = parseFloat(res.scheme_balance) || 0;
 
-                        if (window.pvAvailBackup > 0 || window.pvAvailAnnual > 0) {
+                        if (window.pvAvailBackup > 0 || window.pvAvailAnnual > 0 || window.pvAvailScheme > 0) {
                             $('#pvClaimAdjustmentCard').slideDown(150);
                             $('#pvAvailBackupText').text('Avail: Rs. ' + window.pvAvailBackup.toFixed(2));
                             $('#pvAvailAnnualText').text('Avail: Rs. ' + window.pvAvailAnnual.toFixed(2));
+                            $('#pvAvailSchemeText').text('Avail: Rs. ' + window.pvAvailScheme.toFixed(2));
                         } else {
                             resetClaimAdjustment();
                         }
@@ -585,10 +603,11 @@
 
             function resetClaimAdjustment() {
                 $('#pvClaimAdjustmentCard').slideUp(150);
-                $('#chkAdjustBackup, #chkAdjustAnnual').prop('checked', false);
-                $('#inputAdjustBackup, #inputAdjustAnnual').prop('disabled', true).val('0');
+                $('#chkAdjustBackup, #chkAdjustAnnual, #chkAdjustScheme').prop('checked', false);
+                $('#inputAdjustBackup, #inputAdjustAnnual, #inputAdjustScheme').prop('disabled', true).val('0');
                 window.pvAvailBackup = 0;
                 window.pvAvailAnnual = 0;
+                window.pvAvailScheme = 0;
                 calculateTotal();
             }
 
@@ -611,6 +630,15 @@
                 calculateTotal();
             });
 
+            $(document).on('change', '#chkAdjustScheme', function() {
+                if ($(this).is(':checked')) {
+                    $('#inputAdjustScheme').prop('disabled', false).val(window.pvAvailScheme > 0 ? window.pvAvailScheme.toFixed(2) : '0');
+                } else {
+                    $('#inputAdjustScheme').prop('disabled', true).val('0');
+                }
+                calculateTotal();
+            });
+
             $(document).on('input', '.claim-adj-input', function() {
                 calculateTotal();
             });
@@ -624,7 +652,8 @@
 
                 let backupAdj = $('#chkAdjustBackup').is(':checked') ? (parseFloat($('#inputAdjustBackup').val()) || 0) : 0;
                 let annualAdj = $('#chkAdjustAnnual').is(':checked') ? (parseFloat($('#inputAdjustAnnual').val()) || 0) : 0;
-                let totalOffset = backupAdj + annualAdj;
+                let schemeAdj = $('#chkAdjustScheme').is(':checked') ? (parseFloat($('#inputAdjustScheme').val()) || 0) : 0;
+                let totalOffset = backupAdj + annualAdj + schemeAdj;
 
                 if (totalOffset > 0) {
                     $('#pvGrossRow').show();
