@@ -499,18 +499,26 @@
                         {{-- OWNER'S EQUITY SECTION --}}
                         <div class="bs-section-title d-flex justify-content-between align-items-center mt-3">
                             <span><i class="fas fa-chart-pie text-success me-1"></i>Owner's Equity</span>
-                            <span class="text-muted" style="font-size: 10px;">Net Capital Base</span>
+                            <span class="text-muted" style="font-size: 10px;">Capital & Retained Earnings</span>
                         </div>
 
                         <table class="bs-table">
                             <tbody>
-                                <tr id="rowEquity" class="drilldown-row" title="Click to view Profit & Loss Statement">
+                                <tr id="rowCapital" class="drilldown-row" title="Click to view Chart of Accounts">
                                     <td class="bs-sub-row">
-                                        <i class="fas fa-user-shield text-success me-2"></i>Owner's Capital & Retained Earnings
+                                        <i class="fas fa-landmark text-primary me-2"></i>Owner's Capital
+                                        <span class="drilldown-badge"><i class="fa-solid fa-book me-1"></i>Capital</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
+                                    <td class="bs-amount text-dark" id="lblCapital">Rs 0.00</td>
+                                </tr>
+                                <tr id="rowRetainedEarnings" class="drilldown-row" title="Click to view Profit & Loss Statement">
+                                    <td class="bs-sub-row">
+                                        <i class="fas fa-chart-line text-success me-2"></i>Retained Earnings (Net Profit)
                                         <span class="drilldown-badge"><i class="fa-solid fa-chart-line me-1"></i>P&L Report</span>
                                         <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
                                     </td>
-                                    <td class="bs-amount text-success" id="lblEquity">Rs 0.00</td>
+                                    <td class="bs-amount text-success" id="lblRetainedEarnings">Rs 0.00</td>
                                 </tr>
                                 <tr class="bs-subtotal-row">
                                     <td class="fw-bold text-dark">Total Owner's Equity</td>
@@ -598,14 +606,17 @@
 
                 // 2. Liabilities & Equity Calculation & Render
                 let payables = res.liabilities ? (res.liabilities.payables || 0) : 0;
-                let liabTotal = res.liabilities ? (res.liabilities.current_total || 0) : 0;
-                let equity = res.liabilities ? (res.liabilities.equity || 0) : 0;
-                let liabEquityTotal = res.liabilities ? (res.liabilities.total || 0) : 0;
+                let liabTotal = res.liabilities ? (res.liabilities.total || 0) : 0;
+                let capital = res.equity ? (res.equity.capital || 0) : 0;
+                let retainedEarnings = res.equity ? (res.equity.retained_earnings || 0) : 0;
+                let equityTotal = res.equity ? (res.equity.total || 0) : 0;
+                let liabEquityTotal = res.totals ? (res.totals.liabilities_and_equity || (liabTotal + equityTotal)) : (liabTotal + equityTotal);
 
                 $("#lblPayables").text(fmt(payables));
                 $("#lblLiabTotal").text(fmt(liabTotal));
-                $("#lblEquity").text(fmt(equity));
-                $("#lblEquityTotal").text(fmt(equity));
+                $("#lblCapital").text(fmt(capital));
+                $("#lblRetainedEarnings").text(fmt(retainedEarnings));
+                $("#lblEquityTotal").text(fmt(equityTotal));
                 $("#lblLiabEquityGrandTotal").text(fmt(liabEquityTotal));
 
                 // 3. Drill-down URLs binding
@@ -614,20 +625,21 @@
                     $('#rowInventory').data('url', res.urls.inventory || '');
                     $('#rowFixedAssets').data('url', res.urls.chart_of_accounts || '');
                     $('#rowPayables').data('url', res.urls.payables || '');
-                    $('#rowEquity').data('url', res.urls.equity || '');
+                    $('#rowCapital').data('url', res.urls.chart_of_accounts || '');
+                    $('#rowRetainedEarnings').data('url', res.urls.retained_earnings || '');
                 }
 
                 // 4. Update Stat Pills (Desktop & Mobile)
                 $("#pillAssets, #mobPillAssets").text(fmt(assetsTotal));
                 $("#pillLiabilities, #mobPillLiabilities").text(fmt(liabTotal));
-                $("#pillEquity, #mobPillEquity").text(fmt(equity));
+                $("#pillEquity, #mobPillEquity").text(fmt(equityTotal));
 
                 // Equation Status Check (Assets = Liabilities + Equity)
                 let diff = Math.abs(assetsTotal - liabEquityTotal);
                 if (diff < 0.01) {
                     $("#pillStatus, #mobPillStatus").html('<span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="fas fa-check-circle me-1"></i>Balanced</span>');
                 } else {
-                    $("#pillStatus, #mobPillStatus").html('<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1"><i class="fas fa-exclamation-triangle me-1"></i>Unbalanced</span>');
+                    $("#pillStatus, #mobPillStatus").html('<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1" title="Diff: ' + fmt(diff) + '"><i class="fas fa-exclamation-triangle me-1"></i>Diff: ' + fmt(diff) + '</span>');
                 }
             });
         }

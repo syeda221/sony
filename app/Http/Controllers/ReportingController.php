@@ -3235,37 +3235,90 @@ class ReportingController extends Controller
         }
         $currentLiabilitiesTotal = $totalPayables;
 
-        // 3. Owner's Equity (Equity = Assets - Liabilities)
-        $equityTotal = $totalAssets - $currentLiabilitiesTotal;
-        $totalLiabilitiesAndEquity = $currentLiabilitiesTotal + $equityTotal;
+        // 3. Owner's Equity — Accounting correct:
+        //    Retained Earnings = Net Profit from P&L (Sales - COGS - Expenses) since inception
+        //    Capital = Owner's Capital account balance
+        //    Total Equity = Capital + Retained Earnings
+
+        // Calculate Net Profit from P&L (inception to selected date)
+        $plRequest = new Request([
+            'start_date' => '2000-01-01 00:00:00',
+            'end_date'   => $dateOnly . ' 23:59:59',
+        ]);
+        $plResponse = $this->fetchProfitLoss($plRequest);
+        $plData = $plResponse->getData(true);
+        $retainedEarnings = round((float) ($plData['net_profit'] ?? 0), 2);
+
+        // Capital Account balance (accounts with 'capital' or 'owner' in title)
+        $capitalAccountBalance = 0;
+        $capitalAccounts = DB::table('accounts')
+            ->where('status', 1)
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(title) LIKE '%capital%'")
+                  ->orWhereRaw("LOWER(title) LIKE '%owner%'")
+                  ->orWhereRaw("LOWER(account_code) LIKE '%cap%'");
+            })
+            ->get();
+
+        $capitalBreakdown = [];
+        foreach ($capitalAccounts as $capAcc) {
+            $capBal = DB::table('journal_entries')
+                ->where('account_id', $capAcc->id)
+                ->whereDate('entry_date', '<=', $dateOnly)
+                ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as total')
+                ->value('total') ?? 0;
+            $capComputed = (float)$capAcc->opening_balance + (float)$capBal;
+            $capitalAccountBalance += $capComputed;
+            $capitalBreakdown[] = [
+                'name'    => $capAcc->title,
+                'balance' => round($capComputed, 2),
+            ];
+        }
+        $capitalAccountBalance = round($capitalAccountBalance, 2);
+
+        $equityTotal         = round($capitalAccountBalance + $retainedEarnings, 2);
+        $totalLiabilitiesAndEquity = round($currentLiabilitiesTotal + $equityTotal, 2);
+
+        // Balance Check: Assets should = Liabilities + Equity
+        $balanceDifference = round($totalAssets - $totalLiabilitiesAndEquity, 2);
 
         return response()->json([
-            'date' => date('d-M-Y', strtotime($dateOnly)),
+            'date'     => date('d-M-Y', strtotime($dateOnly)),
             'raw_date' => $dateOnly,
-            'assets' => [
+            'assets'   => [
                 'cash_bank'       => $cashAccounts,
                 'total_cash_bank' => $totalCashBank,
                 'receivables'     => $totalReceivables,
                 'inventory'       => $totalInventory,
                 'current_total'   => $currentAssetsTotal,
                 'fixed_total'     => $fixedAssetsTotal,
-                'total'           => $totalAssets
+                'total'           => $totalAssets,
             ],
             'liabilities' => [
-                'payables'        => $totalPayables,
-                'current_total'   => $currentLiabilitiesTotal,
-                'equity'          => $equityTotal,
-                'total'           => $totalLiabilitiesAndEquity
+                'payables'      => $totalPayables,
+                'current_total' => $currentLiabilitiesTotal,
+                'total'         => $currentLiabilitiesTotal,
+            ],
+            'equity' => [
+                'capital'            => $capitalAccountBalance,
+                'capital_breakdown'  => $capitalBreakdown,
+                'retained_earnings'  => $retainedEarnings,
+                'total'              => $equityTotal,
+            ],
+            'totals' => [
+                'liabilities_and_equity' => $totalLiabilitiesAndEquity,
+                'balance_difference'     => $balanceDifference,
+                'is_balanced'            => $balanceDifference == 0,
             ],
             'urls' => [
-                'receivables' => route('report.parties_balance') . '?report_type=RECEIVABLE',
-                'customer_ledger' => route('report.customer.ledger'),
-                'inventory' => route('report.item_stock') . '?date_to=' . $dateOnly,
-                'payables' => route('report.parties_balance') . '?report_type=PAYABLE',
-                'vendor_ledger' => route('report.vendor.ledger'),
-                'equity' => route('report.profit_loss') . '?start_date=2000-01-01T00:00&end_date=' . $dateOnly . 'T23:59',
+                'receivables'       => route('report.parties_balance') . '?report_type=RECEIVABLE',
+                'customer_ledger'   => route('report.customer.ledger'),
+                'inventory'         => route('report.item_stock') . '?date_to=' . $dateOnly,
+                'payables'          => route('report.parties_balance') . '?report_type=PAYABLE',
+                'vendor_ledger'     => route('report.vendor.ledger'),
+                'retained_earnings' => route('report.profit_loss') . '?start_date=2000-01-01T00:00&end_date=' . $dateOnly . 'T23:59',
                 'chart_of_accounts' => route('view_all'),
-            ]
+            ],
         ]);
     }
 
