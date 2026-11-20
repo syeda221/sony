@@ -2272,16 +2272,12 @@ class SaleController extends Controller
             }
 
             if ($type === 'out') {
-                // Deduct
-                $available = $this->calculateAvailableForItem($item, $stock);
+                // Deduct — use warehouse-specific stock directly (total_pieces in this warehouse)
+                $available = (float) $stock->total_pieces;
                 if ($available < $qtyPieces) {
                     $availFormatted = number_format($available, 3);
                     $unitLabel = ($productMode === 'by_kg' || $productMode === 'by_gm') ? 'Kg' : 'Pcs';
-                    throw new \Exception('Insufficient stock for '.$item->product_name.'. Available: '.$availFormatted.' '.$unitLabel);
-                }
-                // Reconcile physical stock with the variant ledger shown in the UI
-                if ($available > $stock->total_pieces) {
-                    $stock->total_pieces = $available;
+                    throw new \Exception('Insufficient stock for '.$item->product_name.' in selected warehouse. Available: '.$availFormatted.' '.$unitLabel);
                 }
                 $stock->total_pieces -= $qtyPieces;
                 // Update approx boxes for display
