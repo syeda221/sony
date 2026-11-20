@@ -265,6 +265,16 @@
         <div class="card-body p-2">
             <div class="summary-pill-bar">
                 
+                <div class="stat-pill" style="background: #f8fafc; border-color: #cbd5e1;">
+                    <div class="stat-label text-secondary">Gross Sales</div>
+                    <div class="stat-val text-dark" id="cardGrossSales">Rs 0.00</div>
+                </div>
+
+                <div class="stat-pill" style="background: #fffbeb; border-color: #fde68a;">
+                    <div class="stat-label" style="color: #b45309;">Total Discounts</div>
+                    <div class="stat-val" style="color: #d97706;" id="cardTotalDiscount">Rs 0.00</div>
+                </div>
+
                 <div class="stat-pill" style="background: #f0fdf4; border-color: #86efac;">
                     <div class="stat-label text-success">Gross Profit</div>
                     <div class="stat-val text-success" id="cardGrossProfit">Rs 0.00</div>
@@ -286,6 +296,18 @@
 
     {{-- MOBILE SUMMARY METRIC GRID (2 Columns + Full-Width Net Profit d-md-none) --}}
     <div class="row g-2 mb-3 d-md-none no-print px-1">
+        <div class="col-6">
+            <div class="mob-metric-card p-2">
+                <span class="mob-metric-label" style="font-size: 11px;"><i class="fas fa-shopping-bag text-secondary me-1"></i>Gross Sales</span>
+                <div class="mob-metric-val text-dark mt-1" id="mobCardGrossSales" style="font-size: 14px;">Rs 0</div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="mob-metric-card p-2" style="background: #fffbeb; border-color: #fde68a;">
+                <span class="mob-metric-label" style="font-size: 11px; color: #b45309;"><i class="fas fa-tags me-1"></i>Discounts</span>
+                <div class="mob-metric-val mt-1" id="mobCardTotalDiscount" style="font-size: 14px; color: #d97706;">Rs 0</div>
+            </div>
+        </div>
         <div class="col-6">
             <div class="mob-metric-card p-2">
                 <span class="mob-metric-label" style="font-size: 11px;"><i class="fas fa-arrow-up text-success me-1"></i>Gross Profit</span>
@@ -542,10 +564,14 @@ $(document).ready(function() {
         $('#mobProfitContainer').html(mobHtml || '<div class="text-center text-muted py-3 small">No item profitability data</div>');
 
         // Cards (Desktop & Mobile)
-        let formattedGross = 'Rs ' + fmt(data.total_gross_profit);
-        let formattedExp   = 'Rs ' + fmt(data.total_expenses);
-        let formattedNet   = 'Rs ' + fmt(data.net_profit);
+        let formattedGrossSales = 'Rs ' + fmt(data.total_gross_sales || 0);
+        let formattedDiscount   = 'Rs ' + fmt(data.total_discounts_allowed || 0);
+        let formattedGross      = 'Rs ' + fmt(data.total_gross_profit || 0);
+        let formattedExp        = 'Rs ' + fmt(data.total_expenses || 0);
+        let formattedNet        = 'Rs ' + fmt(data.net_profit || 0);
 
+        $('#cardGrossSales, #mobCardGrossSales').text(formattedGrossSales);
+        $('#cardTotalDiscount, #mobCardTotalDiscount').text(formattedDiscount);
         $('#cardGrossProfit, #mobCardGrossProfit').text(formattedGross);
         $('#cardExpenses, #mobCardExpenses').text(formattedExp);
         $('#cardNetProfit, #mobCardNetProfit').text(formattedNet);

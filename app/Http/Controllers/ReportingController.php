@@ -2156,12 +2156,55 @@ class ReportingController extends Controller
         });
         $topCustomers = array_slice($customerProfits, 0, 10);
 
+        // 5. Total Discounts and Gross Sales Calculation (Overall discount + Line items + Web)
+        $salesDiscountQuery = DB::table('sales');
+        if ($start && $end) {
+            $salesDiscountQuery->whereBetween('created_at', [$start, $end]);
+        }
+        if ($customerId && $customerId !== 'all') {
+            $salesDiscountQuery->where('customer_id', $customerId);
+        }
+        $totalOrderDiscount = (float) $salesDiscountQuery->sum('total_extradiscount');
+
+        $itemDiscountQuery = DB::table('sale_items')
+            ->join('sales', 'sales.id', '=', 'sale_items.sale_id');
+        if ($start && $end) {
+            $itemDiscountQuery->whereBetween('sales.created_at', [$start, $end]);
+        }
+        if ($customerId && $customerId !== 'all') {
+            $itemDiscountQuery->where('sales.customer_id', $customerId);
+        }
+        if ($productId && $productId !== 'all') {
+            $itemDiscountQuery->where('sale_items.product_id', $productId);
+        }
+        if ($categoryId && $categoryId !== 'all') {
+            $itemDiscountQuery->where('sale_items.category_id', $categoryId);
+        }
+        $totalItemDiscount = (float) $itemDiscountQuery->sum('sale_items.discount_amount');
+
+        $totalWebDiscount = 0;
+        if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
+            $webQuery = DB::table('ecommerce_orders')->where('is_stock_deducted', 1);
+            if ($start && $end) {
+                $webQuery->whereBetween('created_at', [$start, $end]);
+            }
+            $totalWebDiscount = (float) $webQuery->sum('discount');
+        }
+
+        $totalDiscountsAllowed = $totalOrderDiscount + $totalItemDiscount + $totalWebDiscount;
+        $totalNetRevenue = array_sum(array_column($productStats, 'revenue'));
+        $totalGrossSales = $totalNetRevenue + $totalDiscountsAllowed;
+
         return response()->json([
-            'products' => $productStats,
-            'total_gross_profit' => round($totalGrossProfit, 2),
-            'total_expenses' => round($totalExpenses, 2),
-            'net_profit' => round($totalGrossProfit - $totalExpenses, 2),
-            'top_customers' => $topCustomers
+            'products'                => $productStats,
+            'total_gross_sales'       => round($totalGrossSales, 2),
+            'total_discounts_allowed' => round($totalDiscountsAllowed, 2),
+            'total_extradiscount'     => round($totalOrderDiscount, 2),
+            'total_item_discount'     => round($totalItemDiscount, 2),
+            'total_gross_profit'      => round($totalGrossProfit, 2),
+            'total_expenses'          => round($totalExpenses, 2),
+            'net_profit'              => round($totalGrossProfit - $totalExpenses, 2),
+            'top_customers'           => $topCustomers
         ]);
     }
 
