@@ -2194,11 +2194,14 @@ class ReportingController extends Controller
         $totalDiscountsAllowed = $totalOrderDiscount + $totalItemDiscount + $totalWebDiscount;
         $totalNetRevenue = array_sum(array_column($productStats, 'revenue'));
         $totalGrossSales = $totalNetRevenue + $totalDiscountsAllowed;
+        $totalCogs = array_sum(array_column($productStats, 'cogs'));
 
         return response()->json([
             'products'                => $productStats,
             'total_gross_sales'       => round($totalGrossSales, 2),
             'total_discounts_allowed' => round($totalDiscountsAllowed, 2),
+            'net_sales'               => round($totalNetRevenue, 2),
+            'total_cogs'              => round($totalCogs, 2),
             'total_extradiscount'     => round($totalOrderDiscount, 2),
             'total_item_discount'     => round($totalItemDiscount, 2),
             'total_gross_profit'      => round($totalGrossProfit, 2),

@@ -275,8 +275,18 @@
                     <div class="stat-val" style="color: #d97706;" id="cardTotalDiscount">Rs 0.00</div>
                 </div>
 
-                <div class="stat-pill" style="background: #f0fdf4; border-color: #86efac;">
-                    <div class="stat-label text-success">Gross Profit</div>
+                <div class="stat-pill" style="background: #f5f3ff; border-color: #ddd6fe;">
+                    <div class="stat-label" style="color: #6d28d9;">Net Sales</div>
+                    <div class="stat-val" style="color: #6d28d9;" id="cardNetSales">Rs 0.00</div>
+                </div>
+
+                <div class="stat-pill" style="background: #fff7ed; border-color: #fed7aa;">
+                    <div class="stat-label" style="color: #c2410c;">Cost of Goods (COGS)</div>
+                    <div class="stat-val" style="color: #c2410c;" id="cardCogs">Rs 0.00</div>
+                </div>
+
+                <div class="stat-pill" id="cardGrossProfitWrap" style="background: #f0fdf4; border-color: #86efac;">
+                    <div class="stat-label text-success" id="cardGrossProfitLabel">Gross Profit</div>
                     <div class="stat-val text-success" id="cardGrossProfit">Rs 0.00</div>
                 </div>
 
@@ -285,8 +295,8 @@
                     <div class="stat-val text-danger" id="cardExpenses">Rs 0.00</div>
                 </div>
 
-                <div class="stat-pill" style="background: #f0f9ff; border-color: #bae6fd;">
-                    <div class="stat-label text-primary">Net Profit / Loss</div>
+                <div class="stat-pill" id="cardNetProfitWrap" style="background: #f0f9ff; border-color: #bae6fd;">
+                    <div class="stat-label text-primary" id="cardNetProfitLabel">Net Profit / Loss</div>
                     <div class="stat-val text-primary" id="cardNetProfit">Rs 0.00</div>
                 </div>
 
@@ -309,8 +319,20 @@
             </div>
         </div>
         <div class="col-6">
-            <div class="mob-metric-card p-2">
-                <span class="mob-metric-label" style="font-size: 11px;"><i class="fas fa-arrow-up text-success me-1"></i>Gross Profit</span>
+            <div class="mob-metric-card p-2" style="background: #f5f3ff; border-color: #ddd6fe;">
+                <span class="mob-metric-label" style="font-size: 11px; color: #6d28d9;"><i class="fas fa-receipt me-1"></i>Net Sales</span>
+                <div class="mob-metric-val mt-1" id="mobCardNetSales" style="font-size: 14px; color: #6d28d9;">Rs 0</div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="mob-metric-card p-2" style="background: #fff7ed; border-color: #fed7aa;">
+                <span class="mob-metric-label" style="font-size: 11px; color: #c2410c;"><i class="fas fa-boxes me-1"></i>Cost (COGS)</span>
+                <div class="mob-metric-val mt-1" id="mobCardCogs" style="font-size: 14px; color: #c2410c;">Rs 0</div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="mob-metric-card p-2" id="mobCardGrossProfitWrap">
+                <span class="mob-metric-label" style="font-size: 11px;"><i class="fas fa-chart-bar me-1"></i>Gross Profit/Loss</span>
                 <div class="mob-metric-val text-success mt-1" id="mobCardGrossProfit" style="font-size: 14px;">Rs 0</div>
             </div>
         </div>
@@ -321,7 +343,7 @@
             </div>
         </div>
         <div class="col-12 mt-2">
-            <div class="mob-metric-card p-2" style="background: #f0f9ff; border-color: #bae6fd;">
+            <div class="mob-metric-card p-2" id="mobCardNetProfitWrap" style="background: #f0f9ff; border-color: #bae6fd;">
                 <span class="mob-metric-label text-primary" style="font-size: 11px;"><i class="fas fa-balance-scale me-1"></i>Net Profit / Loss</span>
                 <div class="mob-metric-val text-primary mt-1" id="mobCardNetProfit" style="font-size: 15px;">Rs 0</div>
             </div>
@@ -564,17 +586,47 @@ $(document).ready(function() {
         $('#mobProfitContainer').html(mobHtml || '<div class="text-center text-muted py-3 small">No item profitability data</div>');
 
         // Cards (Desktop & Mobile)
-        let formattedGrossSales = 'Rs ' + fmt(data.total_gross_sales || 0);
-        let formattedDiscount   = 'Rs ' + fmt(data.total_discounts_allowed || 0);
-        let formattedGross      = 'Rs ' + fmt(data.total_gross_profit || 0);
-        let formattedExp        = 'Rs ' + fmt(data.total_expenses || 0);
-        let formattedNet        = 'Rs ' + fmt(data.net_profit || 0);
+        let grossSales  = parseFloat(data.total_gross_sales || 0);
+        let discounts   = parseFloat(data.total_discounts_allowed || 0);
+        let netSales    = parseFloat(data.net_sales || 0);
+        let cogs        = parseFloat(data.total_cogs || 0);
+        let grossProfit = parseFloat(data.total_gross_profit || 0);
+        let expenses    = parseFloat(data.total_expenses || 0);
+        let netProfit   = parseFloat(data.net_profit || 0);
 
-        $('#cardGrossSales, #mobCardGrossSales').text(formattedGrossSales);
-        $('#cardTotalDiscount, #mobCardTotalDiscount').text(formattedDiscount);
-        $('#cardGrossProfit, #mobCardGrossProfit').text(formattedGross);
-        $('#cardExpenses, #mobCardExpenses').text(formattedExp);
-        $('#cardNetProfit, #mobCardNetProfit').text(formattedNet);
+        $('#cardGrossSales, #mobCardGrossSales').text('Rs ' + fmt(grossSales));
+        $('#cardTotalDiscount, #mobCardTotalDiscount').text('Rs ' + fmt(discounts));
+        $('#cardNetSales, #mobCardNetSales').text('Rs ' + fmt(netSales));
+        $('#cardCogs, #mobCardCogs').text('Rs ' + fmt(cogs));
+        $('#cardExpenses, #mobCardExpenses').text('Rs ' + fmt(expenses));
+
+        // Gross Profit / Loss styling
+        let formattedGrossProfit = (grossProfit < 0 ? '-Rs ' + fmt(Math.abs(grossProfit)) : 'Rs ' + fmt(grossProfit));
+        $('#cardGrossProfit, #mobCardGrossProfit').text(formattedGrossProfit);
+        if (grossProfit < 0) {
+            $('#cardGrossProfitWrap').css({'background': '#fef2f2', 'border-color': '#fca5a5'});
+            $('#cardGrossProfitLabel, #cardGrossProfit').removeClass('text-success').addClass('text-danger');
+            $('#cardGrossProfitLabel').text('Gross Loss');
+            $('#mobCardGrossProfit').removeClass('text-success').addClass('text-danger');
+        } else {
+            $('#cardGrossProfitWrap').css({'background': '#f0fdf4', 'border-color': '#86efac'});
+            $('#cardGrossProfitLabel, #cardGrossProfit').removeClass('text-danger').addClass('text-success');
+            $('#cardGrossProfitLabel').text('Gross Profit');
+            $('#mobCardGrossProfit').removeClass('text-danger').addClass('text-success');
+        }
+
+        // Net Profit / Loss styling
+        let formattedNetProfit = (netProfit < 0 ? '-Rs ' + fmt(Math.abs(netProfit)) : 'Rs ' + fmt(netProfit));
+        $('#cardNetProfit, #mobCardNetProfit').text(formattedNetProfit);
+        if (netProfit < 0) {
+            $('#cardNetProfitWrap, #mobCardNetProfitWrap').css({'background': '#fff1f2', 'border-color': '#fda4af'});
+            $('#cardNetProfitLabel, #cardNetProfit, #mobCardNetProfit').removeClass('text-primary').addClass('text-danger');
+            $('#cardNetProfitLabel').text('Net Loss');
+        } else {
+            $('#cardNetProfitWrap, #mobCardNetProfitWrap').css({'background': '#f0f9ff', 'border-color': '#bae6fd'});
+            $('#cardNetProfitLabel, #cardNetProfit, #mobCardNetProfit').removeClass('text-danger').addClass('text-primary');
+            $('#cardNetProfitLabel').text('Net Profit');
+        }
 
         // Chart
         updateChart(chartLabels, chartData);
