@@ -524,9 +524,9 @@ class VoucherController extends Controller
             // ✅ Off-Invoice Vendor Incentive Claim Payout Receipt
             $vType = strtolower($request->vendor_type);
             $totalAmt = (float) $request->total_amount;
-            if ($vType == 'vendor' && in_array($request->incentive_type, ['backup', 'annual']) && $totalAmt > 0 && $targetPartyId > 0) {
+            if ($vType == 'vendor' && in_array($request->incentive_type, ['backup', 'annual', 'scheme']) && $totalAmt > 0 && $targetPartyId > 0) {
                 $incType = $request->incentive_type;
-                $incLabel = $incType === 'backup' ? 'Backup Incentive Claim' : 'Annual Rebate Claim';
+                $incLabel = $incType === 'backup' ? 'Backup Incentive Claim' : ($incType === 'annual' ? 'Annual Rebate Claim' : 'Scheme Discount Claim');
                 $sourceAccId = !empty($request->row_account_id[0]) ? $request->row_account_id[0] : null;
 
                 \App\Models\VendorIncentiveLedger::create([
@@ -556,7 +556,7 @@ class VoucherController extends Controller
                     $partyType = \App\Models\Customer::class;
                     $creditAccountId = $balanceService->getAccountsReceivableId();
                 } elseif ($vType == 'vendor') {
-                    if (in_array($request->incentive_type, ['backup', 'annual'])) {
+                    if (in_array($request->incentive_type, ['backup', 'annual', 'scheme'])) {
                         // Off-invoice claim payout: Do NOT increase vendor payable; credit Purchase/Rebate Expense account
                         $partyType = null;
                         $purchaseAcc = \App\Models\Account::where('account_code', 'PURCHASE')->orWhere('title', 'like', '%Purchase%')->first();
@@ -1198,6 +1198,7 @@ class VoucherController extends Controller
 
         $backupBalance = 0.0;
         $annualBalance = 0.0;
+        $schemeBalance = 0.0;
 
         if (in_array($type, ['customer', 'walkin'])) {
             $balance = $balanceService->getCustomerBalance((int) $id);
@@ -1207,6 +1208,7 @@ class VoucherController extends Controller
             $label = $balance >= 0 ? 'Cr' : 'Dr';
             $backupBalance = (float) $balanceService->getVendorIncentiveBalance((int) $id, 'backup');
             $annualBalance = (float) $balanceService->getVendorIncentiveBalance((int) $id, 'annual');
+            $schemeBalance = (float) $balanceService->getVendorIncentiveBalance((int) $id, 'scheme');
         } else {
             // Cash / Bank / any control account
             $balance = $balanceService->getAccountBalance((int) $id);
@@ -1226,6 +1228,7 @@ class VoucherController extends Controller
             'id'             => (int) $id,
             'backup_balance' => round($backupBalance, 2),
             'annual_balance' => round($annualBalance, 2),
+            'scheme_balance' => round($schemeBalance, 2),
         ]);
     }
 

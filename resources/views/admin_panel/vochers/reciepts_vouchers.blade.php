@@ -458,6 +458,12 @@
                                             <i class="fas fa-bullseye me-1"></i> Annual Rebate Payout
                                         </label>
                                     </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input incentive-radio" type="radio" name="incentive_type" id="inc_scheme" value="scheme">
+                                        <label class="form-check-label small fw-bold text-warning" for="inc_scheme">
+                                            <i class="fas fa-tags me-1"></i> Scheme Discount Payout
+                                        </label>
+                                    </div>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1.5" id="badgeBackupClaim" style="display: none; font-size: 11px;">
@@ -465,6 +471,9 @@
                                     </span>
                                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1.5" id="badgeAnnualClaim" style="display: none; font-size: 11px;">
                                         Pending Annual Rebate: <strong id="valAnnualClaim">Rs. 0.00</strong>
+                                    </span>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1.5" id="badgeSchemeClaim" style="display: none; font-size: 11px;">
+                                        Pending Scheme Claim: <strong id="valSchemeClaim">Rs. 0.00</strong>
                                     </span>
                                 </div>
                             </div>
@@ -711,6 +720,7 @@
                     $.get('/voucher-balance/vendor/' + item.id, function(res) {
                         window.lastVendorBackupClaim = parseFloat(res.backup_balance) || 0;
                         window.lastVendorAnnualClaim = parseFloat(res.annual_balance) || 0;
+                        window.lastVendorSchemeClaim = parseFloat(res.scheme_balance) || 0;
 
                         if (window.lastVendorBackupClaim > 0) {
                             $('#valBackupClaim').text('Rs. ' + window.lastVendorBackupClaim.toFixed(2));
@@ -725,6 +735,13 @@
                         } else {
                             $('#badgeAnnualClaim').hide();
                         }
+
+                        if (window.lastVendorSchemeClaim > 0) {
+                            $('#valSchemeClaim').text('Rs. ' + window.lastVendorSchemeClaim.toFixed(2));
+                            $('#badgeSchemeClaim').show();
+                        } else {
+                            $('#badgeSchemeClaim').hide();
+                        }
                     });
                 }
 
@@ -734,6 +751,8 @@
                     $('#remarks').val('Backup Incentive Claim Payout from ' + partyName);
                 } else if (currentMode === 'annual') {
                     $('#remarks').val('Annual Rebate Claim Payout from ' + partyName);
+                } else if (currentMode === 'scheme') {
+                    $('#remarks').val('Scheme Discount Claim Payout from ' + partyName);
                 } else if (partyName) {
                     $('#remarks').val('Receipt from ' + partyName);
                 }
@@ -744,7 +763,8 @@
                 updateBalance(0);
                 window.lastVendorBackupClaim = 0;
                 window.lastVendorAnnualClaim = 0;
-                $('#badgeBackupClaim, #badgeAnnualClaim').hide();
+                window.lastVendorSchemeClaim = 0;
+                $('#badgeBackupClaim, #badgeAnnualClaim, #badgeSchemeClaim').hide();
             });
 
             $(document).on('change', '.incentive-radio', function() {
@@ -763,6 +783,12 @@
                     let availAnnual = window.lastVendorAnnualClaim || 0;
                     if (availAnnual > 0 && (!$('.amount:first').val() || parseFloat($('.amount:first').val()) === 0)) {
                         $('.amount:first').val(availAnnual.toFixed(2)).trigger('input');
+                    }
+                } else if (mode === 'scheme') {
+                    $('#remarks').val('Scheme Discount Claim Payout from ' + partyName);
+                    let availScheme = window.lastVendorSchemeClaim || 0;
+                    if (availScheme > 0 && (!$('.amount:first').val() || parseFloat($('.amount:first').val()) === 0)) {
+                        $('.amount:first').val(availScheme.toFixed(2)).trigger('input');
                     }
                 } else {
                     $('#remarks').val('Receipt from ' + partyName);
