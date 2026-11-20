@@ -2196,10 +2196,10 @@ class ReportingController extends Controller
         $totalGrossSales = $totalNetRevenue + $totalDiscountsAllowed;
         $totalCogs = array_sum(array_column($productStats, 'cogs'));
 
-        // 6. Vendor Incentives & Rebates Income (Backup, Annual, Scheme Claims received from vendors via Cash/Bank)
+        // 6. Vendor Incentives & Rebates Income (Backup & Annual Claims received from vendors via Cash/Bank)
+        // Note: Scheme discount is excluded as it is already adjusted against purchase bills / product pricing
         $backupIncome = 0;
         $annualIncome = 0;
-        $schemeIncome = 0;
         $totalIncentiveIncome = 0;
 
         if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
@@ -2212,8 +2212,7 @@ class ReportingController extends Controller
 
             $backupIncome = (float) (clone $incBase)->where('type', 'backup')->sum('credit');
             $annualIncome = (float) (clone $incBase)->where('type', 'annual')->sum('credit');
-            $schemeIncome = (float) (clone $incBase)->where('type', 'scheme')->sum('credit');
-            $totalIncentiveIncome = $backupIncome + $annualIncome + $schemeIncome;
+            $totalIncentiveIncome = $backupIncome + $annualIncome;
         }
 
         $netProfit = $totalGrossProfit + $totalIncentiveIncome - $totalExpenses;
@@ -2230,7 +2229,6 @@ class ReportingController extends Controller
             'vendor_incentive_income'  => round($totalIncentiveIncome, 2),
             'backup_income'            => round($backupIncome, 2),
             'annual_income'            => round($annualIncome, 2),
-            'scheme_income'            => round($schemeIncome, 2),
             'total_expenses'           => round($totalExpenses, 2),
             'net_profit'               => round($netProfit, 2),
             'top_customers'            => $topCustomers
@@ -3358,7 +3356,15 @@ class ReportingController extends Controller
         $stockData = $stockRes->getData(true);
         $totalInventory = (float) ($stockData['grand_total'] ?? 0);
 
-        $currentAssetsTotal = $totalCashBank + $totalReceivables + $totalInventory;
+        // Scheme Discount Receivable (Claims from vendor for scheme discount not yet collected/adjusted)
+        $schemeDiscountReceivable = (float) DB::table('vendor_incentive_ledgers')
+            ->where('type', 'scheme')
+            ->whereDate('date', '<=', $dateOnly)
+            ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as balance')
+            ->value('balance') ?? 0;
+        $schemeDiscountReceivable = round(max(0, $schemeDiscountReceivable), 2);
+
+        $currentAssetsTotal = round($totalCashBank + $totalReceivables + $schemeDiscountReceivable + $totalInventory, 2);
         $fixedAssetsTotal = 0; // Fixed assets head
         $totalAssets = $currentAssetsTotal + $fixedAssetsTotal;
 
@@ -3420,13 +3426,14 @@ class ReportingController extends Controller
             'raw_date' => $dateOnly,
             'pending_vendor_claims' => round($pendingVendorClaims, 2),
             'assets'   => [
-                'cash_bank'       => $cashAccounts,
-                'total_cash_bank' => $totalCashBank,
-                'receivables'     => $totalReceivables,
-                'inventory'       => $totalInventory,
-                'current_total'   => $currentAssetsTotal,
-                'fixed_total'     => $fixedAssetsTotal,
-                'total'           => $totalAssets,
+                'cash_bank'                  => $cashAccounts,
+                'total_cash_bank'            => $totalCashBank,
+                'receivables'                => $totalReceivables,
+                'scheme_discount_receivable' => $schemeDiscountReceivable,
+                'inventory'                  => $totalInventory,
+                'current_total'              => $currentAssetsTotal,
+                'fixed_total'                => $fixedAssetsTotal,
+                'total'                      => $totalAssets,
             ],
             'liabilities' => [
                 'payables'      => $totalPayables,

@@ -420,13 +420,13 @@
                                     </td>
                                     <td class="bs-amount text-dark" id="lblInventory">Rs 0.00</td>
                                 </tr>
-                                <tr id="rowVendorClaims" class="drilldown-row" title="Click to view Vendor Multi-Ledger Claims" style="display: none;">
+                                <tr id="rowSchemeDiscount" class="drilldown-row" title="Click to view Scheme Discount Claims" style="display: none;">
                                     <td class="bs-sub-row">
-                                        <i class="fas fa-hand-holding-usd text-success me-2"></i>Pending Vendor Claims (Backup / Rebate / Scheme)
-                                        <span class="drilldown-badge text-success"><i class="fa-solid fa-file-invoice me-1"></i>Uncollected</span>
+                                        <i class="fas fa-tags text-success me-2"></i>Scheme Discount Receivable
+                                        <span class="drilldown-badge text-success"><i class="fa-solid fa-percent me-1"></i>Scheme</span>
                                         <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
                                     </td>
-                                    <td class="bs-amount text-success" id="lblVendorClaims">Rs 0.00</td>
+                                    <td class="bs-amount text-success" id="lblSchemeDiscount">Rs 0.00</td>
                                 </tr>
                                 <tr class="bs-subtotal-row">
                                     <td class="fw-bold text-dark">Total Current Assets</td>
@@ -609,12 +609,12 @@
                 $("#lblReceivables").text(fmt(receivables));
                 $("#lblInventory").text(fmt(inventory));
 
-                let pendingClaims = parseFloat(res.pending_vendor_claims || 0);
-                if (pendingClaims > 0) {
-                    $("#rowVendorClaims").show();
-                    $("#lblVendorClaims").text(fmt(pendingClaims));
+                let schemeReceivable = res.assets ? parseFloat(res.assets.scheme_discount_receivable || 0) : 0;
+                if (schemeReceivable > 0) {
+                    $("#rowSchemeDiscount").show();
+                    $("#lblSchemeDiscount").text(fmt(schemeReceivable));
                 } else {
-                    $("#rowVendorClaims").hide();
+                    $("#rowSchemeDiscount").hide();
                 }
 
                 $("#lblCurrentAssetsTotal").text(fmt(currentAssetsTotal));

@@ -290,7 +290,7 @@
                     <div class="stat-val text-success" id="cardGrossProfit">Rs 0.00</div>
                 </div>
 
-                <div class="stat-pill" style="background: #ecfdf5; border-color: #a7f3d0;" id="cardIncentiveIncomeWrap" title="Backup, Annual Rebates & Scheme Claims Received from Vendors">
+                <div class="stat-pill" style="background: #ecfdf5; border-color: #a7f3d0;" id="cardIncentiveIncomeWrap" title="Backup & Annual Claims Received from Vendors">
                     <div class="stat-label" style="color: #059669;"><i class="fas fa-hand-holding-usd me-1"></i>Incentives Income</div>
                     <div class="stat-val" style="color: #047857;" id="cardIncentiveIncome">Rs 0.00</div>
                 </div>
@@ -611,7 +611,7 @@ $(document).ready(function() {
         $('#cardNetSales, #mobCardNetSales').text('Rs ' + fmt(netSales));
         $('#cardCogs, #mobCardCogs').text('Rs ' + fmt(cogs));
         $('#cardIncentiveIncome, #mobCardIncentiveIncome').text('Rs ' + fmt(incentives));
-        let incDetails = 'Backup: Rs ' + fmt(data.backup_income || 0) + ' | Annual: Rs ' + fmt(data.annual_income || 0) + ' | Scheme: Rs ' + fmt(data.scheme_income || 0);
+        let incDetails = 'Backup Received: Rs ' + fmt(data.backup_income || 0) + ' | Annual Rebate Received: Rs ' + fmt(data.annual_income || 0);
         $('#cardIncentiveIncomeWrap').attr('title', incDetails);
         $('#cardExpenses, #mobCardExpenses').text('Rs ' + fmt(expenses));
 
