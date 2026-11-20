@@ -3158,10 +3158,18 @@ class ReportingController extends Controller
         $balanceService = app(\App\Services\BalanceService::class);
 
         // 1. Current Assets: Cash & Bank / Liquid Accounts
-        // Include all active user accounts from Chart of Accounts (excluding only internal control accounts AP, AR, PURCHASE, SALES)
+        // Include active Cash/Bank liquid accounts, excluding control accounts and Equity/Capital accounts
         $assetAccounts = DB::table('accounts')
-            ->whereNotIn('account_code', ['AP', 'AR', 'PURCHASE', 'SALES'])
-            ->whereNotIn('title', ['Accounts Receivable', 'Accounts Payable', 'Sales Revenue', 'Purchase Expense'])
+            ->whereNotIn('account_code', ['AP', 'AR', 'PURCHASE', 'SALES', 'CAP-0001'])
+            ->whereNotIn('title', ['Accounts Receivable', 'Accounts Payable', 'Sales Revenue', 'Purchase Expense', "Owner's Capital"])
+            ->where(function ($q) {
+                $q->whereNull('account_code')
+                  ->orWhereRaw("LOWER(account_code) NOT LIKE '%cap%'");
+            })
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(title) NOT LIKE '%capital%'")
+                  ->whereRaw("LOWER(title) NOT LIKE '%owner%'");
+            })
             ->where('status', 1)
             ->orderBy('id', 'asc')
             ->get();
