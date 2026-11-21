@@ -229,18 +229,31 @@
             <div class="stat-label text-purple" style="color: #7c3aed;">Total Commission</div>
             <div class="stat-val" style="color: #7c3aed;" id="statCommission">Rs 0</div>
         </div>
+        <div class="stat-pill" style="border-color: #10b981; background: #ecfdf5;">
+            <div class="stat-label text-success"><i class="fas fa-check-circle me-1"></i>Commission Paid</div>
+            <div class="stat-val text-success" id="statPaid">Rs 0</div>
+        </div>
+        <div class="stat-pill" style="border-color: #ef4444; background: #fef2f2;">
+            <div class="stat-label text-danger"><i class="fas fa-clock me-1"></i>Remaining Due</div>
+            <div class="stat-val text-danger" id="statDue">Rs 0</div>
+        </div>
     </div>
 
-    {{-- Tabs: Summary Breakdown by Officer VS Detailed Sale Log --}}
+    {{-- Tabs: Summary Breakdown by Officer VS Detailed Sale Log VS Payouts History --}}
     <ul class="nav nav-pills mb-3 no-print" id="pills-tab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active fw-bold py-1 px-3 btn-sm" id="pills-summary-tab" data-toggle="pill" data-target="#pills-summary" data-bs-toggle="pill" data-bs-target="#pills-summary" type="button" role="tab" style="cursor: pointer;">
-                <i class="fas fa-users-cog me-1"></i> Officer Summary Breakdown
+                <i class="fas fa-users-cog me-1"></i> Officer Summary & Payables
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link fw-bold py-1 px-3 btn-sm" id="pills-detailed-tab" data-toggle="pill" data-target="#pills-detailed" data-bs-toggle="pill" data-bs-target="#pills-detailed" type="button" role="tab" style="cursor: pointer;">
                 <i class="fas fa-list-alt me-1"></i> Detailed Sales Log
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold py-1 px-3 btn-sm" id="pills-payouts-tab" data-toggle="pill" data-target="#pills-payouts" data-bs-toggle="pill" data-bs-target="#pills-payouts" type="button" role="tab" style="cursor: pointer;">
+                <i class="fas fa-history me-1"></i> Commission Payouts History
             </button>
         </li>
     </ul>
@@ -261,14 +274,16 @@
                             <th class="text-end">Returns</th>
                             <th class="text-end">Net Realized</th>
                             <th class="text-end">Gross Profit</th>
-                            <th class="text-center">Sale Comm (Rate / Amt)</th>
-                            <th class="text-center">Profit Comm (Rate / Amt)</th>
-                            <th class="text-end">Total Comm (Rs)</th>
-                            <th class="text-center">Share</th>
+                            <th class="text-center">Sale Comm</th>
+                            <th class="text-center">Profit Comm</th>
+                            <th class="text-end">Earned (Rs)</th>
+                            <th class="text-end">Paid (Rs)</th>
+                            <th class="text-end">Remaining Due (Rs)</th>
+                            <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody id="summaryBody">
-                        <tr><td colspan="13" class="text-center py-4 text-muted">Loading officer summary...</td></tr>
+                        <tr><td colspan="15" class="text-center py-4 text-muted">Loading officer summary...</td></tr>
                     </tbody>
                     <tfoot class="bg-light fw-bold" id="summaryFoot"></tfoot>
                 </table>
@@ -307,6 +322,30 @@
                 </table>
             </div>
         </div>
+
+        {{-- TAB 3: Commission Payouts History (Paid Vouchers) --}}
+        <div class="tab-pane fade" id="pills-payouts" role="tabpanel">
+            <div class="report-table-wrap">
+                <table class="table table-hover report-table align-middle" id="tablePayouts">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 40px;">#</th>
+                            <th>Date</th>
+                            <th>Payment Voucher #</th>
+                            <th>Sales Officer</th>
+                            <th>Paid From Account</th>
+                            <th>Narration / Remarks</th>
+                            <th class="text-end">Amount Paid</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payoutsBody">
+                        <tr><td colspan="8" class="text-center py-4 text-muted">Loading payouts history...</td></tr>
+                    </tbody>
+                    <tfoot class="bg-light fw-bold" id="payoutsFoot"></tfoot>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 @endsection
@@ -340,13 +379,15 @@
                     $('#statVolumeComm').text('Rs ' + Number(totals.total_volume_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                     $('#statProfitComm').text('Rs ' + Number(totals.total_profit_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                     $('#statCommission').text('Rs ' + Number(totals.total_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                    $('#statPaid').text('Rs ' + Number(totals.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                    $('#statDue').text('Rs ' + Number(totals.total_remaining_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
 
                     // 2. Render Officer Summary Table
                     let sumHtml = '';
                     let totalNetSum = totals.total_net || 0;
 
                     if (summary.length === 0) {
-                        sumHtml = '<tr><td colspan="13" class="text-center py-4 text-muted">No sales found for the selected criteria.</td></tr>';
+                        sumHtml = '<tr><td colspan="15" class="text-center py-4 text-muted">No sales found for the selected criteria.</td></tr>';
                     } else {
                         summary.forEach((item, idx) => {
                             let sharePct = totalNetSum > 0 ? ((item.total_net / totalNetSum) * 100).toFixed(1) : 0;
@@ -372,8 +413,12 @@
                                         <div class="fw-bold text-success font-monospace mt-1">Rs ${Number(item.profit_commission_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                                     </td>
                                     <td class="text-end font-monospace fw-bold" style="color: #7c3aed;">Rs ${Number(item.commission_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                    <td class="text-end font-monospace fw-bold text-success">Rs ${Number(item.commission_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                    <td class="text-end font-monospace fw-bold text-danger">Rs ${Number(item.remaining_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                     <td class="text-center">
-                                        <span class="badge bg-primary text-white" style="font-size:10px;">${sharePct}%</span>
+                                        <a href="{{ route('Payment_vochers') }}" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2 fw-bold" style="font-size:11px;" title="Pay Commission via Payment Voucher">
+                                            <i class="fas fa-hand-holding-usd me-1"></i>Pay
+                                        </a>
                                     </td>
                                 </tr>
                             `;
@@ -396,7 +441,9 @@
                                 <td class="text-center font-monospace text-primary fw-bold">Rs ${Number(totals.total_volume_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-center font-monospace text-success fw-bold">Rs ${Number(totals.total_profit_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td class="text-end font-monospace fw-bold" style="color: #7c3aed;">Rs ${Number(totals.total_commission || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td class="text-center font-monospace">100%</td>
+                                <td class="text-end font-monospace fw-bold text-success">Rs ${Number(totals.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-end font-monospace fw-bold text-danger">Rs ${Number(totals.total_remaining_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td class="text-center font-monospace">—</td>
                             </tr>
                         `);
                     } else {
@@ -497,29 +544,78 @@
                     } else {
                         $('#detailedFoot').html('');
                     }
+
+                    // 4. Render Commission Payouts History Table
+                    const payouts = res.payouts || [];
+                    let pHtml = '';
+                    let pTotal = 0;
+
+                    if (payouts.length === 0) {
+                        pHtml = '<tr><td colspan="8" class="text-center py-4 text-muted">No commission payouts found for the selected criteria.</td></tr>';
+                    } else {
+                        payouts.forEach((p, idx) => {
+                            pTotal += Number(p.amount || 0);
+                            pHtml += `
+                                <tr>
+                                    <td class="text-center text-muted fw-bold">${idx + 1}</td>
+                                    <td class="font-monospace">${p.date}</td>
+                                    <td><span class="badge bg-light text-primary border font-monospace fw-bold">${p.voucher_no}</span></td>
+                                    <td><div class="fw-bold text-dark"><i class="fas fa-user-tie text-primary me-1"></i>${p.officer_name}</div></td>
+                                    <td><span class="badge bg-light text-dark border">${p.account_name}</span></td>
+                                    <td class="text-muted" style="font-size:11.5px;">${p.narration}</td>
+                                    <td class="text-end font-monospace fw-bold text-success">Rs ${Number(p.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                    <td class="text-center">
+                                        <a href="/Paymentprint/${p.id}" target="_blank" class="btn btn-outline-dark btn-sm py-0 px-2" style="font-size:11px;" title="Print Voucher">
+                                            <i class="fas fa-print"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    $('#payoutsBody').html(pHtml);
+
+                    if (payouts.length > 0) {
+                        $('#payoutsFoot').html(`
+                            <tr>
+                                <td colspan="6" class="text-end fw-bold">TOTAL PAID:</td>
+                                <td class="text-end font-monospace fw-bold text-success">Rs ${Number(pTotal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td></td>
+                            </tr>
+                        `);
+                    } else {
+                        $('#payoutsFoot').html('');
+                    }
                 },
                 error: function() {
-                    $('#summaryBody').html('<tr><td colspan="13" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
+                    $('#summaryBody').html('<tr><td colspan="15" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
                     $('#detailedBody').html('<tr><td colspan="17" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
+                    $('#payoutsBody').html('<tr><td colspan="8" class="text-center py-4 text-danger">Failed to fetch report data.</td></tr>');
                 }
             });
         }
 
         // Tab switching handler for Bootstrap 4 & 5 compatibility
+        function switchTab(activeBtn, targetPane) {
+            $('#pills-tab .nav-link').removeClass('active');
+            $(activeBtn).addClass('active');
+            $('#pills-tabContent .tab-pane').removeClass('show active').css('display', 'none');
+            $(targetPane).addClass('show active').css('display', 'block');
+        }
+
         $('#pills-summary-tab').on('click', function(e) {
             e.preventDefault();
-            $('#pills-detailed-tab').removeClass('active');
-            $(this).addClass('active');
-            $('#pills-detailed').removeClass('show active').css('display', 'none');
-            $('#pills-summary').addClass('show active').css('display', 'block');
+            switchTab(this, '#pills-summary');
         });
 
         $('#pills-detailed-tab').on('click', function(e) {
             e.preventDefault();
-            $('#pills-summary-tab').removeClass('active');
-            $(this).addClass('active');
-            $('#pills-summary').removeClass('show active').css('display', 'none');
-            $('#pills-detailed').addClass('show active').css('display', 'block');
+            switchTab(this, '#pills-detailed');
+        });
+
+        $('#pills-payouts-tab').on('click', function(e) {
+            e.preventDefault();
+            switchTab(this, '#pills-payouts');
         });
 
         // Trigger load

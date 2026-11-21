@@ -973,4 +973,148 @@ class BalanceService
 
         return (float) $bal;
     }
+
+    /**
+     * Get commission earned by a Sales Officer
+     * Calculates line-by-line or snapshots for all eligible sales
+     */
+    public function getSalesOfficerCommissionEarned(int $officerId, ?string $dateTo = null, ?string $dateFrom = null): float
+    {
+        $officer = \App\Models\SalesOfficer::find($officerId);
+        if (!$officer) return 0.0;
+
+        $query = \App\Models\Sale::with(['items.product', 'returns.items'])
+            ->whereNotIn('sale_status', ['cancelled'])
+            ->where(function($q) use ($officerId) {
+                $q->where('sales_officer_id', $officerId)
+                  ->orWhere(function($sub) use ($officerId) {
+                      $sub->where(function($nullQ) {
+                          $nullQ->whereNull('sales_officer_id')
+                                ->orWhere('sales_officer_id', 0)
+                                ->orWhere('sales_officer_id', '');
+                      })->whereHas('customer_relation', function($custQ) use ($officerId) {
+                          $custQ->where('sales_officer_id', $officerId);
+                      });
+                  });
+            });
+
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
+        $sales = $query->get();
+        $totalComm = 0;
+
+        foreach ($sales as $sale) {
+            $gross = (float)($sale->total_gross > 0 ? $sale->total_gross : $sale->total_bill_amount);
+            $inlineDisc = 0;
+            $totalSaleCogs = 0;
+
+            foreach ($sale->items as $it) {
+                $inlineDisc += (float) ($it->discount_amount ?? 0);
+                $itQty = (float) ($it->qty_box ?? $it->qty ?? $it->total_pieces ?? 0);
+                $itemCost = (float)($it->purchase_price ?? 0);
+                if ($itemCost <= 0 && $it->product) {
+                    $itemCost = (float)($it->product->purchase_price_per_piece ?? $it->product->purchase_price ?? 0);
+                }
+                $pieces = (float)($it->total_pieces > 0 ? $it->total_pieces : $itQty);
+                $totalSaleCogs += ($pieces * $itemCost);
+            }
+
+            $addDisc = (float) ($sale->total_extradiscount ?? 0);
+            $totalDiscount = $inlineDisc + $addDisc;
+            if ($gross <= 0) $gross = (float)$sale->total_net + $totalDiscount;
+            $billNet = (float) ($sale->total_net ?? ($gross - $totalDiscount));
+
+            $retAmount = 0;
+            if ($sale->returns && $sale->returns->count() > 0) {
+                $retAmount = (float) $sale->returns->sum('net_amount');
+            }
+            if ($retAmount <= 0) {
+                $linkedReturn = \App\Models\SaleReturn::where('remarks', 'LIKE', '%Invoice #'.$sale->invoice_no.'%')->first();
+                if ($linkedReturn) {
+                    $retAmount = (float) ($linkedReturn->net_amount ?? $linkedReturn->items->sum('line_total'));
+                }
+            }
+
+            $netRealized = max(0, $billNet - $retAmount);
+            $saleGrossProfit = max(0, $netRealized - $totalSaleCogs);
+
+            $saleCommRate = (float)($sale->sales_officer_sale_comm_rate ?? $officer->sale_commission_rate ?? $officer->commission_rate ?? 0);
+            $profitCommRate = (float)($sale->sales_officer_profit_comm_rate ?? $officer->profit_commission_rate ?? 0);
+
+            $volComm = ($netRealized * $saleCommRate) / 100;
+            $profComm = ($saleGrossProfit * $profitCommRate) / 100;
+
+            $totalComm += ($volComm + $profComm);
+        }
+
+        return round($totalComm, 2);
+    }
+
+    /**
+     * Get commission paid to a Sales Officer via Payment Vouchers
+     */
+    public function getSalesOfficerCommissionPaid(int $officerId, ?string $dateTo = null, ?string $dateFrom = null): float
+    {
+        $query = \App\Models\SalesOfficerPayout::where('sales_officer_id', $officerId);
+        if ($dateFrom) {
+            $query->whereDate('date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('date', '<=', $dateTo);
+        }
+
+        return round((float)$query->sum('amount'), 2);
+    }
+
+    /**
+     * Get remaining payable balance for a Sales Officer
+     */
+    public function getSalesOfficerBalance(int $officerId, ?string $dateTo = null): float
+    {
+        $earned = $this->getSalesOfficerCommissionEarned($officerId, $dateTo);
+        $paid = $this->getSalesOfficerCommissionPaid($officerId, $dateTo);
+
+        return round($earned - $paid, 2);
+    }
+
+    /**
+     * Get total outstanding commission payable across all Sales Officers as of date
+     */
+    public function getTotalSalesOfficerPayableAsOfDate(?string $dateTo = null): float
+    {
+        $officers = \App\Models\SalesOfficer::all();
+        $totalPayable = 0;
+
+        foreach ($officers as $officer) {
+            $bal = $this->getSalesOfficerBalance($officer->id, $dateTo);
+            if ($bal > 0) {
+                $totalPayable += $bal;
+            }
+        }
+
+        return round($totalPayable, 2);
+    }
+
+    /**
+     * Get total commission earned across all Sales Officers between two dates (for P&L)
+     */
+    public function getTotalSalesOfficerCommissionEarnedBetween(string $start, string $end): float
+    {
+        $officers = \App\Models\SalesOfficer::all();
+        $total = 0;
+
+        $startDateOnly = substr($start, 0, 10);
+        $endDateOnly = substr($end, 0, 10);
+
+        foreach ($officers as $officer) {
+            $total += $this->getSalesOfficerCommissionEarned($officer->id, $endDateOnly, $startDateOnly);
+        }
+
+        return round($total, 2);
+    }
 }

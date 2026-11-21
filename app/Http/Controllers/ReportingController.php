@@ -2215,7 +2215,13 @@ class ReportingController extends Controller
             $totalIncentiveIncome = $backupIncome + $annualIncome;
         }
 
-        $netProfit = $totalGrossProfit + $totalIncentiveIncome - $totalExpenses;
+        // 7. Sales Officer Commission Expense incurred in this period
+        $totalSalesOfficerCommission = 0;
+        if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
+            $totalSalesOfficerCommission = (float) $balanceService->getTotalSalesOfficerCommissionEarnedBetween($start, $end);
+        }
+
+        $netProfit = $totalGrossProfit + $totalIncentiveIncome - $totalExpenses - $totalSalesOfficerCommission;
 
         return response()->json([
             'products'                 => $productStats,
@@ -2230,6 +2236,7 @@ class ReportingController extends Controller
             'backup_income'            => round($backupIncome, 2),
             'annual_income'            => round($annualIncome, 2),
             'total_expenses'           => round($totalExpenses, 2),
+            'sales_officer_commission' => round($totalSalesOfficerCommission, 2),
             'net_profit'               => round($netProfit, 2),
             'top_customers'            => $topCustomers
         ]);
@@ -3341,7 +3348,10 @@ class ReportingController extends Controller
             $totalPayables += $vendBal;
         }
 
-        $currentLiabilitiesTotal = $totalPayables;
+        // Sales Officer Commission Payable (Outstanding earned commission minus payments made)
+        $totalSalesOfficerCommissionPayable = (float) $balanceService->getTotalSalesOfficerPayableAsOfDate($dateOnly);
+
+        $currentLiabilitiesTotal = round($totalPayables + $totalSalesOfficerCommissionPayable, 2);
 
         // Stock in Trade / Inventory on Hand (Exact valuation synchronized with Item Stock Report)
         $stockReq = new Request([
@@ -3436,9 +3446,10 @@ class ReportingController extends Controller
                 'total'                      => $totalAssets,
             ],
             'liabilities' => [
-                'payables'      => $totalPayables,
-                'current_total' => $currentLiabilitiesTotal,
-                'total'         => $currentLiabilitiesTotal,
+                'payables'                          => $totalPayables,
+                'sales_officer_commission_payable'  => $totalSalesOfficerCommissionPayable,
+                'current_total'                     => $currentLiabilitiesTotal,
+                'total'                             => $currentLiabilitiesTotal,
             ],
             'equity' => [
                 'capital'            => $capitalAccountBalance,
@@ -3456,8 +3467,9 @@ class ReportingController extends Controller
                 'customer_ledger'   => route('report.customer.ledger'),
                 'inventory'         => route('report.item_stock') . '?date_to=' . $dateOnly,
                 'scheme_discount'   => route('report.vendor.ledger') . '?ledger_type=scheme',
-                'payables'          => route('report.parties_balance') . '?report_type=PAYABLE',
-                'vendor_ledger'     => route('report.vendor.ledger'),
+                'payables'                 => route('report.parties_balance') . '?report_type=PAYABLE',
+                'sales_officer_commission' => route('report.sales_officer_sale'),
+                'vendor_ledger'            => route('report.vendor.ledger'),
                 'retained_earnings' => route('report.profit_loss') . '?start_date=2000-01-01T00:00&end_date=' . $dateOnly . 'T23:59',
                 'chart_of_accounts' => route('view_all'),
             ],
@@ -4693,9 +4705,48 @@ class ReportingController extends Controller
             ];
         }
 
+        $balanceService = app(\App\Services\BalanceService::class);
+        foreach ($officerSummary as $oId => &$oData) {
+            $paidQuery = \App\Models\SalesOfficerPayout::where('sales_officer_id', $oId);
+            if (!empty($start)) $paidQuery->whereDate('date', '>=', $start);
+            if (!empty($end)) $paidQuery->whereDate('date', '<=', $end);
+            $oPaid = (float) $paidQuery->sum('amount');
+
+            // Outstanding balance (Earned minus Paid)
+            $allTimeEarned = $balanceService->getSalesOfficerCommissionEarned($oId);
+            $allTimePaid = $balanceService->getSalesOfficerCommissionPaid($oId);
+            $oBal = max(0, $allTimeEarned - $allTimePaid);
+
+            $oData['commission_paid'] = round($oPaid, 2);
+            $oData['remaining_due']   = round($oBal, 2);
+        }
+        unset($oData);
+
+        // Fetch Commission Payouts
+        $payoutsQuery = \App\Models\SalesOfficerPayout::with(['salesOfficer', 'account'])
+            ->orderBy('date', 'desc');
+        if (!empty($salesOfficerId) && $salesOfficerId !== 'all') {
+            $payoutsQuery->where('sales_officer_id', $salesOfficerId);
+        }
+        if (!empty($start)) $payoutsQuery->whereDate('date', '>=', $start);
+        if (!empty($end)) $payoutsQuery->whereDate('date', '<=', $end);
+
+        $payouts = $payoutsQuery->get()->map(function($p) {
+            return [
+                'id'            => $p->id,
+                'date'          => $p->date ? $p->date->format('d/m/Y') : '',
+                'voucher_no'    => $p->voucher_no ?: ('PV-' . $p->id),
+                'officer_name'  => $p->salesOfficer ? $p->salesOfficer->name : 'Sales Officer',
+                'account_name'  => $p->account ? $p->account->title : 'Cash / Bank',
+                'amount'        => (float) $p->amount,
+                'narration'     => $p->narration ?: 'Commission Payout',
+            ];
+        });
+
         return response()->json([
             'sales'   => $transformed,
             'summary' => array_values($officerSummary),
+            'payouts' => $payouts,
             'totals'  => [
                 'total_sales'             => count($transformed),
                 'total_qty'               => array_sum(array_column($officerSummary, 'total_qty')),
@@ -4707,6 +4758,8 @@ class ReportingController extends Controller
                 'total_volume_commission' => array_sum(array_column($officerSummary, 'volume_commission_amount')),
                 'total_profit_commission' => array_sum(array_column($officerSummary, 'profit_commission_amount')),
                 'total_commission'        => array_sum(array_column($officerSummary, 'commission_amount')),
+                'total_paid'              => array_sum(array_column($officerSummary, 'commission_paid')),
+                'total_remaining_due'     => array_sum(array_column($officerSummary, 'remaining_due')),
             ]
         ]);
     }

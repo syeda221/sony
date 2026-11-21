@@ -326,6 +326,7 @@
                                                 <option value="vendor">Vendor</option>
                                                 <option value="customer">Customer</option>
                                                 <option value="walkin">Walk-in</option>
+                                                <option value="sales_officer">Sales Officer</option>
                                                 @foreach ($AccountHeads as $head)
                                                     <option value="{{ $head->id }}">{{ $head->name }}</option>
                                                 @endforeach
@@ -535,7 +536,7 @@
 
                 $select.html('<option value="">Loading...</option>').trigger('change');
 
-                if (type === 'vendor' || type === 'customer' || type === 'walkin') {
+                if (type === 'vendor' || type === 'customer' || type === 'walkin' || type === 'sales_officer') {
                     $.get('{{ route("party.list") }}?type=' + type, function(data) {
                         $select.empty().append('<option value="" disabled selected>Select Party</option>');
                         data.forEach(function(item) {
@@ -697,6 +698,7 @@
                                 <option value="vendor">Vendor</option>
                                 <option value="customer">Customer</option>
                                 <option value="walkin">Walk-in</option>
+                                <option value="sales_officer">Sales Officer</option>
                                 @foreach ($AccountHeads as $head)
                                     <option value="{{ $head->id }}">{{ $head->name }}</option>
                                 @endforeach

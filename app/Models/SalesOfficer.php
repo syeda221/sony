@@ -23,4 +23,29 @@ class SalesOfficer extends Model
         'sale_commission_rate'   => 'float',
         'profit_commission_rate' => 'float',
     ];
+
+    public function payouts()
+    {
+        return $this->hasMany(SalesOfficerPayout::class, 'sales_officer_id');
+    }
+
+    public function sales()
+    {
+        return $this->hasMany(Sale::class, 'sales_officer_id');
+    }
+
+    public function getCommissionEarnedAttribute(): float
+    {
+        return app(\App\Services\BalanceService::class)->getSalesOfficerCommissionEarned($this->id);
+    }
+
+    public function getCommissionPaidAttribute(): float
+    {
+        return app(\App\Services\BalanceService::class)->getSalesOfficerCommissionPaid($this->id);
+    }
+
+    public function getPayableBalanceAttribute(): float
+    {
+        return app(\App\Services\BalanceService::class)->getSalesOfficerBalance($this->id);
+    }
 }

@@ -319,6 +319,14 @@ class VoucherController extends Controller
                             ->value('closing_balance') ?? ($party->opening_balance ?? 0));
                     }
 
+                } elseif ($party instanceof \App\Models\SalesOfficer) {
+                    $voucher->type = 'sales_officer';
+                    $party->name = $party->name;
+                    $party->address = 'Sales Officer';
+                    $party->phone = $party->mobile ?? '-';
+                    $party->mobile = $party->mobile ?? '-';
+
+                    $previousBalance = app(\App\Services\BalanceService::class)->getSalesOfficerBalance($party->id, $voucherV2->date->format('Y-m-d'));
                 } elseif ($party instanceof \App\Models\Account) {
                     $voucher->type = '1';
                     $party->name = $party->title;
@@ -781,6 +789,8 @@ class VoucherController extends Controller
                         $partyType = \App\Models\Customer::class;
                     } elseif ($fType == 'vendor') {
                         $partyType = \App\Models\Vendor::class;
+                    } elseif ($fType == 'sales_officer') {
+                        $partyType = \App\Models\SalesOfficer::class;
                     } else {
                         $partyType = \App\Models\Account::class;
                     }
@@ -809,7 +819,7 @@ class VoucherController extends Controller
                         }
 
                         $controlAccountId = null;
-                        if ($type == 'vendor') {
+                        if ($type == 'vendor' || $type == 'sales_officer') {
                             $controlAccountId = $balanceService->getAccountsPayableId();
                         } elseif ($type == 'customer' || $type == 'walkin') {
                             $controlAccountId = $balanceService->getAccountsReceivableId();
@@ -955,6 +965,17 @@ class VoucherController extends Controller
                             'previous_balance' => $bal,
                             'opening_balance'  => 0,
                             'closing_balance'  => $bal + $rowAmount, // ✅ PLUS: paying customer increases customer balance
+                        ]);
+                    } elseif ($type === 'sales_officer') {
+                        \App\Models\SalesOfficerPayout::create([
+                            'sales_officer_id'   => (int) $partyId,
+                            'payment_voucher_id' => $payment->id,
+                            'voucher_no'         => $pvid,
+                            'date'               => $receiptDate,
+                            'amount'             => $rowAmount,
+                            'account_id'         => $request->header_account_id,
+                            'narration'          => $request->narration_text[$index] ?? ("Commission payment via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : "")),
+                            'admin_or_user_id'   => auth()->id(),
                         ]);
                     } elseif ($type) {
                         // Account ID in table
@@ -1113,6 +1134,14 @@ class VoucherController extends Controller
                         ->orderBy('id', 'desc')
                         ->value('closing_balance') ?? ($party->opening_balance ?? 0);
 
+                } elseif ($party instanceof \App\Models\SalesOfficer) {
+                    $voucher->type = 'sales_officer';
+                    $party->name = $party->name;
+                    $party->address = 'Sales Officer';
+                    $party->phone = $party->mobile ?? '-';
+                    $party->mobile = $party->mobile ?? '-';
+
+                    $previousBalance = app(\App\Services\BalanceService::class)->getSalesOfficerBalance($party->id, $voucherV2->date->format('Y-m-d'));
                 } elseif ($party instanceof \App\Models\Account) {
                     $voucher->type = '1'; // Numeric triggers Account Block
                     $party->name = $party->title;
@@ -1305,6 +1334,27 @@ class VoucherController extends Controller
                     $customer->name = $customer->customer_name;
                     $customer->remarks = $customer->status;
                     $data[] = $customer;
+                }
+            } elseif ($type == 'sales_officer') {
+                $query = \App\Models\SalesOfficer::query();
+                if ($search) {
+                    $query->where('name', 'like', "%{$search}%")
+                          ->orWhere('mobile', 'like', "%{$search}%");
+                }
+                $officers = $query->orderBy('name')->get();
+                foreach ($officers as $so) {
+                    $earned = $balanceService->getSalesOfficerCommissionEarned($so->id);
+                    $paid = $balanceService->getSalesOfficerCommissionPaid($so->id);
+                    $bal = round($earned - $paid, 2);
+                    $balFmt = number_format(abs($bal), 2);
+                    $lbl = $bal >= 0 ? 'Cr' : 'Dr';
+
+                    $so->closing_balance = $bal;
+                    $so->customer_name = $so->name;
+                    $so->mobile = $so->mobile ?? '-';
+                    $so->address = 'Sales Officer';
+                    $so->text = "{$so->name} (Comm Payable: Rs. {$balFmt} {$lbl})";
+                    $data[] = $so;
                 }
             } elseif (is_numeric($type)) {
                 $query = \App\Models\Account::where('account_head_id', $type);
@@ -2040,8 +2090,14 @@ class VoucherController extends Controller
             }
 
             if ($legacyPayment) {
+                \App\Models\SalesOfficerPayout::where('payment_voucher_id', $legacyPayment->id)
+                    ->orWhere('voucher_no', $legacyPayment->pvid)
+                    ->delete();
                 $journalService->reverseEntriesForSource($legacyPayment);
                 $legacyPayment->delete();
+            }
+            if ($voucherMaster && !empty($voucherMaster->voucher_no)) {
+                \App\Models\SalesOfficerPayout::where('voucher_no', $voucherMaster->voucher_no)->delete();
             }
 
             DB::commit();

@@ -300,6 +300,11 @@
                     <div class="stat-val text-danger" id="cardExpenses">Rs 0.00</div>
                 </div>
 
+                <div class="stat-pill" style="background: #faf5ff; border-color: #e9d5ff;" id="cardCommExpenseWrap" title="Sales Officer Commission Incurred">
+                    <div class="stat-label" style="color: #7e22ce;"><i class="fas fa-user-tie me-1"></i>Sales Commission</div>
+                    <div class="stat-val" style="color: #7e22ce;" id="cardCommExpense">Rs 0.00</div>
+                </div>
+
                 <div class="stat-pill" id="cardNetProfitWrap" style="background: #f0f9ff; border-color: #bae6fd;">
                     <div class="stat-label text-primary" id="cardNetProfitLabel">Net Profit / Loss</div>
                     <div class="stat-val text-primary" id="cardNetProfit">Rs 0.00</div>
@@ -347,10 +352,16 @@
                 <div class="mob-metric-val mt-1" id="mobCardIncentiveIncome" style="font-size: 14px; color: #047857;">Rs 0</div>
             </div>
         </div>
-        <div class="col-12 mt-1">
+        <div class="col-6">
             <div class="mob-metric-card p-2">
                 <span class="mob-metric-label" style="font-size: 11px;"><i class="fas fa-arrow-down text-danger me-1"></i>Total Expenses</span>
                 <div class="mob-metric-val text-danger mt-1" id="mobCardExpenses" style="font-size: 14px;">Rs 0</div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="mob-metric-card p-2" style="background: #faf5ff; border-color: #e9d5ff;">
+                <span class="mob-metric-label" style="font-size: 11px; color: #7e22ce;"><i class="fas fa-user-tie me-1"></i>Sales Comm</span>
+                <div class="mob-metric-val mt-1" id="mobCardCommExpense" style="font-size: 14px; color: #7e22ce;">Rs 0</div>
             </div>
         </div>
         <div class="col-12 mt-2">
@@ -614,6 +625,8 @@ $(document).ready(function() {
         let incDetails = 'Backup Received: Rs ' + fmt(data.backup_income || 0) + ' | Annual Rebate Received: Rs ' + fmt(data.annual_income || 0);
         $('#cardIncentiveIncomeWrap').attr('title', incDetails);
         $('#cardExpenses, #mobCardExpenses').text('Rs ' + fmt(expenses));
+        let soCommission = parseFloat(data.sales_officer_commission || 0);
+        $('#cardCommExpense, #mobCardCommExpense').text('Rs ' + fmt(soCommission));
 
         // Gross Profit / Loss styling
         let formattedGrossProfit = (grossProfit < 0 ? '-Rs ' + fmt(Math.abs(grossProfit)) : 'Rs ' + fmt(grossProfit));

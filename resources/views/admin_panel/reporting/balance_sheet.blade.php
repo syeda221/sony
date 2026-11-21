@@ -497,6 +497,14 @@
                                     </td>
                                     <td class="bs-amount text-danger" id="lblPayables">Rs 0.00</td>
                                 </tr>
+                                <tr id="rowSOCommission" class="drilldown-row" title="Click to view Sales Officer Commission Report">
+                                    <td class="bs-sub-row">
+                                        <i class="fas fa-user-tie me-2" style="color: #7c3aed;"></i>Sales Officer Commission Payable
+                                        <span class="drilldown-badge" style="background:#f3e8ff; color:#6d28d9;"><i class="fa-solid fa-user-tie me-1"></i>Officers</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square drilldown-icon"></i>
+                                    </td>
+                                    <td class="bs-amount fw-bold" style="color: #7c3aed;" id="lblSOCommission">Rs 0.00</td>
+                                </tr>
                                 <tr class="bs-subtotal-row">
                                     <td class="fw-bold text-dark">Total Current Liabilities</td>
                                     <td class="bs-amount text-danger fs-6" id="lblLiabTotal">Rs 0.00</td>
@@ -623,6 +631,7 @@
 
                 // 2. Liabilities & Equity Calculation & Render
                 let payables = res.liabilities ? (res.liabilities.payables || 0) : 0;
+                let soCommission = res.liabilities ? (res.liabilities.sales_officer_commission_payable || 0) : 0;
                 let liabTotal = res.liabilities ? (res.liabilities.total || 0) : 0;
                 let capital = res.equity ? (res.equity.capital || 0) : 0;
                 let retainedEarnings = res.equity ? (res.equity.retained_earnings || 0) : 0;
@@ -630,6 +639,7 @@
                 let liabEquityTotal = res.totals ? (res.totals.liabilities_and_equity || (liabTotal + equityTotal)) : (liabTotal + equityTotal);
 
                 $("#lblPayables").text(fmt(payables));
+                $("#lblSOCommission").text(fmt(soCommission));
                 $("#lblLiabTotal").text(fmt(liabTotal));
                 $("#lblCapital").text(fmt(capital));
                 $("#lblRetainedEarnings").text(fmt(retainedEarnings));
@@ -643,6 +653,7 @@
                     $('#rowSchemeDiscount').data('url', res.urls.scheme_discount || '');
                     $('#rowFixedAssets').data('url', res.urls.chart_of_accounts || '');
                     $('#rowPayables').data('url', res.urls.payables || '');
+                    $('#rowSOCommission').data('url', res.urls.sales_officer_commission || '');
                     $('#rowCapital').data('url', res.urls.chart_of_accounts || '');
                     $('#rowRetainedEarnings').data('url', res.urls.retained_earnings || '');
                 }
