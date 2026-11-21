@@ -348,7 +348,7 @@
         </div>
         <div class="vendor-action-hub">
             @can('vendors.create')
-                <button type="button" class="btn-vendor-primary" id="btnAddVendor">
+                <button type="button" class="btn-vendor-primary" id="btnAddVendor" data-bs-toggle="modal" data-bs-target="#vendorModal" data-toggle="modal" data-target="#vendorModal">
                     <i class="fas fa-plus"></i> Add Vendor
                 </button>
             @endcan
@@ -853,21 +853,27 @@
 @section('js')
 <script>
     $(document).ready(function() {
-        // Initialize DataTable
-        if ($.fn.DataTable.isDataTable('.datanew')) {
-            $('.datanew').DataTable().destroy();
+        // Initialize DataTable safely
+        try {
+            if ($.fn.DataTable && $.fn.DataTable.isDataTable('.datanew')) {
+                $('.datanew').DataTable().destroy();
+            }
+            if ($.fn.DataTable) {
+                $('.datanew').DataTable({
+                    "pageLength": 10,
+                    "order": [],
+                    "language": {
+                        "search": "",
+                        "searchPlaceholder": "Filter records..."
+                    },
+                    "dom": "<'row mb-3'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                        "<'row'<'col-sm-12'tr>>" +
+                        "<'row mt-3'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+                });
+            }
+        } catch (e) {
+            console.error('DataTable initialization error:', e);
         }
-        $('.datanew').DataTable({
-            "pageLength": 10,
-            "order": [],
-            "language": {
-                "search": "",
-                "searchPlaceholder": "Filter records..."
-            },
-            "dom": "<'row mb-3'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
-                "<'row'<'col-sm-12'tr>>" +
-                "<'row mt-3'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
-        });
 
         // Function to clear all modal error states
         function clearModalErrors() {
@@ -878,7 +884,8 @@
         }
 
         // Open Modal for Create
-        $('#btnAddVendor').click(function() {
+        $(document).on('click', '#btnAddVendor', function(e) {
+            e.preventDefault();
             $('#vendorForm')[0].reset();
             clearModalErrors();
             $('#vendor_id').val('');
