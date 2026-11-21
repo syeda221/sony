@@ -9,6 +9,7 @@ use App\Models\Unit;
 use App\Models\Brand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ReportingController extends Controller
 {
@@ -1429,6 +1430,9 @@ class ReportingController extends Controller
         $start = $request->start_date ?: now()->startOfDay()->toDateTimeString();
         $end = $request->end_date ?: now()->endOfDay()->toDateTimeString();
 
+        $start = str_replace('T', ' ', $start);
+        $end = str_replace('T', ' ', $end);
+
         if (strlen($start) === 10) {
             $start .= ' 00:00:00';
         } elseif (strlen($start) === 16) {
@@ -1441,25 +1445,92 @@ class ReportingController extends Controller
             $end .= ':59';
         }
 
-        $productId = $request->product_id;
-        $categoryId = $request->category_id;
-        $customerId = $request->customer_id;
+        try {
+            $hasSerialCol = Schema::hasColumn('sale_items', 'serials');
+            $hasBatchCol = Schema::hasColumn('sale_items', 'batch_id');
+            $hasSalePurchPriceCol = Schema::hasColumn('sale_items', 'purchase_price');
+            $hasReturnPurchPriceCol = Schema::hasColumn('sale_return_items', 'purchase_price');
+            $hasProductSerialsTable = Schema::hasTable('product_serials');
+            $hasProductBatchesTable = Schema::hasTable('product_batches');
 
-        $productsQuery = Product::query();
-        if ($productId && $productId !== 'all') {
-            $productsQuery->where('id', $productId);
-        }
-        if ($categoryId && $categoryId !== 'all') {
-            $productsQuery->where('category_id', $categoryId);
-        }
-        
-        $products = $productsQuery->get();
-        $productStats = [];
-        $totalGrossProfit = 0;
-        $avgPriceMap = [];
-        $variantPriceMap = [];
+            $calcItemCost = function($sItem, $productId, $fallbackAvgPrice) use ($hasProductSerialsTable, $hasProductBatchesTable) {
+                $pieces = (float) ($sItem->total_pieces ?? 0);
+                $itSerials = !empty($sItem->serials) ? (is_array($sItem->serials) ? $sItem->serials : json_decode($sItem->serials, true)) : [];
+                if (!empty($itSerials) && is_array($itSerials) && $hasProductSerialsTable) {
+                    try {
+                        $serialCosts = DB::table('product_serials')
+                            ->where('product_id', $productId)
+                            ->whereIn('serial_number', $itSerials)
+                            ->pluck('cost_price');
+                        if ($serialCosts->count() > 0) {
+                            $foundSum = (float) $serialCosts->sum();
+                            $missingCount = max(0, count($itSerials) - $serialCosts->count());
+                            return $foundSum + ($missingCount * $fallbackAvgPrice);
+                        }
+                    } catch (\Throwable $e) {}
+                } elseif (!empty($sItem->batch_id) && $hasProductBatchesTable) {
+                    try {
+                        $batchCost = (float) (DB::table('product_batches')->where('id', $sItem->batch_id)->value('cost_price') ?? 0);
+                        if ($batchCost > 0) {
+                            return $pieces * $batchCost;
+                        }
+                    } catch (\Throwable $e) {}
+                } elseif (!empty($sItem->purchase_price) && (float)$sItem->purchase_price > 0) {
+                    return $pieces * (float)$sItem->purchase_price;
+                }
+                return $pieces * $fallbackAvgPrice;
+            };
 
-        foreach ($products as $product) {
+            $saleItemSelectCols = [
+                'sale_items.total_pieces',
+                'sale_items.qty',
+                'sale_items.total',
+                'sales.total_extradiscount',
+                'sales.total_bill_amount'
+            ];
+            $saleItemSelectCols[] = 'sale_items.color';
+            $saleItemSelectCols[] = $hasSerialCol ? 'sale_items.serials' : DB::raw('NULL as serials');
+            $saleItemSelectCols[] = $hasBatchCol ? 'sale_items.batch_id' : DB::raw('NULL as batch_id');
+            $saleItemSelectCols[] = $hasSalePurchPriceCol ? 'sale_items.purchase_price' : DB::raw('NULL as purchase_price');
+
+            $returnSelectCols = [
+                'sri.qty',
+                'sri.line_total',
+                $hasReturnPurchPriceCol ? 'sri.purchase_price' : DB::raw('NULL as purchase_price')
+            ];
+
+            $custSaleItemSelectCols = [
+                'sale_items.product_id',
+                'sale_items.is_manual',
+                'sale_items.color',
+                'sale_items.total_pieces',
+                'sale_items.total',
+                'sales.total_extradiscount',
+                'sales.total_bill_amount',
+                $hasSalePurchPriceCol ? 'sale_items.purchase_price' : DB::raw('NULL as purchase_price'),
+                $hasSerialCol ? 'sale_items.serials' : DB::raw('NULL as serials'),
+                $hasBatchCol ? 'sale_items.batch_id' : DB::raw('NULL as batch_id')
+            ];
+
+            $productId = $request->product_id;
+            $categoryId = $request->category_id;
+            $customerId = $request->customer_id;
+
+            $productsQuery = Product::query();
+            if ($productId && $productId !== 'all') {
+                $productsQuery->where('id', $productId);
+            }
+            if ($categoryId && $categoryId !== 'all') {
+                $productsQuery->where('category_id', $categoryId);
+            }
+            
+            $products = $productsQuery->get();
+            $productStats = [];
+            $totalGrossProfit = 0;
+            $avgPriceMap = [];
+            $variantPriceMap = [];
+
+            foreach ($products as $product) {
             // Determine default purchase price per piece
             $productPurchPrice = 0;
             if ($product->size_mode === 'by_size') {
@@ -1546,17 +1617,7 @@ class ReportingController extends Controller
                     $saleQuery->where('sales.customer_id', $customerId);
                 }
 
-                $salesList = $saleQuery->select(
-                    'sale_items.total_pieces',
-                    'sale_items.qty',
-                    'sale_items.total',
-                    'sale_items.color',
-                    'sale_items.serials',
-                    'sale_items.batch_id',
-                    'sale_items.purchase_price',
-                    'sales.total_extradiscount',
-                    'sales.total_bill_amount'
-                )->get();
+                $salesList = $saleQuery->select($saleItemSelectCols)->get();
 
                 // Fetch confirmed web sales
                 $webSalesQuery = DB::table('ecommerce_order_items as eoi')
@@ -1658,67 +1719,7 @@ class ReportingController extends Controller
                         $unitBadge = "Pcs";
                     }
 
-                    $soldQty = 0;
-                    $soldQtyPieces = 0;
-                    $soldAmount = 0;
-                    $soldCost = 0;
-                    foreach ($salesList as $sItem) {
-                        if ($this->matchSaleItemToVariant($sItem, $v)) {
-                            $soldQty += (float) $sItem->qty;
-                            $soldQtyPieces += (float) $sItem->total_pieces;
-                            
-                            $itemNet = (float) $sItem->total;
-                            if ($sItem->total_bill_amount > 0 && $sItem->total_extradiscount > 0) {
-                                $proportion = $itemNet / (float) $sItem->total_bill_amount;
-                                $itemNet -= ($sItem->total_extradiscount * $proportion);
-                            }
-                            $soldAmount += $itemNet;
-
-                            // Calculate specific item cost (Serial / Batch / Fallback)
-                            $pieces = (float) $sItem->total_pieces;
-                            $itSerials = !empty($sItem->serials) ? (is_array($sItem->serials) ? $sItem->serials : json_decode($sItem->serials, true)) : [];
-                            if (!empty($itSerials) && is_array($itSerials)) {
-                                $serialCosts = DB::table('product_serials')
-                                    ->where('product_id', $product->id)
-                                    ->whereIn('serial_number', $itSerials)
-                                    ->pluck('cost_price');
-                                if ($serialCosts->count() > 0) {
-                                    $foundSum = (float) $serialCosts->sum();
-                                    $missingCount = max(0, count($itSerials) - $serialCosts->count());
-                                    $soldCost += $foundSum + ($missingCount * $vAveragePrice);
-                                } else {
-                                    $soldCost += $pieces * $vAveragePrice;
-                                }
-                            } elseif (!empty($sItem->batch_id)) {
-                                $batchCost = (float) (DB::table('product_batches')->where('id', $sItem->batch_id)->value('cost_price') ?? 0);
-                                $soldCost += $pieces * ($batchCost > 0 ? $batchCost : $vAveragePrice);
-                            } elseif (!empty($sItem->purchase_price) && (float)$sItem->purchase_price > 0) {
-                                $soldCost += $pieces * (float)$sItem->purchase_price;
-                            } else {
-                                $soldCost += $pieces * $vAveragePrice;
-                            }
-                        }
-                    }
-
-                    $returnedQtyPieces = 0;
-                    $returnedAmount = 0;
-                    foreach ($returnsList as $rItem) {
-                        $rColor = $rItem->color;
-                        if (empty($rColor)) {
-                            $saleColors = $saleItemsMap[$rItem->sale_id] ?? [];
-                            $rColor = !empty($saleColors) ? $saleColors[0] : '';
-                        }
-                        $rItemCopy = (object)[
-                            'qty' => $rItem->qty,
-                            'color' => $rColor
-                        ];
-                        if ($this->matchSaleItemToVariant($rItemCopy, $v)) {
-                            $returnedQtyPieces += (float) $rItem->qty;
-                            $returnedAmount += (float) $rItem->line_total;
-                        }
-                    }
-
-                    // Calculate variant purchase average price
+                    // 1. Calculate variant purchase average price first so $vAveragePrice is ALWAYS defined
                     $vPurchQty = 0;
                     $vPurchAmount = 0;
                     foreach ($periodPurchItems as $pItem) {
@@ -1758,6 +1759,47 @@ class ReportingController extends Controller
                     if ($vColorKey === '') $vColorKey = '-';
                     if ($vSizeKey === '') $vSizeKey = '-';
                     $variantPriceMap[$product->id][$vColorKey . '_' . $vSizeKey] = $vAveragePrice;
+
+                    // 2. Sales and cost calculation
+                    $soldQty = 0;
+                    $soldQtyPieces = 0;
+                    $soldAmount = 0;
+                    $soldCost = 0;
+                    foreach ($salesList as $sItem) {
+                        if ($this->matchSaleItemToVariant($sItem, $v)) {
+                            $soldQty += (float) $sItem->qty;
+                            $soldQtyPieces += (float) $sItem->total_pieces;
+                            
+                            $itemNet = (float) $sItem->total;
+                            if ($sItem->total_bill_amount > 0 && $sItem->total_extradiscount > 0) {
+                                $proportion = $itemNet / (float) $sItem->total_bill_amount;
+                                $itemNet -= ($sItem->total_extradiscount * $proportion);
+                            }
+                            $soldAmount += $itemNet;
+
+                            // Calculate specific item cost (Serial / Batch / Fallback) using $vAveragePrice
+                            $soldCost += $calcItemCost($sItem, $product->id, $vAveragePrice);
+                        }
+                    }
+
+                    // 3. Returns
+                    $returnedQtyPieces = 0;
+                    $returnedAmount = 0;
+                    foreach ($returnsList as $rItem) {
+                        $rColor = $rItem->color;
+                        if (empty($rColor)) {
+                            $saleColors = $saleItemsMap[$rItem->sale_id] ?? [];
+                            $rColor = !empty($saleColors) ? $saleColors[0] : '';
+                        }
+                        $rItemCopy = (object)[
+                            'qty' => $rItem->qty,
+                            'color' => $rColor
+                        ];
+                        if ($this->matchSaleItemToVariant($rItemCopy, $v)) {
+                            $returnedQtyPieces += (float) $rItem->qty;
+                            $returnedAmount += (float) $rItem->line_total;
+                        }
+                    }
 
                     $netSoldAmount = $soldAmount - $returnedAmount;
                     $netQtyPieces = $soldQtyPieces - $returnedQtyPieces;
@@ -1856,16 +1898,7 @@ class ReportingController extends Controller
                     $saleQuery->where('sales.customer_id', $customerId);
                 }
 
-                $salesList = $saleQuery->select(
-                    'sale_items.total_pieces',
-                    'sale_items.qty',
-                    'sale_items.total',
-                    'sale_items.serials',
-                    'sale_items.batch_id',
-                    'sale_items.purchase_price',
-                    'sales.total_extradiscount',
-                    'sales.total_bill_amount'
-                )->get();
+                $salesList = $saleQuery->select($saleItemSelectCols)->get();
 
                 $soldQty = 0;
                 $soldQtyPieces = 0;
@@ -1883,28 +1916,7 @@ class ReportingController extends Controller
                     $soldAmount += $itemNet;
 
                     // Calculate specific item cost (Serial / Batch / Fallback)
-                    $pieces = (float) $sItem->total_pieces;
-                    $itSerials = !empty($sItem->serials) ? (is_array($sItem->serials) ? $sItem->serials : json_decode($sItem->serials, true)) : [];
-                    if (!empty($itSerials) && is_array($itSerials)) {
-                        $serialCosts = DB::table('product_serials')
-                            ->where('product_id', $product->id)
-                            ->whereIn('serial_number', $itSerials)
-                            ->pluck('cost_price');
-                        if ($serialCosts->count() > 0) {
-                            $foundSum = (float) $serialCosts->sum();
-                            $missingCount = max(0, count($itSerials) - $serialCosts->count());
-                            $soldCost += $foundSum + ($missingCount * $averagePrice);
-                        } else {
-                            $soldCost += $pieces * $averagePrice;
-                        }
-                    } elseif (!empty($sItem->batch_id)) {
-                        $batchCost = (float) (DB::table('product_batches')->where('id', $sItem->batch_id)->value('cost_price') ?? 0);
-                        $soldCost += $pieces * ($batchCost > 0 ? $batchCost : $averagePrice);
-                    } elseif (!empty($sItem->purchase_price) && (float)$sItem->purchase_price > 0) {
-                        $soldCost += $pieces * (float)$sItem->purchase_price;
-                    } else {
-                        $soldCost += $pieces * $averagePrice;
-                    }
+                    $soldCost += $calcItemCost($sItem, $product->id, $averagePrice);
                 }
                 
                 $returnQuery = DB::table('sale_return_items as sri')
@@ -1914,7 +1926,7 @@ class ReportingController extends Controller
                 if ($start && $end) {
                     $returnQuery->whereBetween('sr.created_at', [$start, $end]);
                 }
-                $returnsList = $returnQuery->select('sri.qty', 'sri.line_total', 'sri.purchase_price')->get();
+                $returnsList = $returnQuery->select($returnSelectCols)->get();
 
                 $returnedQtyPieces = 0;
                 $returnedAmount = 0;
@@ -2131,18 +2143,7 @@ class ReportingController extends Controller
                 $custSaleQuery->whereBetween('sales.created_at', [$start, $end]);
             }
 
-            $custSaleItems = $custSaleQuery->select(
-                'sale_items.product_id', 
-                'sale_items.is_manual',
-                'sale_items.purchase_price',
-                'sale_items.color',
-                'sale_items.serials',
-                'sale_items.batch_id',
-                'sale_items.total_pieces',
-                'sale_items.total',
-                'sales.total_extradiscount',
-                'sales.total_bill_amount'
-            )->get();
+            $custSaleItems = $custSaleQuery->select($custSaleItemSelectCols)->get();
 
             $custRevenue = 0;
             $custCogs = 0;
@@ -2209,28 +2210,7 @@ class ReportingController extends Controller
                 $custRevenue += $itemNet;
 
                 // Specific serial / batch / fallback cost calculation for customer profit
-                $pieces = (float) ($item->total_pieces ?? 0);
-                $itSerials = !empty($item->serials) ? (is_array($item->serials) ? $item->serials : json_decode($item->serials, true)) : [];
-                if (!empty($itSerials) && is_array($itSerials)) {
-                    $serialCosts = DB::table('product_serials')
-                        ->where('product_id', $item->product_id)
-                        ->whereIn('serial_number', $itSerials)
-                        ->pluck('cost_price');
-                    if ($serialCosts->count() > 0) {
-                        $foundSum = (float) $serialCosts->sum();
-                        $missingCount = max(0, count($itSerials) - $serialCosts->count());
-                        $custCogs += $foundSum + ($missingCount * $avgPrice);
-                    } else {
-                        $custCogs += $pieces * $avgPrice;
-                    }
-                } elseif (!empty($item->batch_id)) {
-                    $batchCost = (float) (DB::table('product_batches')->where('id', $item->batch_id)->value('cost_price') ?? 0);
-                    $custCogs += $pieces * ($batchCost > 0 ? $batchCost : $avgPrice);
-                } elseif (!empty($item->purchase_price) && (float)$item->purchase_price > 0) {
-                    $custCogs += $pieces * (float)$item->purchase_price;
-                } else {
-                    $custCogs += $pieces * $avgPrice;
-                }
+                $custCogs += $calcItemCost($item, $item->product_id, $avgPrice);
             }
 
             $custProfit = $custRevenue - $custCogs;
@@ -2337,6 +2317,30 @@ class ReportingController extends Controller
             'net_profit'               => round($netProfit, 2),
             'top_customers'            => $topCustomers
         ]);
+        } catch (\Throwable $e) {
+            \Log::error('fetchProfitLoss error: ' . $e->getMessage() . ' on line ' . $e->getLine() . ' in ' . $e->getFile(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'products' => [],
+                'total_gross_sales' => 0,
+                'total_discounts_allowed' => 0,
+                'net_sales' => 0,
+                'total_cogs' => 0,
+                'total_extradiscount' => 0,
+                'total_item_discount' => 0,
+                'total_gross_profit' => 0,
+                'vendor_incentive_income' => 0,
+                'backup_income' => 0,
+                'annual_income' => 0,
+                'total_expenses' => 0,
+                'sales_officer_commission' => 0,
+                'net_profit' => 0,
+                'top_customers' => []
+            ], 500);
+        }
     }
 
     public function purchase_report()
@@ -4697,16 +4701,18 @@ class ReportingController extends Controller
                 // Cost calculation for line item (Specific Serial / Batch / Fallback)
                 $itemCost = (float)($it->purchase_price ?? 0);
                 if ($itemCost <= 0) {
-                    $itSerials = !empty($it->serials) ? (is_array($it->serials) ? $it->serials : json_decode($it->serials, true)) : [];
-                    if (!empty($itSerials) && is_array($itSerials)) {
-                        $sCosts = DB::table('product_serials')->where('product_id', $it->product_id)->whereIn('serial_number', $itSerials)->pluck('cost_price');
-                        if ($sCosts->count() > 0) {
-                            $itemCost = $sCosts->avg();
+                    try {
+                        $itSerials = !empty($it->serials) ? (is_array($it->serials) ? $it->serials : json_decode($it->serials, true)) : [];
+                        if (!empty($itSerials) && is_array($itSerials) && Schema::hasTable('product_serials')) {
+                            $sCosts = DB::table('product_serials')->where('product_id', $it->product_id)->whereIn('serial_number', $itSerials)->pluck('cost_price');
+                            if ($sCosts->count() > 0) {
+                                $itemCost = $sCosts->avg();
+                            }
+                        } elseif (!empty($it->batch_id) && Schema::hasTable('product_batches')) {
+                            $bCost = (float)(DB::table('product_batches')->where('id', $it->batch_id)->value('cost_price') ?? 0);
+                            if ($bCost > 0) $itemCost = $bCost;
                         }
-                    } elseif (!empty($it->batch_id)) {
-                        $bCost = (float)(DB::table('product_batches')->where('id', $it->batch_id)->value('cost_price') ?? 0);
-                        if ($bCost > 0) $itemCost = $bCost;
-                    }
+                    } catch (\Throwable $e) {}
                 }
                 if ($itemCost <= 0 && $it->product) {
                     $itemCost = (float)($it->product->purchase_price_per_piece ?? $it->product->purchase_price ?? 0);

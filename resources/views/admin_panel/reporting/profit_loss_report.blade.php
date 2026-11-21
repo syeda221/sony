@@ -543,9 +543,13 @@ $(document).ready(function() {
                 $('#loader').hide();
                 renderReport(response);
             },
-            error: function() {
+            error: function(xhr) {
                 $('#loader').hide();
-                alert('Could not fetch report data');
+                let errMsg = 'Could not fetch report data';
+                if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg += ': ' + xhr.responseJSON.message;
+                }
+                alert(errMsg);
             }
         });
     }
