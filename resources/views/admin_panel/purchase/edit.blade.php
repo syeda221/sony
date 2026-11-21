@@ -2270,6 +2270,25 @@
 
             // Apply Selected Serials Button
             $(document).on('click', '#btnApplySelectedSerials', function() {
+                // Auto-commit single serial input if user typed but didn't press enter or plus button
+                const singleVal = ($('#inputSingleSerial').val() || '').trim();
+                if (singleVal && !currentPurchaseSerials.includes(singleVal)) {
+                    currentPurchaseSerials.push(singleVal);
+                    $('#inputSingleSerial').val('');
+                }
+
+                // Auto-commit bulk serial input if user pasted but didn't click bulk apply
+                const bulkVal = ($('#inputBulkSerials').val() || '').trim();
+                if (bulkVal) {
+                    const items = bulkVal.split(/[\n,]+/).map(s => s.trim()).filter(s => s.length > 0);
+                    items.forEach(sNum => {
+                        if (!currentPurchaseSerials.includes(sNum)) {
+                            currentPurchaseSerials.push(sNum);
+                        }
+                    });
+                    $('#inputBulkSerials').val('');
+                }
+
                 const rowIndex = parseInt($('#activeSerialRowIndex').val(), 10);
                 const $row = $('#purchaseTableBody tr').eq(rowIndex);
 
