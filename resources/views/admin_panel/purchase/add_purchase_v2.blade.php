@@ -1897,9 +1897,10 @@
                         // Backup % -> Annual %
                         $row.find('.item-annual-percent').focus().select();
                     } else if ($input.hasClass('item-annual-percent')) {
-                        // Annual % -> GST % or Next Row
-                        if ($row.find('.item-gst-percent').length) {
-                            $row.find('.item-gst-percent').focus().select();
+                        // Annual % -> GST % (if visible) or Next Row / New Row
+                        const $gstVisible = $row.find('.item-gst-percent:visible');
+                        if ($gstVisible.length) {
+                            $gstVisible.focus().select();
                         } else {
                             const $nextRow = $row.next('tr');
                             if ($nextRow.length) {
