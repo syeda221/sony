@@ -1618,6 +1618,28 @@ class SaleController extends Controller
                         'payment_amount' => $manualPaymentAmount,
                         'account_id' => $manualAccountId,
                     ];
+                } else {
+                    // Check if serials or batches provide exact purchase cost
+                    $exactCost = null;
+                    if (!empty($saleItem->serials)) {
+                        $sList = is_array($saleItem->serials) ? $saleItem->serials : json_decode($saleItem->serials, true);
+                        if (is_array($sList) && count($sList) > 0) {
+                            $sCosts = \App\Models\ProductSerial::where('product_id', $pid)
+                                ->whereIn('serial_number', $sList)
+                                ->pluck('cost_price');
+                            if ($sCosts->count() > 0 && $sCosts->avg() > 0) {
+                                $exactCost = $sCosts->avg();
+                            }
+                        }
+                    } elseif (!empty($saleItem->batch_id)) {
+                        $batchCost = \App\Models\ProductBatch::where('id', $saleItem->batch_id)->value('cost_price');
+                        if ($batchCost && (float)$batchCost > 0) {
+                            $exactCost = (float)$batchCost;
+                        }
+                    }
+                    if ($exactCost !== null) {
+                        $saleItem->purchase_price = $exactCost;
+                    }
                 }
 
                 $saleItem->save();
