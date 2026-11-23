@@ -2034,47 +2034,45 @@
                                     Rs. {{ number_format($sale->installmentPlan->monthly_installment, 2) }} / Mo ({{ $sale->installmentPlan->duration_months }} Mos)
                                 </td>
                             </tr>
-                        @elseif ($paidAmount > 0)
-                            <tr>
-                                <td class="lbl text-success">Paid / Received</td>
-                                <td class="val text-success font-monospace">- Rs. {{ number_format($paidAmount, 2) }}</td>
-                            </tr>
-                            @php
-                                $billBalanceDue = max(0, $finalPayable - $paidAmount);
-                            @endphp
-                            @if ((!$showCustomerBalance || empty($sale->customer_id)) && $billBalanceDue > 0)
-                                <tr style="border-top: 1px solid #cbd5e1;">
-                                    <td class="lbl fw-bold text-danger">Balance Due</td>
-                                    <td class="val fw-bold font-monospace text-danger">Rs. {{ number_format($billBalanceDue, 2) }}</td>
-                                </tr>
-                            @endif
-                        @endif
-
-                        @if ($showCustomerBalance && !empty($sale->customer_id))
-                            @php
-                                $prevBal = (float)($previousBalance ?? 0);
-                                $totalClosingBal = (float)($currentBalance ?? ($prevBal + $finalPayable - $paidAmount));
-                            @endphp
+                        @else
                             @if ($paidAmount > 0)
                                 <tr>
                                     <td class="lbl text-success">Paid / Received</td>
                                     <td class="val text-success font-monospace">- Rs. {{ number_format($paidAmount, 2) }}</td>
                                 </tr>
                             @endif
-                            <tr style="border-top: 1px solid #cbd5e1;">
-                                <td class="lbl text-muted">Previous Balance</td>
-                                <td class="val text-dark font-monospace">
-                                    Rs. {{ number_format(abs($prevBal), 2) }} {{ $prevBal >= 0 ? 'Dr' : 'Cr' }}
-                                </td>
-                            </tr>
-                            <tr style="background: #f8fafc; border-top: 1.5px solid var(--primary-navy);">
-                                <td class="lbl fw-bold" style="font-size: 12px; color: var(--primary-navy);">
-                                    Total Balance
-                                </td>
-                                <td class="val fw-bold font-monospace" style="font-size: 13.5px; color: {{ $totalClosingBal >= 0 ? '#b91c1c' : '#15803d' }};">
-                                    Rs. {{ number_format(abs($totalClosingBal), 2) }} {{ $totalClosingBal >= 0 ? 'Dr' : 'Cr' }}
-                                </td>
-                            </tr>
+
+                            @php
+                                $billBalanceDue = max(0, $finalPayable - $paidAmount);
+                            @endphp
+
+                            @if (!$showCustomerBalance || empty($sale->customer_id))
+                                @if ($billBalanceDue > 0)
+                                    <tr style="border-top: 1px solid #cbd5e1;">
+                                        <td class="lbl fw-bold text-danger">Balance Due</td>
+                                        <td class="val fw-bold font-monospace text-danger">Rs. {{ number_format($billBalanceDue, 2) }}</td>
+                                    </tr>
+                                @endif
+                            @else
+                                @php
+                                    $prevBal = (float)($previousBalance ?? 0);
+                                    $totalClosingBal = (float)($currentBalance ?? ($prevBal + $finalPayable - $paidAmount));
+                                @endphp
+                                <tr style="border-top: 1px solid #cbd5e1;">
+                                    <td class="lbl text-muted">Previous Balance</td>
+                                    <td class="val text-dark font-monospace">
+                                        Rs. {{ number_format(abs($prevBal), 2) }} {{ $prevBal > 0 ? 'Dr' : ($prevBal < 0 ? 'Cr' : '') }}
+                                    </td>
+                                </tr>
+                                <tr style="background: #f8fafc; border-top: 1.5px solid var(--primary-navy);">
+                                    <td class="lbl fw-bold" style="font-size: 12px; color: var(--primary-navy);">
+                                        Total Balance
+                                    </td>
+                                    <td class="val fw-bold font-monospace" style="font-size: 13.5px; color: {{ $totalClosingBal > 0 ? '#b91c1c' : ($totalClosingBal < 0 ? '#15803d' : '#334155') }};">
+                                        Rs. {{ number_format(abs($totalClosingBal), 2) }} {{ $totalClosingBal > 0 ? 'Dr' : ($totalClosingBal < 0 ? 'Cr' : '') }}
+                                    </td>
+                                </tr>
+                            @endif
                         @endif
                     </table>
                 </div>
@@ -2368,25 +2366,31 @@
                 @endif
             </div>
 
+            @if ($paidAmount > 0)
+                <div class="tot-row">
+                    <span>Paid / Received:</span>
+                    <span>- {{ number_format($paidAmount, 0) }}</span>
+                </div>
+            @endif
+
             @if ($showCustomerBalance && !empty($sale->customer_id))
                 @php
                     $prevBalThermal = (float)($previousBalance ?? 0);
                     $totalClosingThermal = (float)($currentBalance ?? ($prevBalThermal + $finalPayable - $paidAmount));
                 @endphp
                 <div class="divider" style="margin: 4px 0;"></div>
-                @if ($paidAmount > 0)
-                    <div class="tot-row">
-                        <span>Paid / Received:</span>
-                        <span>- {{ number_format($paidAmount, 0) }}</span>
-                    </div>
-                @endif
                 <div class="tot-row">
                     <span>Previous Balance:</span>
-                    <span>{{ number_format(abs($prevBalThermal), 0) }} {{ $prevBalThermal >= 0 ? 'Dr' : 'Cr' }}</span>
+                    <span>{{ number_format(abs($prevBalThermal), 0) }} {{ $prevBalThermal > 0 ? 'Dr' : ($prevBalThermal < 0 ? 'Cr' : '') }}</span>
                 </div>
                 <div class="tot-row grand-total" style="font-size: 11.5px; border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;">
                     <span>TOTAL BALANCE:</span>
-                    <span>{{ number_format(abs($totalClosingThermal), 0) }} {{ $totalClosingThermal >= 0 ? 'Dr' : 'Cr' }}</span>
+                    <span>{{ number_format(abs($totalClosingThermal), 0) }} {{ $totalClosingThermal > 0 ? 'Dr' : ($totalClosingThermal < 0 ? 'Cr' : '') }}</span>
+                </div>
+            @elseif (max(0, $finalPayable - $paidAmount) > 0)
+                <div class="tot-row" style="font-weight: bold; color: #b91c1c;">
+                    <span>Balance Due:</span>
+                    <span>{{ number_format(max(0, $finalPayable - $paidAmount), 0) }}</span>
                 </div>
             @endif
         </div>

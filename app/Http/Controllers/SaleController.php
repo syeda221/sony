@@ -930,32 +930,53 @@ class SaleController extends Controller
 
         // Calculate Balances for Invoice
         $previousBalance = 0;
-        $currentBalance = 0;
+        $paidAmount = (float)($sale->cash ?? 0);
 
-        // Find the Journal Entry for this Sale (Debit side)
-        // We look for the entry by its description which matches the invoice number
-        $journalEntry = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
-            ->where('party_id', $sale->customer_id)
-            ->where('description', "Sale Invoice #{$sale->invoice_no}")
-            ->first();
-
-        if ($journalEntry && $sale->customer_id) {
-            // Calculate Previous Balance: Sum of (Dr - Cr) for all entries BEFORE this one
-            $previousBalance = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+        if ($sale->customer_id) {
+            // Find the Journal Entry for this Sale (Debit side)
+            $journalEntry = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
                 ->where('party_id', $sale->customer_id)
-                ->where('id', '<', $journalEntry->id)
-                ->sum(\Illuminate\Support\Facades\DB::raw('debit - credit'));
-        } else {
-            // Fallback if no journal entry (not posted yet)
-            // The customer's current balance is effectively the previous balance before this sale is posted
-            if ($sale->customer_id) {
-                $balanceService = app(\App\Services\BalanceService::class);
-                $previousBalance = $balanceService->getCustomerBalance($sale->customer_id);
+                ->where(function($q) use ($sale) {
+                    $q->where('description', "Sale Invoice #{$sale->invoice_no}")
+                      ->orWhere('description', "Sale #{$sale->invoice_no}")
+                      ->orWhere('description', 'like', "%#{$sale->invoice_no}%");
+                })
+                ->orderBy('id', 'asc')
+                ->first();
+
+            if ($journalEntry) {
+                // Calculate Previous Balance: Sum of (Dr - Cr) for all entries strictly BEFORE this sale entry
+                $previousBalance = (float) \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+                    ->where('party_id', $sale->customer_id)
+                    ->where('id', '<', $journalEntry->id)
+                    ->sum(\Illuminate\Support\Facades\DB::raw('debit - credit'));
             } else {
-                $previousBalance = 0;
+                // Check in legacy CustomerLedger
+                $ledgerEntry = \App\Models\CustomerLedger::where('customer_id', $sale->customer_id)
+                    ->where(function($q) use ($sale) {
+                        $q->where('description', 'like', "%#{$sale->invoice_no}%")
+                          ->orWhere('description', 'like', "%{$sale->invoice_no}%");
+                    })
+                    ->orderBy('id', 'asc')
+                    ->first();
+
+                if ($ledgerEntry) {
+                    $previousBalance = (float) $ledgerEntry->previous_balance;
+                } else {
+                    $balanceService = app(\App\Services\BalanceService::class);
+                    $rawCurrent = (float) $balanceService->getCustomerBalance($sale->customer_id);
+                    if ($sale->sale_status === 'posted') {
+                        // Current ledger already includes this posted sale and its receipt
+                        $previousBalance = $rawCurrent - (float)$sale->total_net + $paidAmount;
+                    } else {
+                        $previousBalance = $rawCurrent;
+                    }
+                }
             }
         }
-        $currentBalance = $previousBalance + $sale->total_net;
+
+        // Net closing balance after this invoice and its receipt
+        $currentBalance = $previousBalance + (float)$sale->total_net - $paidAmount;
 
         return view('admin_panel.sale.saleinvoice', [
             'sale' => $sale,
@@ -1093,29 +1114,50 @@ class SaleController extends Controller
         $sale = Sale::with('customer_relation')->findOrFail($id);
         $items = $this->_getSaleItems($sale);
 
-        // Logic for Previous Balance (copied from saleinvoice)
-        $journalEntry = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
-            ->where('party_id', $sale->customer_id)
-            ->where('description', "Sale Invoice #{$sale->invoice_no}")
-            ->first();
-
+        // Calculate Balances for Receipt
         $previousBalance = 0;
-        $currentBalance = 0;
+        $paidAmount = (float)($sale->cash ?? 0);
 
-        if ($journalEntry && $sale->customer_id) {
-            // Calculate Previous Balance: Sum of (Dr - Cr) for all entries BEFORE this one
-            $previousBalance = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+        if ($sale->customer_id) {
+            $journalEntry = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
                 ->where('party_id', $sale->customer_id)
-                ->where('id', '<', $journalEntry->id)
-                ->sum(\Illuminate\Support\Facades\DB::raw('debit - credit'));
-        } else {
-            // Fallback if no journal entry (legacy or draft)
-            if ($sale->customer_id) {
-                $balanceService = app(\App\Services\BalanceService::class);
-                $previousBalance = $balanceService->getCustomerBalance($sale->customer_id);
+                ->where(function($q) use ($sale) {
+                    $q->where('description', "Sale Invoice #{$sale->invoice_no}")
+                      ->orWhere('description', "Sale #{$sale->invoice_no}")
+                      ->orWhere('description', 'like', "%#{$sale->invoice_no}%");
+                })
+                ->orderBy('id', 'asc')
+                ->first();
+
+            if ($journalEntry) {
+                $previousBalance = (float) \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+                    ->where('party_id', $sale->customer_id)
+                    ->where('id', '<', $journalEntry->id)
+                    ->sum(\Illuminate\Support\Facades\DB::raw('debit - credit'));
+            } else {
+                $ledgerEntry = \App\Models\CustomerLedger::where('customer_id', $sale->customer_id)
+                    ->where(function($q) use ($sale) {
+                        $q->where('description', 'like', "%#{$sale->invoice_no}%")
+                          ->orWhere('description', 'like', "%{$sale->invoice_no}%");
+                    })
+                    ->orderBy('id', 'asc')
+                    ->first();
+
+                if ($ledgerEntry) {
+                    $previousBalance = (float) $ledgerEntry->previous_balance;
+                } else {
+                    $balanceService = app(\App\Services\BalanceService::class);
+                    $rawCurrent = (float) $balanceService->getCustomerBalance($sale->customer_id);
+                    if ($sale->sale_status === 'posted') {
+                        $previousBalance = $rawCurrent - (float)$sale->total_net + $paidAmount;
+                    } else {
+                        $previousBalance = $rawCurrent;
+                    }
+                }
             }
         }
-        $currentBalance = $previousBalance + $sale->total_net;
+
+        $currentBalance = $previousBalance + (float)$sale->total_net - $paidAmount;
 
         return view('admin_panel.sale.salereceipt', [
             'sale' => $sale,
