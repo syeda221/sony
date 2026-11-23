@@ -1848,6 +1848,45 @@
                     </div>
                 @endif
 
+                {{-- Installment Payment Schedule --}}
+                @if ($sale->installmentPlan)
+                    @php
+                        $scheduleItems = $sale->installmentPlan->installments()->orderBy('installment_no')->get();
+                    @endphp
+                    @if($scheduleItems->count() > 0)
+                        <div style="margin-bottom: 12px; border: 1.5px solid #d8b4fe; border-radius: 6px; overflow: hidden; background: #faf5ff;">
+                            <div style="background: #f3e8ff; padding: 4px 10px; font-weight: 700; font-size: 11px; color: #6b21a8; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #d8b4fe;">
+                                <span><i class="fas fa-calendar-alt me-1"></i> Installment Payment Schedule</span>
+                                <span style="font-size: 10px;">{{ $sale->installmentPlan->duration_months }} Mos Plan | Financed: Rs. {{ number_format($sale->installmentPlan->financed_amount, 2) }}</span>
+                            </div>
+                            <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
+                                <thead>
+                                    <tr style="background: #fbf5ff; border-bottom: 1px solid #e9d5ff; color: #581c87; font-size: 9.5px; text-transform: uppercase;">
+                                        <th style="padding: 3px 8px; text-align: left; width: 20%;">Inst #</th>
+                                        <th style="padding: 3px 8px; text-align: left; width: 35%;">Due Date</th>
+                                        <th style="padding: 3px 8px; text-align: right; width: 25%;">Amount</th>
+                                        <th style="padding: 3px 8px; text-align: center; width: 20%;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($scheduleItems as $sItem)
+                                        <tr style="border-bottom: 1px solid #f3e8ff;">
+                                            <td style="padding: 3px 8px; font-weight: 700; color: #7e22ce;">#{{ $sItem->installment_no }}</td>
+                                            <td style="padding: 3px 8px; color: #334155;">{{ $sItem->due_date ? \Carbon\Carbon::parse($sItem->due_date)->format('d-M-Y') : '-' }}</td>
+                                            <td style="padding: 3px 8px; text-align: right; font-weight: 700; font-family: monospace; color: #6b21a8;">Rs. {{ number_format($sItem->amount, 2) }}</td>
+                                            <td style="padding: 3px 8px; text-align: center;">
+                                                <span style="font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; {{ $sItem->status === 'paid' ? 'background: #dcfce7; color: #166534;' : 'background: #e2e8f0; color: #475569;' }}">
+                                                    {{ ucfirst($sItem->status) }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                @endif
+
                 <!-- Terms & Conditions -->
                 @php
                     $showInvoiceTerms = \App\Models\Setting::get('show_invoice_terms', '1') == '1';
@@ -2028,12 +2067,31 @@
                                 <td class="lbl fw-bold" style="color: #7e22ce;">Remaining (Financed)</td>
                                 <td class="val fw-bold font-monospace" style="color: #7e22ce;">Rs. {{ number_format($sale->installmentPlan->financed_amount, 2) }}</td>
                             </tr>
-                            <tr style="background: #faf5ff;">
-                                <td class="lbl" style="color: #6b21a8; font-size: 11px;">Monthly Installment</td>
-                                <td class="val font-monospace" style="color: #6b21a8; font-weight: 700; font-size: 11px;">
-                                    Rs. {{ number_format($sale->installmentPlan->monthly_installment, 2) }} / Mo ({{ $sale->installmentPlan->duration_months }} Mos)
-                                </td>
-                            </tr>
+                            @php
+                                $planInsts = $sale->installmentPlan->installments()->orderBy('installment_no')->get();
+                                $uniqueAmts = $planInsts->pluck('amount')->unique();
+                                $isCustomSchedule = $uniqueAmts->count() > 1;
+                            @endphp
+
+                            @if (!$isCustomSchedule)
+                                <tr style="background: #faf5ff;">
+                                    <td class="lbl" style="color: #6b21a8; font-size: 11px;">Monthly Installment</td>
+                                    <td class="val font-monospace" style="color: #6b21a8; font-weight: 700; font-size: 11px;">
+                                        Rs. {{ number_format($sale->installmentPlan->monthly_installment, 2) }} / Mo ({{ $sale->installmentPlan->duration_months }} Mos)
+                                    </td>
+                                </tr>
+                            @else
+                                @foreach ($planInsts as $pInst)
+                                    <tr style="background: #faf5ff; border-top: 1px dashed #e9d5ff;">
+                                        <td class="lbl" style="color: #6b21a8; font-size: 11px;">
+                                            Inst #{{ $pInst->installment_no }} Due ({{ $pInst->due_date ? \Carbon\Carbon::parse($pInst->due_date)->format('d-M-Y') : '' }})
+                                        </td>
+                                        <td class="val font-monospace" style="color: #6b21a8; font-weight: 700; font-size: 11px;">
+                                            Rs. {{ number_format($pInst->amount, 2) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            @endif
                         @else
                             @if ($paidAmount > 0)
                                 <tr>
@@ -2366,7 +2424,33 @@
                 @endif
             </div>
 
-            @if ($paidAmount > 0)
+            @if ($sale->installmentPlan)
+                <div class="tot-row" style="color: #166534; font-weight: bold;">
+                    <span>Advance Received:</span>
+                    <span>- {{ number_format($sale->installmentPlan->advance_amount, 0) }}</span>
+                </div>
+                <div class="tot-row" style="font-weight: bold;">
+                    <span>Financed Balance:</span>
+                    <span>{{ number_format($sale->installmentPlan->financed_amount, 0) }}</span>
+                </div>
+                @php
+                    $tPlanInsts = $sale->installmentPlan->installments()->orderBy('installment_no')->get();
+                    $tUniqueAmts = $tPlanInsts->pluck('amount')->unique();
+                @endphp
+                @if($tUniqueAmts->count() <= 1)
+                    <div class="tot-row" style="font-size: 10px;">
+                        <span>Monthly Installment:</span>
+                        <span>{{ number_format($sale->installmentPlan->monthly_installment, 0) }} ({{ $sale->installmentPlan->duration_months }} Mos)</span>
+                    </div>
+                @else
+                    @foreach($tPlanInsts as $tInst)
+                        <div class="tot-row" style="font-size: 9.5px;">
+                            <span>Inst #{{ $tInst->installment_no }} ({{ $tInst->due_date ? \Carbon\Carbon::parse($tInst->due_date)->format('d-M') : '' }}):</span>
+                            <span>{{ number_format($tInst->amount, 0) }}</span>
+                        </div>
+                    @endforeach
+                @endif
+            @elseif ($paidAmount > 0)
                 <div class="tot-row">
                     <span>Paid / Received:</span>
                     <span>- {{ number_format($paidAmount, 0) }}</span>

@@ -551,10 +551,38 @@
                 <span>{{ number_format(abs($previousBalance), 0) }} {{ $previousBalance >= 0 ? 'Dr' : 'Cr' }}</span>
             </div>
             @endif
-            <div class="tot-row">
-                <span>Paid Amount:</span>
-                <span>{{ number_format($sale->cash, 0) }}</span>
-            </div>
+            @if ($sale->installmentPlan)
+                <div class="tot-row" style="color: #166534; font-weight: bold;">
+                    <span>Advance Received:</span>
+                    <span>- {{ number_format($sale->installmentPlan->advance_amount, 0) }}</span>
+                </div>
+                <div class="tot-row" style="font-weight: bold;">
+                    <span>Financed Balance:</span>
+                    <span>{{ number_format($sale->installmentPlan->financed_amount, 0) }}</span>
+                </div>
+                @php
+                    $srPlanInsts = $sale->installmentPlan->installments()->orderBy('installment_no')->get();
+                    $srUniqueAmts = $srPlanInsts->pluck('amount')->unique();
+                @endphp
+                @if($srUniqueAmts->count() <= 1)
+                    <div class="tot-row" style="font-size: 10px;">
+                        <span>Monthly Installment:</span>
+                        <span>{{ number_format($sale->installmentPlan->monthly_installment, 0) }} ({{ $sale->installmentPlan->duration_months }} Mos)</span>
+                    </div>
+                @else
+                    @foreach($srPlanInsts as $srInst)
+                        <div class="tot-row" style="font-size: 9.5px;">
+                            <span>Inst #{{ $srInst->installment_no }} ({{ $srInst->due_date ? \Carbon\Carbon::parse($srInst->due_date)->format('d-M') : '' }}):</span>
+                            <span>{{ number_format($srInst->amount, 0) }}</span>
+                        </div>
+                    @endforeach
+                @endif
+            @else
+                <div class="tot-row">
+                    <span>Paid Amount:</span>
+                    <span>{{ number_format($sale->cash, 0) }}</span>
+                </div>
+            @endif
             @if($sale->change > 0)
             <div class="tot-row">
                 <span>Change{{ $sale->change_account ? ' ('.$sale->change_account->title.')' : '' }}:</span>
