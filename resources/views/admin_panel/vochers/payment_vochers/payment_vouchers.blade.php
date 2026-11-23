@@ -336,6 +336,7 @@
                                             <select name="vendor_id[]" class="pv-input rowParty">
                                                 <option value="" disabled selected>Select Party</option>
                                             </select>
+                                            <div class="rowPartyBalance text-muted mt-1" style="font-size: 11px;"></div>
                                         </td>
                                         <td>
                                             <input type="number" name="amount[]"
@@ -367,9 +368,9 @@
                                     <tr>
                                         <td colspan="2" class="text-end fw-bold" style="font-size: 1rem;" id="pvTotalAmountLabel">Net Cash / Bank to Pay:</td>
                                         <td>
-                                            <input type="text" name="total_amount"
-                                                class="pv-input text-end fw-bold" id="totalAmount" readonly
-                                                value="0.00" style="background: #fef2f2; border-color: #fca5a5; font-size: 1.1rem; color: #dc2626;">
+                                            <input type="number" step="any" min="0" name="total_amount"
+                                                class="pv-input text-end fw-bold" id="totalAmount"
+                                                value="0.00" style="background: #fef2f2; border-color: #fca5a5; font-size: 1.1rem; color: #dc2626;" placeholder="0.00">
                                         </td>
                                         <td></td>
                                     </tr>
@@ -567,9 +568,39 @@
             window.pvAvailAnnual = 0;
             window.pvAvailScheme = 0;
 
-            // Check vendor claims when party changes
+            // Check vendor claims & show party balance when party changes
             $(document).on('change', '.rowParty', function() {
+                let $r = $(this).closest('tr');
+                let t = $r.find('.rowType').val();
+                let v = $(this).val();
+                let $balDiv = $r.find('.rowPartyBalance');
+                $balDiv.empty();
+
+                if (t === 'vendor' && v) {
+                    $.get('/voucher-balance/vendor/' + v, function(res) {
+                        let bal = parseFloat(res.balance) || 0;
+                        if (bal > 0) {
+                            $balDiv.html(`
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle py-1 px-2">Payable: Rs. ${bal.toFixed(2)} Cr</span>
+                                <a href="javascript:void(0)" class="btn-fill-payable ms-2 text-decoration-none fw-bold text-primary" style="font-size: 11px;" data-bal="${bal}">
+                                    <i class="bi bi-arrow-right-circle me-1"></i>Settle Full (Rs. ${bal.toFixed(2)})
+                                </a>
+                            `);
+                        } else if (bal < 0) {
+                            $balDiv.html(`<span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2">Advance/Dr: Rs. ${Math.abs(bal).toFixed(2)}</span>`);
+                        } else {
+                            $balDiv.html(`<span class="badge bg-light text-muted border py-1 px-2">Payable: Rs. 0.00</span>`);
+                        }
+                    });
+                }
                 checkVendorClaims();
+            });
+
+            $(document).on('click', '.btn-fill-payable', function() {
+                let bal = parseFloat($(this).data('bal')) || 0;
+                let $row = $(this).closest('tr');
+                $row.find('.amount').val(bal.toFixed(2));
+                calculateTotal();
             });
 
             function checkVendorClaims() {
@@ -646,6 +677,51 @@
                 calculateTotal();
             });
 
+            // Bidirectional Calculation: Editing Net Cash updates Gross Bill, and editing Gross Bill updates Net Cash
+            $(document).on('input', '#totalAmount', function() {
+                let backupAdj = $('#chkAdjustBackup').is(':checked') ? (parseFloat($('#inputAdjustBackup').val()) || 0) : 0;
+                let annualAdj = $('#chkAdjustAnnual').is(':checked') ? (parseFloat($('#inputAdjustAnnual').val()) || 0) : 0;
+                let schemeAdj = $('#chkAdjustScheme').is(':checked') ? (parseFloat($('#inputAdjustScheme').val()) || 0) : 0;
+                let totalOffset = backupAdj + annualAdj + schemeAdj;
+
+                if (totalOffset > 0) {
+                    let netCash = parseFloat($(this).val()) || 0;
+                    let gross = netCash + totalOffset;
+                    $('.amount').first().val(gross.toFixed(2));
+                    $('#pvGrossBillDisplay').val('Rs. ' + gross.toFixed(2));
+                    renderHelperAlert(gross, totalOffset, netCash);
+                }
+            });
+
+            function renderHelperAlert(gross, totalOffset, netPay) {
+                if (totalOffset <= 0) {
+                    $('#pvClaimHelperAlert').slideUp(150);
+                    return;
+                }
+
+                if (gross > 0 && gross < totalOffset) {
+                    let suggestedGross = gross + totalOffset;
+                    $('#pvClaimHelperAlert').html(`
+                        <i class="bi bi-info-circle me-1 text-primary"></i>
+                        <strong>Wazahat:</strong> Bill Amount (Rs. ${gross.toFixed(2)}) claims deduction (Rs. ${totalOffset.toFixed(2)}) se kam hai. 
+                        Agar aap vendor ko <strong>Rs. ${gross.toFixed(2)} Cash</strong> de kar Rs. ${totalOffset.toFixed(2)} claims kaatna chahte hain, toh kul Bill <strong>Rs. ${suggestedGross.toFixed(2)}</strong> clear hoga.
+                        <button type="button" class="btn btn-sm btn-primary py-0 px-2 ms-2" id="btnAutoFixGross" data-gross="${suggestedGross}">
+                            Kul Bill Rs. ${suggestedGross.toFixed(2)} Set Karein
+                        </button>
+                    `).slideDown(150);
+                } else if (gross === 0 && netPay === 0) {
+                    $('#pvClaimHelperAlert').html(`
+                        <i class="bi bi-info-circle me-1 text-primary"></i>
+                        <strong>Pure Claims Adjustment:</strong> Koi Cash pay nahi ho raha (Net Cash: Rs. 0.00). Vendor ke payable bill se <strong>Rs. ${totalOffset.toFixed(2)}</strong> claims deduct ho kar clear ho jayenge.
+                    `).slideDown(150);
+                } else {
+                    $('#pvClaimHelperAlert').html(`
+                        <i class="bi bi-check-circle me-1 text-success"></i>
+                        Vendor ka kul Bill <strong>Rs. ${gross.toFixed(2)}</strong> clear hoga: <strong>Rs. ${netPay.toFixed(2)} Cash/Bank</strong> se aur <strong>Rs. ${totalOffset.toFixed(2)} Claims</strong> se.
+                    `).slideDown(150);
+                }
+            }
+
             // Totals
             function calculateTotal() {
                 let gross = 0;
@@ -667,28 +743,7 @@
                     let netPay = Math.max(0, gross - totalOffset);
                     $('#totalAmount').val(netPay.toFixed(2));
                     $('#pvTotalAmountLabel').text('Net Cash / Bank to Pay:');
-
-                    if (gross > 0 && gross < totalOffset) {
-                        let suggestedGross = gross + totalOffset;
-                        $('#pvClaimHelperAlert').html(`
-                            <i class="bi bi-info-circle me-1 text-primary"></i>
-                            <strong>Wazahat:</strong> Bill Amount (Rs. ${gross.toFixed(2)}) claims deduction (Rs. ${totalOffset.toFixed(2)}) se kam hai. 
-                            Agar aap vendor ko <strong>Rs. ${gross.toFixed(2)} Cash</strong> de kar Rs. ${totalOffset.toFixed(2)} claims kaatna chahte hain, toh kul Bill <strong>Rs. ${suggestedGross.toFixed(2)}</strong> hona chahiye.
-                            <button type="button" class="btn btn-sm btn-primary py-0 px-2 ms-2" id="btnAutoFixGross" data-gross="${suggestedGross}">
-                                Bill Rs. ${suggestedGross.toFixed(2)} Set Karein
-                            </button>
-                        `).slideDown(150);
-                    } else if (gross === 0) {
-                        $('#pvClaimHelperAlert').html(`
-                            <i class="bi bi-info-circle me-1 text-primary"></i>
-                            <strong>Pure Claims Adjustment:</strong> Koi Cash pay nahi ho raha (Net Cash: Rs. 0.00). Vendor ke payable bill se <strong>Rs. ${totalOffset.toFixed(2)}</strong> claims deduct ho kar clear ho jayenge.
-                        `).slideDown(150);
-                    } else {
-                        $('#pvClaimHelperAlert').html(`
-                            <i class="bi bi-check-circle me-1 text-success"></i>
-                            Vendor ka kul Bill <strong>Rs. ${gross.toFixed(2)}</strong> clear hoga: <strong>Rs. ${netPay.toFixed(2)} Cash</strong> se aur <strong>Rs. ${totalOffset.toFixed(2)} Claims</strong> se.
-                        `).slideDown(150);
-                    }
+                    renderHelperAlert(gross, totalOffset, netPay);
                 } else {
                     $('#pvGrossRow').hide();
                     $('#pvOffsetRow').hide();
