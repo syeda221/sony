@@ -714,7 +714,7 @@ body {
                         <small class="text-muted">Offset claims to reduce actual cash payout</small>
                     </div>
                     <div class="row g-2 align-items-center">
-                        <div class="col-md-5">
+                        <div class="col-md-3">
                             <div class="p-2 border rounded-3 bg-white">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <label class="form-check-label fw-bold text-success small mb-0" for="po_chk_backup">
@@ -729,7 +729,7 @@ body {
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-3">
                             <div class="p-2 border rounded-3 bg-white">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <label class="form-check-label fw-bold text-primary small mb-0" for="po_chk_annual">
@@ -744,7 +744,22 @@ body {
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-3">
+                            <div class="p-2 border rounded-3 bg-white">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-check-label fw-bold text-warning small mb-0" for="po_chk_scheme">
+                                        <input class="form-check-input me-1" type="checkbox" id="po_chk_scheme">
+                                        <i class="fas fa-tags me-1"></i> Scheme Claim
+                                    </label>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle small font-monospace" id="po_avail_scheme_badge">Avail: 0.00</span>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light text-muted">Deduct Rs.</span>
+                                    <input type="number" step="any" min="0" name="adjust_scheme_amount" id="po_input_scheme" class="form-control text-end fw-bold text-warning po-adj-input" placeholder="0.00" value="0" disabled>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
                             <div class="p-2 border rounded-3 text-center bg-white">
                                 <small class="text-muted d-block" style="font-size: 11px;">Claims Offset</small>
                                 <strong class="text-danger fs-6" id="po_total_offset_text">-Rs. 0.00</strong>
@@ -757,7 +772,7 @@ body {
                 <div class="row g-3 mb-4">
                     <div class="col-md-3">
                         <label class="pw-label" id="po_bill_amount_label">BILL AMOUNT TO SETTLE (PKR) <span class="text-danger">*</span></label>
-                        <input type="number" step="any" min="0.01" id="po_gross_amount" class="form-control pw-input fw-bold fs-5 text-dark text-end" placeholder="0.00" required>
+                        <input type="number" step="any" min="0.01" name="gross_bill_amount" id="po_gross_amount" class="form-control pw-input fw-bold fs-5 text-dark text-end" placeholder="0.00" required>
                     </div>
                     <div class="col-md-3">
                         <label class="pw-label">NET CASH/BANK TO PAY (PKR)</label>
@@ -1225,6 +1240,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.poAvailBackup = 0;
     window.poAvailAnnual = 0;
+    window.poAvailScheme = 0;
 
     $('#po_vendor_select').on('change', function() {
         let vId = $(this).val();
@@ -1232,11 +1248,13 @@ document.addEventListener('DOMContentLoaded', function() {
             $.get('/voucher-balance/vendor/' + vId, function(res) {
                 window.poAvailBackup = parseFloat(res.backup_balance) || 0;
                 window.poAvailAnnual = parseFloat(res.annual_balance) || 0;
+                window.poAvailScheme = parseFloat(res.scheme_balance) || 0;
 
-                if (window.poAvailBackup > 0 || window.poAvailAnnual > 0) {
+                if (window.poAvailBackup > 0 || window.poAvailAnnual > 0 || window.poAvailScheme > 0) {
                     $('#po_claim_adjustment_card').slideDown(150);
                     $('#po_avail_backup_badge').text('Avail: ' + window.poAvailBackup.toFixed(2));
                     $('#po_avail_annual_badge').text('Avail: ' + window.poAvailAnnual.toFixed(2));
+                    $('#po_avail_scheme_badge').text('Avail: ' + window.poAvailScheme.toFixed(2));
                 } else {
                     resetPoClaimDeductions();
                 }
@@ -1248,10 +1266,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function resetPoClaimDeductions() {
         $('#po_claim_adjustment_card').slideUp(150);
-        $('#po_chk_backup, #po_chk_annual').prop('checked', false);
-        $('#po_input_backup, #po_input_annual').prop('disabled', true).val('0');
+        $('#po_chk_backup, #po_chk_annual, #po_chk_scheme').prop('checked', false);
+        $('#po_input_backup, #po_input_annual, #po_input_scheme').prop('disabled', true).val('0');
         window.poAvailBackup = 0;
         window.poAvailAnnual = 0;
+        window.poAvailScheme = 0;
         calcPoTotal();
     }
 
@@ -1273,13 +1292,23 @@ document.addEventListener('DOMContentLoaded', function() {
         calcPoTotal();
     });
 
+    $(document).on('change', '#po_chk_scheme', function() {
+        if ($(this).is(':checked')) {
+            $('#po_input_scheme').prop('disabled', false).val(window.poAvailScheme > 0 ? window.poAvailScheme.toFixed(2) : '0');
+        } else {
+            $('#po_input_scheme').prop('disabled', true).val('0');
+        }
+        calcPoTotal();
+    });
+
     $(document).on('input', '#po_gross_amount, .po-adj-input', calcPoTotal);
 
     function calcPoTotal() {
         let gross = parseFloat($('#po_gross_amount').val()) || 0;
         let backupAdj = $('#po_chk_backup').is(':checked') ? (parseFloat($('#po_input_backup').val()) || 0) : 0;
         let annualAdj = $('#po_chk_annual').is(':checked') ? (parseFloat($('#po_input_annual').val()) || 0) : 0;
-        let totalOffset = backupAdj + annualAdj;
+        let schemeAdj = $('#po_chk_scheme').is(':checked') ? (parseFloat($('#po_input_scheme').val()) || 0) : 0;
+        let totalOffset = backupAdj + annualAdj + schemeAdj;
 
         $('#po_total_offset_text').text('-Rs. ' + totalOffset.toFixed(2));
         let netCash = Math.max(0, gross - totalOffset);

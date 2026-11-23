@@ -314,7 +314,7 @@
                                     <tr>
                                         <th style="width: 25%;">Type</th>
                                         <th style="width: 35%;">Party / Account</th>
-                                        <th style="width: 25%;">Amount</th>
+                                        <th style="width: 25%;">Bill Amount (Gross) / Amount</th>
                                         <th style="width: 15%;">Action</th>
                                     </tr>
                                 </thead>
@@ -376,6 +376,8 @@
                                 </tfoot>
                             </table>
                         </div>
+
+                        <div id="pvClaimHelperAlert" class="alert alert-info py-2 px-3 mt-2 rounded-3 small" style="display: none;"></div>
 
                         {{-- Vendor Claim Offset / Deduction Box --}}
                         <div class="card border-0 shadow-sm mt-3 p-3 rounded-3" id="pvClaimAdjustmentCard" style="display: none; background: #f8fafc; border-left: 4px solid #4f46e5 !important;">
@@ -665,14 +667,69 @@
                     let netPay = Math.max(0, gross - totalOffset);
                     $('#totalAmount').val(netPay.toFixed(2));
                     $('#pvTotalAmountLabel').text('Net Cash / Bank to Pay:');
+
+                    if (gross > 0 && gross < totalOffset) {
+                        let suggestedGross = gross + totalOffset;
+                        $('#pvClaimHelperAlert').html(`
+                            <i class="bi bi-info-circle me-1 text-primary"></i>
+                            <strong>Wazahat:</strong> Bill Amount (Rs. ${gross.toFixed(2)}) claims deduction (Rs. ${totalOffset.toFixed(2)}) se kam hai. 
+                            Agar aap vendor ko <strong>Rs. ${gross.toFixed(2)} Cash</strong> de kar Rs. ${totalOffset.toFixed(2)} claims kaatna chahte hain, toh kul Bill <strong>Rs. ${suggestedGross.toFixed(2)}</strong> hona chahiye.
+                            <button type="button" class="btn btn-sm btn-primary py-0 px-2 ms-2" id="btnAutoFixGross" data-gross="${suggestedGross}">
+                                Bill Rs. ${suggestedGross.toFixed(2)} Set Karein
+                            </button>
+                        `).slideDown(150);
+                    } else if (gross === 0) {
+                        $('#pvClaimHelperAlert').html(`
+                            <i class="bi bi-info-circle me-1 text-primary"></i>
+                            <strong>Pure Claims Adjustment:</strong> Koi Cash pay nahi ho raha (Net Cash: Rs. 0.00). Vendor ke payable bill se <strong>Rs. ${totalOffset.toFixed(2)}</strong> claims deduct ho kar clear ho jayenge.
+                        `).slideDown(150);
+                    } else {
+                        $('#pvClaimHelperAlert').html(`
+                            <i class="bi bi-check-circle me-1 text-success"></i>
+                            Vendor ka kul Bill <strong>Rs. ${gross.toFixed(2)}</strong> clear hoga: <strong>Rs. ${netPay.toFixed(2)} Cash</strong> se aur <strong>Rs. ${totalOffset.toFixed(2)} Claims</strong> se.
+                        `).slideDown(150);
+                    }
                 } else {
                     $('#pvGrossRow').hide();
                     $('#pvOffsetRow').hide();
+                    $('#pvClaimHelperAlert').slideUp(150);
                     $('#pvTotalClaimsDeductedDisplay').text('-Rs. 0.00');
                     $('#totalAmount').val(gross.toFixed(2));
                     $('#pvTotalAmountLabel').text('Total Amount:');
                 }
             }
+
+            $(document).on('click', '#btnAutoFixGross', function() {
+                let suggested = $(this).data('gross');
+                if (suggested > 0) {
+                    $('.amount').first().val(suggested);
+                    calculateTotal();
+                }
+            });
+
+            // Form Submit Validation
+            $('form').on('submit', function(e) {
+                let gross = 0;
+                $('.amount').each(function() { gross += parseFloat($(this).val()) || 0; });
+                let backupAdj = $('#chkAdjustBackup').is(':checked') ? (parseFloat($('#inputAdjustBackup').val()) || 0) : 0;
+                let annualAdj = $('#chkAdjustAnnual').is(':checked') ? (parseFloat($('#inputAdjustAnnual').val()) || 0) : 0;
+                let schemeAdj = $('#chkAdjustScheme').is(':checked') ? (parseFloat($('#inputAdjustScheme').val()) || 0) : 0;
+                let totalOffset = backupAdj + annualAdj + schemeAdj;
+                let netPay = parseFloat($('#totalAmount').val()) || 0;
+
+                if (gross <= 0 && totalOffset <= 0) {
+                    e.preventDefault();
+                    alert('Barah-e-karam Bill Amount dalein ya Claims select karein!');
+                    return false;
+                }
+
+                if (netPay > 0 && !$('#payFromAccount').val()) {
+                    e.preventDefault();
+                    alert('Barah-e-karam Pay From (Cash/Bank) Account muntakhib karein!');
+                    $('#payFromAccount').focus();
+                    return false;
+                }
+            });
             $(document).on('input', '.amount', function() {
                 calculateTotal();
             });

@@ -802,20 +802,37 @@ class VoucherController extends Controller
                 $adjustScheme = (float) ($request->adjust_scheme_amount ?? 0);
                 $totalClaimsAdjusted = $adjustBackup + $adjustAnnual + $adjustScheme;
 
+                $netCashPaid = (float) $totalAmount;
+
                 // 1. DEBIT SIDE (AP / AR / Accounts) - Table Destinations
-                if ($request->vendor_id && $request->amount) {
+                if ($request->vendor_id) {
                     $claimsApplied = false;
                     foreach ($request->vendor_id as $idx => $partyId) {
                         $type = $request->vendor_type[$idx] ?? null;
-                        $amt = (float) ($request->amount[$idx] ?? 0);
-                        if ($amt <= 0) {
-                            continue;
-                        }
+                        $amt = isset($request->amount[$idx]) ? (float) $request->amount[$idx] : 0;
 
                         $claimOffsetForThisRow = 0;
                         if ($type == 'vendor' && !$claimsApplied && $totalClaimsAdjusted > 0) {
                             $claimOffsetForThisRow = $totalClaimsAdjusted;
                             $claimsApplied = true;
+                        }
+
+                        // Determine gross amount to debit (Gross Bill cleared):
+                        // If user entered gross in row ($amt >= $claimOffsetForThisRow and $amt > 0):
+                        if ($amt >= $claimOffsetForThisRow && $amt > 0) {
+                            $grossSettled = $amt;
+                        } elseif ($amt > 0 && $netCashPaid > 0) {
+                            // User entered net cash in row
+                            $grossSettled = $amt + $claimOffsetForThisRow;
+                        } elseif ($claimOffsetForThisRow > 0) {
+                            // Pure claims adjustment against vendor bill
+                            $grossSettled = $claimOffsetForThisRow;
+                        } else {
+                            $grossSettled = $amt;
+                        }
+
+                        if ($grossSettled <= 0) {
+                            continue;
                         }
 
                         $controlAccountId = null;
@@ -830,7 +847,7 @@ class VoucherController extends Controller
                         if ($controlAccountId) {
                             $v2Lines[] = [
                                 'account_id' => $controlAccountId,
-                                'debit' => $amt + $claimOffsetForThisRow,
+                                'debit' => $grossSettled,
                                 'credit' => 0,
                                 'narration' => ($request->narration_text[$idx] ?? ("Payment to " . $type)) . ($claimOffsetForThisRow > 0 ? " (Includes Rs. {$claimOffsetForThisRow} Claim Offset)" : ""),
                             ];
@@ -839,19 +856,21 @@ class VoucherController extends Controller
                 }
 
                 // 2. CREDIT SIDE (Cash/Bank) - Header Source
-                if ($totalAmount > 0 && $request->header_account_id) {
+                if ($netCashPaid > 0 && $request->header_account_id) {
                     $v2Lines[] = [
                         'account_id' => $request->header_account_id,
                         'debit' => 0,
-                        'credit' => $totalAmount,
+                        'credit' => $netCashPaid,
                         'narration' => $request->remarks ?: "Payment from Cash/Bank",
                     ];
                 }
 
                 // 2b. CREDIT SIDE (Claim Offset) - Balancing Entry if Claims Deducted
+                // Claims offset reduces purchase expense / cost of purchases
                 if ($totalClaimsAdjusted > 0) {
+                    $purchaseExpenseId = $balanceService->getPurchaseExpenseId();
                     $v2Lines[] = [
-                        'account_id' => $balanceService->getAccountsPayableId(),
+                        'account_id' => $purchaseExpenseId,
                         'debit' => 0,
                         'credit' => $totalClaimsAdjusted,
                         'narration' => "Vendor Claims Offset (Backup: Rs. {$adjustBackup}, Annual: Rs. {$adjustAnnual}, Scheme: Rs. {$adjustScheme})",
@@ -871,19 +890,82 @@ class VoucherController extends Controller
                     \Log::info('V2 Payment Voucher Created Successfully.');
                 }
             } catch (\Exception $e) {
+                DB::rollBack();
                 \Log::error('V2 Payment Sync Error: '.$e->getMessage());
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Payment Voucher Error: ' . $e->getMessage(),
+                    ], 422);
+                }
+                return back()->with('error', 'Payment Voucher Error: ' . $e->getMessage());
             }
 
             /**
              * STEP 2: Legacy Table Destinations (Parties) - Update polymorphic ledger balances (Closing balances)
              */
-            if ($request->vendor_id && $request->amount) {
+            if ($request->vendor_id) {
                 $claimsAppliedLegacy = false;
                 foreach ($request->vendor_id as $index => $partyId) {
                     $type = $request->vendor_type[$index] ?? null;
                     $rowAmount = isset($request->amount[$index]) ? (float) $request->amount[$index] : 0;
 
-                    if ($rowAmount <= 0) {
+                    // Check if claim offsets apply to this vendor
+                    $claimOffset = 0;
+                    if ($type === 'vendor' && !$claimsAppliedLegacy && $totalClaimsAdjusted > 0) {
+                        $claimOffset = $totalClaimsAdjusted;
+                        $claimsAppliedLegacy = true;
+
+                        if ($adjustBackup > 0) {
+                            \App\Models\VendorIncentiveLedger::create([
+                                'vendor_id'         => (int) $partyId,
+                                'purchase_id'       => null,
+                                'type'              => 'backup',
+                                'entry_type'        => 'adjusted',
+                                'date'              => $receiptDate,
+                                'reference_no'      => $pvid,
+                                'debit'             => 0,
+                                'credit'            => $adjustBackup,
+                                'account_id'        => $request->header_account_id,
+                                'notes'             => "Backup Claim Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
+                                'admin_or_user_id'  => auth()->id() ?? 1,
+                            ]);
+                        }
+
+                        if ($adjustAnnual > 0) {
+                            \App\Models\VendorIncentiveLedger::create([
+                                'vendor_id'         => (int) $partyId,
+                                'purchase_id'       => null,
+                                'type'              => 'annual',
+                                'entry_type'        => 'adjusted',
+                                'date'              => $receiptDate,
+                                'reference_no'      => $pvid,
+                                'debit'             => 0,
+                                'credit'            => $adjustAnnual,
+                                'account_id'        => $request->header_account_id,
+                                'notes'             => "Annual Rebate Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
+                                'admin_or_user_id'  => auth()->id() ?? 1,
+                            ]);
+                        }
+
+                        if ($adjustScheme > 0) {
+                            \App\Models\VendorIncentiveLedger::create([
+                                'vendor_id'         => (int) $partyId,
+                                'purchase_id'       => null,
+                                'type'              => 'scheme',
+                                'entry_type'        => 'adjusted',
+                                'date'              => $receiptDate,
+                                'reference_no'      => $pvid,
+                                'debit'             => 0,
+                                'credit'            => $adjustScheme,
+                                'account_id'        => $request->header_account_id,
+                                'notes'             => "Scheme Discount Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
+                                'admin_or_user_id'  => auth()->id() ?? 1,
+                            ]);
+                        }
+                    }
+
+                    if ($rowAmount <= 0 && $claimOffset <= 0) {
                         continue;
                     }
 
@@ -891,66 +973,19 @@ class VoucherController extends Controller
                         $ledger = VendorLedger::where('vendor_id', $partyId)->latest()->first();
                         $bal = $ledger ? $ledger->closing_balance : 0;
 
-                        // Check if claim offsets apply to this vendor
-                        $claimOffset = 0;
-                        if (!$claimsAppliedLegacy && $totalClaimsAdjusted > 0) {
-                            $claimOffset = $totalClaimsAdjusted;
-                            $claimsAppliedLegacy = true;
-
-                            if ($adjustBackup > 0) {
-                                \App\Models\VendorIncentiveLedger::create([
-                                    'vendor_id'         => (int) $partyId,
-                                    'purchase_id'       => null,
-                                    'type'              => 'backup',
-                                    'entry_type'        => 'adjusted',
-                                    'date'              => $receiptDate,
-                                    'reference_no'      => $pvid,
-                                    'debit'             => 0,
-                                    'credit'            => $adjustBackup,
-                                    'account_id'        => $request->header_account_id,
-                                    'notes'             => "Backup Claim Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
-                                    'admin_or_user_id'  => auth()->id(),
-                                ]);
-                            }
-
-                            if ($adjustAnnual > 0) {
-                                \App\Models\VendorIncentiveLedger::create([
-                                    'vendor_id'         => (int) $partyId,
-                                    'purchase_id'       => null,
-                                    'type'              => 'annual',
-                                    'entry_type'        => 'adjusted',
-                                    'date'              => $receiptDate,
-                                    'reference_no'      => $pvid,
-                                    'debit'             => 0,
-                                    'credit'            => $adjustAnnual,
-                                    'account_id'        => $request->header_account_id,
-                                    'notes'             => "Annual Rebate Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
-                                    'admin_or_user_id'  => auth()->id(),
-                                ]);
-                            }
-
-                            if ($adjustScheme > 0) {
-                                \App\Models\VendorIncentiveLedger::create([
-                                    'vendor_id'         => (int) $partyId,
-                                    'purchase_id'       => null,
-                                    'type'              => 'scheme',
-                                    'entry_type'        => 'adjusted',
-                                    'date'              => $receiptDate,
-                                    'reference_no'      => $pvid,
-                                    'debit'             => 0,
-                                    'credit'            => $adjustScheme,
-                                    'account_id'        => $request->header_account_id,
-                                    'notes'             => "Scheme Discount Offset against Bill via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : ""),
-                                    'admin_or_user_id'  => auth()->id(),
-                                ]);
-                            }
+                        if ($rowAmount >= $claimOffset && $rowAmount > 0) {
+                            $totalBillCleared = $rowAmount;
+                        } elseif ($rowAmount > 0 && $totalAmount > 0) {
+                            $totalBillCleared = $rowAmount + $claimOffset;
+                        } elseif ($claimOffset > 0) {
+                            $totalBillCleared = $claimOffset;
+                        } else {
+                            $totalBillCleared = $rowAmount;
                         }
-
-                        $totalBillCleared = $rowAmount + $claimOffset;
 
                         VendorLedger::create([
                             'vendor_id'         => $partyId,
-                            'admin_or_user_id'  => auth()->id(),
+                            'admin_or_user_id'  => auth()->id() ?? 1,
                             'opening_balance'   => 0,
                             'previous_balance'  => $bal,
                             'closing_balance'   => $bal - $totalBillCleared, // ✅ MINUS: payment + claims offset reduces vendor payable
@@ -961,7 +996,7 @@ class VoucherController extends Controller
                         $bal = $ledger ? $ledger->closing_balance : 0;
                         CustomerLedger::create([
                             'customer_id'      => $partyId,
-                            'admin_or_user_id' => auth()->id(),
+                            'admin_or_user_id' => auth()->id() ?? 1,
                             'previous_balance' => $bal,
                             'opening_balance'  => 0,
                             'closing_balance'  => $bal + $rowAmount, // ✅ PLUS: paying customer increases customer balance
@@ -975,7 +1010,7 @@ class VoucherController extends Controller
                             'amount'             => $rowAmount,
                             'account_id'         => $request->header_account_id,
                             'narration'          => $request->narration_text[$index] ?? ("Commission payment via Payment Voucher {$pvid}" . ($request->remarks ? " - {$request->remarks}" : "")),
-                            'admin_or_user_id'   => auth()->id(),
+                            'admin_or_user_id'   => auth()->id() ?? 1,
                         ]);
                     } elseif ($type) {
                         // Account ID in table
