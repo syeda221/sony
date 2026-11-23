@@ -3336,20 +3336,51 @@ class ReportingController extends Controller
         $balanceService = app(\App\Services\BalanceService::class);
 
         // 1. Current Assets: Cash & Bank / Liquid Accounts
-        // Include active Cash/Bank liquid accounts, excluding control accounts and Equity/Capital accounts
+        // Include ONLY active Cash & Bank / Liquid Asset accounts.
+        // Strictly exclude Expense accounts, Revenue accounts, Equity/Capital accounts, Liabilities, and System Control accounts.
         $assetAccounts = DB::table('accounts')
-            ->whereNotIn('account_code', ['AP', 'AR', 'PURCHASE', 'SALES', 'CAP-0001'])
-            ->whereNotIn('title', ['Accounts Receivable', 'Accounts Payable', 'Sales Revenue', 'Purchase Expense', "Owner's Capital"])
+            ->leftJoin('account_heads', 'account_heads.id', '=', 'accounts.head_id')
+            ->where('accounts.status', 1)
+            // Exclude control accounts
+            ->whereNotIn('accounts.account_code', ['AP', 'AR', 'PURCHASE', 'SALES', 'CAP-0001'])
+            ->whereNotIn('accounts.title', ['Accounts Receivable', 'Accounts Payable', 'Sales Revenue', 'Purchase Expense', "Owner's Capital"])
+            // Exclude Expense, Capital, Revenue codes
             ->where(function ($q) {
-                $q->whereNull('account_code')
-                  ->orWhereRaw("LOWER(account_code) NOT LIKE '%cap%'");
+                $q->whereNull('accounts.account_code')
+                  ->orWhere(function ($sub) {
+                      $sub->whereRaw("LOWER(accounts.account_code) NOT LIKE 'exp%'")
+                          ->whereRaw("LOWER(accounts.account_code) NOT LIKE '%cap%'")
+                          ->whereRaw("LOWER(accounts.account_code) NOT LIKE 'rev%'")
+                          ->whereRaw("LOWER(accounts.account_code) NOT LIKE 'inc%'");
+                  });
+            })
+            // Exclude heads that are Expense, Revenue, Capital, Equity, Liability
+            ->where(function ($q) {
+                $q->whereNull('account_heads.name')
+                  ->orWhere(function ($sub) {
+                      $sub->whereRaw("LOWER(account_heads.name) NOT LIKE '%expense%'")
+                          ->whereRaw("LOWER(account_heads.name) NOT LIKE '%revenue%'")
+                          ->whereRaw("LOWER(account_heads.name) NOT LIKE '%income%'")
+                          ->whereRaw("LOWER(account_heads.name) NOT LIKE '%capital%'")
+                          ->whereRaw("LOWER(account_heads.name) NOT LIKE '%equity%'")
+                          ->whereRaw("LOWER(account_heads.name) NOT LIKE '%liability%'")
+                          ->whereRaw("LOWER(account_heads.name) NOT LIKE '%payable%'");
+                  });
             })
             ->where(function ($q) {
-                $q->whereRaw("LOWER(title) NOT LIKE '%capital%'")
-                  ->whereRaw("LOWER(title) NOT LIKE '%owner%'");
+                $q->whereNull('account_heads.type')
+                  ->orWhereNotIn('account_heads.type', ['Expense', 'Revenue', 'Equity', 'Liability']);
             })
-            ->where('status', 1)
-            ->orderBy('id', 'asc')
+            // Exclude accounts with Expense, Capital, Owner, Revenue, Payable in title
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(accounts.title) NOT LIKE '%expense%'")
+                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%capital%'")
+                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%owner%'")
+                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%revenue%'")
+                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%payable%'");
+            })
+            ->select('accounts.*')
+            ->orderBy('accounts.id', 'asc')
             ->get();
 
         $cashAccounts = [];
