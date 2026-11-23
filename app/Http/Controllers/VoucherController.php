@@ -1101,7 +1101,12 @@ class VoucherController extends Controller
     public function Paymentprint($id)
     {
         // 1. Try V2 VoucherMaster First
-        $voucherV2 = \App\Models\VoucherMaster::find($id);
+        $voucherV2 = is_numeric($id) ? \App\Models\VoucherMaster::find($id) : null;
+        if (! $voucherV2) {
+            $voucherV2 = \App\Models\VoucherMaster::where('voucher_no', $id)
+                ->orWhere('remarks', 'like', "%{$id}%")
+                ->first();
+        }
 
         if ($voucherV2) {
             // Lazy load relationships
@@ -1190,7 +1195,13 @@ class VoucherController extends Controller
             return view('admin_panel.vochers.payment_vochers.print', compact('voucher', 'rows', 'party', 'previousBalance'));
         }
 
-        $voucher = \App\Models\PaymentVoucher::findOrFail($id);
+        $voucher = is_numeric($id) ? \App\Models\PaymentVoucher::find($id) : null;
+        if (! $voucher) {
+            $voucher = \App\Models\PaymentVoucher::where('pvid', $id)->first();
+        }
+        if (! $voucher) {
+            abort(404, 'Payment Voucher not found');
+        }
 
         // Decode JSON arrays
         $narrations = json_decode($voucher->narration_id, true) ?? [];
