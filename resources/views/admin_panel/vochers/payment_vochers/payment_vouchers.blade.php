@@ -707,8 +707,14 @@
                 }
             });
 
-            // Form Submit Validation
+            // Form Submit Validation & Double-click Prevention
+            let isPvSubmitting = false;
             $('form').on('submit', function(e) {
+                if (isPvSubmitting) {
+                    e.preventDefault();
+                    return false;
+                }
+
                 let gross = 0;
                 $('.amount').each(function() { gross += parseFloat($(this).val()) || 0; });
                 let backupAdj = $('#chkAdjustBackup').is(':checked') ? (parseFloat($('#inputAdjustBackup').val()) || 0) : 0;
@@ -729,6 +735,10 @@
                     $('#payFromAccount').focus();
                     return false;
                 }
+
+                isPvSubmitting = true;
+                let $btn = $(this).find('button[type="submit"]');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Saving...');
             });
             $(document).on('input', '.amount', function() {
                 calculateTotal();

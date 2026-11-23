@@ -2128,11 +2128,15 @@ class VoucherController extends Controller
                 \App\Models\SalesOfficerPayout::where('payment_voucher_id', $legacyPayment->id)
                     ->orWhere('voucher_no', $legacyPayment->pvid)
                     ->delete();
+                if ($legacyPayment->pvid) {
+                    \App\Models\VendorIncentiveLedger::where('reference_no', $legacyPayment->pvid)->delete();
+                }
                 $journalService->reverseEntriesForSource($legacyPayment);
                 $legacyPayment->delete();
             }
             if ($voucherMaster && !empty($voucherMaster->voucher_no)) {
                 \App\Models\SalesOfficerPayout::where('voucher_no', $voucherMaster->voucher_no)->delete();
+                \App\Models\VendorIncentiveLedger::where('reference_no', $voucherMaster->voucher_no)->delete();
             }
 
             DB::commit();
