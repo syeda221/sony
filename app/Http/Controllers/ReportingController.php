@@ -2292,13 +2292,13 @@ class ReportingController extends Controller
             $totalIncentiveIncome = $backupIncome + $annualIncome;
         }
 
-        // 7. Sales Officer Commission Expense incurred in this period
+        // 7. Sales Officer Commission Expense (Tracked for report, NOT subtracted from Net Profit)
         $totalSalesOfficerCommission = 0;
         if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
             $totalSalesOfficerCommission = (float) $balanceService->getTotalSalesOfficerCommissionEarnedBetween($start, $end);
         }
 
-        $netProfit = $totalGrossProfit + $totalIncentiveIncome - $totalExpenses - $totalSalesOfficerCommission;
+        $netProfit = $totalGrossProfit + $totalIncentiveIncome - $totalExpenses;
 
         return response()->json([
             'products'                 => $productStats,
@@ -3480,10 +3480,10 @@ class ReportingController extends Controller
             $totalPayables += $vendBal;
         }
 
-        // Sales Officer Commission Payable (Outstanding earned commission minus payments made)
-        $totalSalesOfficerCommissionPayable = (float) $balanceService->getTotalSalesOfficerPayableAsOfDate($dateOnly);
+        // Sales Officer Commission Payable (Excluded from Current Liabilities as requested)
+        $totalSalesOfficerCommissionPayable = 0;
 
-        $currentLiabilitiesTotal = round($totalPayables + $totalSalesOfficerCommissionPayable, 2);
+        $currentLiabilitiesTotal = round($totalPayables, 2);
 
         // Stock in Trade / Inventory on Hand (Exact valuation synchronized with Item Stock Report)
         $stockReq = new Request([

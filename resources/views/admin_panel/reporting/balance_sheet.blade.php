@@ -497,7 +497,7 @@
                                     </td>
                                     <td class="bs-amount text-danger" id="lblPayables">Rs 0.00</td>
                                 </tr>
-                                <tr id="rowSOCommission" class="drilldown-row" title="Click to view Sales Officer Commission Report">
+                                <tr id="rowSOCommission" class="drilldown-row" title="Click to view Sales Officer Commission Report" style="display: none;">
                                     <td class="bs-sub-row">
                                         <i class="fas fa-user-tie me-2" style="color: #7c3aed;"></i>Sales Officer Commission Payable
                                         <span class="drilldown-badge" style="background:#f3e8ff; color:#6d28d9;"><i class="fa-solid fa-user-tie me-1"></i>Officers</span>
@@ -639,7 +639,12 @@
                 let liabEquityTotal = res.totals ? (res.totals.liabilities_and_equity || (liabTotal + equityTotal)) : (liabTotal + equityTotal);
 
                 $("#lblPayables").text(fmt(payables));
-                $("#lblSOCommission").text(fmt(soCommission));
+                if (soCommission > 0) {
+                    $("#rowSOCommission").show();
+                    $("#lblSOCommission").text(fmt(soCommission));
+                } else {
+                    $("#rowSOCommission").hide();
+                }
                 $("#lblLiabTotal").text(fmt(liabTotal));
                 $("#lblCapital").text(fmt(capital));
                 $("#lblRetainedEarnings").text(fmt(retainedEarnings));
