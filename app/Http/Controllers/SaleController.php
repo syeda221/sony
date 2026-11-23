@@ -2151,6 +2151,9 @@ class SaleController extends Controller
                 $financedAmount = max(0, $totalAmount - $advanceAmount);
 
                 $customInstallments = $request->input('installments');
+                if (is_string($customInstallments)) {
+                    $customInstallments = json_decode($customInstallments, true);
+                }
                 if (is_array($customInstallments) && count($customInstallments) > 0) {
                     $durationMonths = count($customInstallments);
                     if (!empty($customInstallments[0]['due_date'])) {

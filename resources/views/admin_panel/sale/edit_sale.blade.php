@@ -1926,20 +1926,30 @@
                                 $planDuration = $hasPlan ? (int)$sale->installmentPlan->duration_months : 12;
                                 $planAdvance = $hasPlan ? (float)$sale->installmentPlan->advance_amount : 0;
                                 $planAdvAccId = $hasPlan ? $sale->installmentPlan->advance_account_id : null;
-                                $planStartDate = $hasPlan && $sale->installmentPlan->start_date ? $sale->installmentPlan->start_date->format('Y-m-d') : date('Y-m-d', strtotime('+1 month'));
-                                $savedInstallmentsJson = json_encode(
-                                    $hasPlan
-                                        ? $sale->installmentPlan->installments()->orderBy('installment_no')->get()->map(function($ins) {
-                                            return [
-                                                'installment_no' => (int)$ins->installment_no,
-                                                'due_date' => $ins->due_date ? \Carbon\Carbon::parse($ins->due_date)->format('Y-m-d') : '',
-                                                'amount' => (float)$ins->amount,
-                                                'status' => $ins->status,
-                                                'paid_amount' => (float)$ins->paid_amount,
-                                            ];
-                                        })
-                                        : []
-                                );
+                                $planStartDate = $hasPlan && $sale->installmentPlan->start_date 
+                                    ? ($sale->installmentPlan->start_date instanceof \Carbon\Carbon ? $sale->installmentPlan->start_date->format('Y-m-d') : date('Y-m-d', strtotime($sale->installmentPlan->start_date))) 
+                                    : date('Y-m-d', strtotime('+1 month'));
+
+                                $savedInstallmentsData = [];
+                                if ($hasPlan && $sale->installmentPlan->installments) {
+                                    $savedInstallmentsData = $sale->installmentPlan->installments->sortBy('installment_no')->map(function($ins) {
+                                        $d = $ins->due_date;
+                                        $dStr = '';
+                                        if ($d instanceof \Carbon\Carbon) {
+                                            $dStr = $d->format('Y-m-d');
+                                        } elseif (!empty($d)) {
+                                            $dStr = date('Y-m-d', strtotime($d));
+                                        }
+                                        return [
+                                            'installment_no' => (int)$ins->installment_no,
+                                            'due_date' => $dStr,
+                                            'amount' => (float)$ins->amount,
+                                            'status' => (string)$ins->status,
+                                            'paid_amount' => (float)$ins->paid_amount,
+                                        ];
+                                    })->values()->all();
+                                }
+                                $savedInstallmentsJson = json_encode($savedInstallmentsData);
                             @endphp
 
                             {{-- Collapsible Installment Details --}}
@@ -3088,7 +3098,7 @@
                 if (typeof updateBalancesOnPaymentChange === 'function') updateBalancesOnPaymentChange();
             };
 
-            var initialSavedInstallments = {!! $savedInstallmentsJson ?? '[]' !!};
+            var savedInstallmentsList = {!! $savedInstallmentsJson ?? '[]' !!};
 
             function getInstallmentDateSafe(baseDate, monthOffset) {
                 var year = baseDate.getFullYear();
@@ -3220,20 +3230,20 @@
                 $('#dispMonthsLabel').text(durationMonths + ' months');
                 $('#badgeSelectedMonths').text(durationMonths + ' Month' + (durationMonths > 1 ? 's' : '') + ' Selected');
 
-                // Build Schedule Rows
                 var tbody = $('#installmentScheduleTbody');
-                tbody.empty();
+                var existingRowCount = tbody.find('tr').length;
 
-                var startDateStr = $('#installmentStartDate').val();
-                var baseDate = startDateStr ? new Date(startDateStr) : new Date();
-                if (isNaN(baseDate.getTime())) {
-                    baseDate = new Date();
+                // PRIORITY 1: If table already has rows matching duration and user didn't request a reset, keep them!
+                if (!resetEqual && existingRowCount === durationMonths) {
+                    updateInstallmentScheduleSummary(financed);
+                    return;
                 }
 
-                // If loading saved installments from existing plan on initial page load
-                if (!resetEqual && initialSavedInstallments && initialSavedInstallments.length > 0) {
-                    for (var s = 0; s < initialSavedInstallments.length; s++) {
-                        var itm = initialSavedInstallments[s];
+                // PRIORITY 2: If loading saved installments from DB on edit page and user didn't ask to reset:
+                if (!resetEqual && savedInstallmentsList && savedInstallmentsList.length > 0) {
+                    tbody.empty();
+                    for (var s = 0; s < savedInstallmentsList.length; s++) {
+                        var itm = savedInstallmentsList[s];
                         var num = itm.installment_no || (s + 1);
                         var amtVal = (typeof itm.amount !== 'undefined') ? parseFloat(itm.amount) : 0;
                         var isPaid = (itm.status === 'paid');
@@ -3259,9 +3269,17 @@
                             '</tr>';
                         tbody.append(rowHtml);
                     }
-                    initialSavedInstallments = null; // Cleared after first load
                     updateInstallmentScheduleSummary(financed);
                     return;
+                }
+
+                // PRIORITY 3: Build Schedule Rows from scratch (Reset Equal or New Duration)
+                tbody.empty();
+
+                var startDateStr = $('#installmentStartDate').val();
+                var baseDate = startDateStr ? new Date(startDateStr) : new Date();
+                if (isNaN(baseDate.getTime())) {
+                    baseDate = new Date();
                 }
 
                 var accumulated = 0;
@@ -3315,12 +3333,14 @@
                 $(this).addClass('active');
                 var m = $(this).data('months');
                 $('#installmentDurationMonths').val(m);
+                savedInstallmentsList = []; // Duration changed, discard previous saved list
                 window.recalculateInstallmentPlan(true);
             });
 
             // Advance amount change
             $('#installmentAdvanceAmount').on('input change', function() {
                 syncAdvanceToAccount();
+                savedInstallmentsList = [];
                 window.recalculateInstallmentPlan(true);
             });
 
@@ -3328,6 +3348,7 @@
             $('#btnAdvZero').on('click', function() {
                 $('#installmentAdvanceAmount').val(0);
                 syncAdvanceToAccount();
+                savedInstallmentsList = [];
                 window.recalculateInstallmentPlan(true);
             });
             $('#btnAdv25').on('click', function() {
@@ -3335,6 +3356,7 @@
                 var adv = Math.round(total * 0.25);
                 $('#installmentAdvanceAmount').val(adv);
                 syncAdvanceToAccount();
+                savedInstallmentsList = [];
                 window.recalculateInstallmentPlan(true);
             });
             $('#btnAdv50').on('click', function() {
@@ -3342,6 +3364,7 @@
                 var adv = Math.round(total * 0.50);
                 $('#installmentAdvanceAmount').val(adv);
                 syncAdvanceToAccount();
+                savedInstallmentsList = [];
                 window.recalculateInstallmentPlan(true);
             });
 
@@ -3372,6 +3395,7 @@
             $(document).on('click', '#btnResetEqualSplit', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                savedInstallmentsList = []; // Discard on reset
                 window.recalculateInstallmentPlan(true);
             });
 

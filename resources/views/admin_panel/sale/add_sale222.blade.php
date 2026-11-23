@@ -3318,8 +3318,16 @@
                 $('#dispMonthsLabel').text(durationMonths + ' months');
                 $('#badgeSelectedMonths').text(durationMonths + ' Month' + (durationMonths > 1 ? 's' : '') + ' Selected');
 
-                // Build Schedule Rows
                 var tbody = $('#installmentScheduleTbody');
+                var existingRowCount = tbody.find('tr').length;
+
+                // PRIORITY 1: If table already has rows matching duration and user didn't request a reset, keep them!
+                if (!resetEqual && existingRowCount === durationMonths) {
+                    updateInstallmentScheduleSummary(financed);
+                    return;
+                }
+
+                // PRIORITY 2: Build Schedule Rows from scratch (Reset Equal or New Duration)
                 tbody.empty();
 
                 var startDateStr = $('#installmentStartDate').val();
@@ -3379,34 +3387,34 @@
                 $(this).addClass('active');
                 var m = $(this).data('months');
                 $('#installmentDurationMonths').val(m);
-                window.recalculateInstallmentPlan();
+                window.recalculateInstallmentPlan(true);
             });
 
             // Advance amount change
             $('#installmentAdvanceAmount').on('input change', function() {
                 syncAdvanceToAccount();
-                window.recalculateInstallmentPlan();
+                window.recalculateInstallmentPlan(true);
             });
 
             // Quick advance percentage buttons
             $('#btnAdvZero').on('click', function() {
                 $('#installmentAdvanceAmount').val(0);
                 syncAdvanceToAccount();
-                window.recalculateInstallmentPlan();
+                window.recalculateInstallmentPlan(true);
             });
             $('#btnAdv25').on('click', function() {
                 var total = parseFloat($('#tCurrentBill').text()) || parseFloat($('#totalBalance').val()) || 0;
                 var adv = Math.round(total * 0.25);
                 $('#installmentAdvanceAmount').val(adv);
                 syncAdvanceToAccount();
-                window.recalculateInstallmentPlan();
+                window.recalculateInstallmentPlan(true);
             });
             $('#btnAdv50').on('click', function() {
                 var total = parseFloat($('#tCurrentBill').text()) || parseFloat($('#totalBalance').val()) || 0;
                 var adv = Math.round(total * 0.50);
                 $('#installmentAdvanceAmount').val(adv);
                 syncAdvanceToAccount();
-                window.recalculateInstallmentPlan();
+                window.recalculateInstallmentPlan(true);
             });
 
             // Advance account change
