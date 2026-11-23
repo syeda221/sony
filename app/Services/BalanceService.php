@@ -434,17 +434,34 @@ class BalanceService
             ->orderBy('entry_date')
             ->orderBy('id')
             ->get()
-            ->map(fn($e) => [
-                'source_type'       => $e->source_type,
-                'source_id'         => $e->source_id,
-                'date'              => $e->entry_date,
-                'invoice_no'        => null,
-                'vendor_invoice_no' => null,
-                'description'       => $e->description,
-                'debit'             => (float) $e->debit,   // Dr = reduces what we owe
-                'credit'            => (float) $e->credit,  // Cr = increases what we owe (e.g. refunds/adjustments)
-                'sort_date'         => $e->entry_date,
-            ]);
+            ->map(function ($e) {
+                $refNo = null;
+                if ($e->source_type === \App\Models\VoucherMaster::class && $e->source_id) {
+                    $vm = \App\Models\VoucherMaster::find($e->source_id);
+                    if ($vm) {
+                        if (preg_match('/Ref:\s*([^)]+)/', $vm->remarks, $m)) {
+                            $refNo = trim($m[1]);
+                        } else {
+                            $refNo = $vm->voucher_no;
+                        }
+                    }
+                } elseif ($e->source_type === \App\Models\PaymentVoucher::class && $e->source_id) {
+                    $pv = \App\Models\PaymentVoucher::find($e->source_id);
+                    $refNo = $pv?->pvid;
+                }
+
+                return [
+                    'source_type'       => $e->source_type,
+                    'source_id'         => $e->source_id,
+                    'date'              => $e->entry_date,
+                    'invoice_no'        => $refNo,
+                    'vendor_invoice_no' => null,
+                    'description'       => $e->description,
+                    'debit'             => (float) $e->debit,   // Dr = reduces what we owe
+                    'credit'            => (float) $e->credit,  // Cr = increases what we owe (e.g. refunds/adjustments)
+                    'sort_date'         => $e->entry_date,
+                ];
+            });
 
         // Merge & sort
         $all = collect([])

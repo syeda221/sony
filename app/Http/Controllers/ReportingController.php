@@ -3195,22 +3195,19 @@ class ReportingController extends Controller
                         $desc .= ' [A/C: ' . $accountName . ']';
                     }
 
-                    $ref = '-';
-                    if (preg_match('/PUR-(\S+)/', $desc, $matches)) {
-                        $ref = 'PUR-' . $matches[1];
-                    } elseif (preg_match('/Payment #(\S+)/', $desc, $matches)) {
-                        $ref = $matches[1];
-                    } elseif (preg_match('/Purchase #(\S+)/', $desc, $matches)) {
-                        $ref = $matches[1];
-                    }
-
-                    $entryDate = $row['date'];
-                    if ($entryDate instanceof \Carbon\Carbon) {
-                        $formattedDate = $entryDate->format('d-M-Y');
-                        $sortDate = $entryDate->format('Y-m-d');
-                    } else {
-                        $formattedDate = \Carbon\Carbon::parse($entryDate)->format('d-M-Y');
-                        $sortDate = \Carbon\Carbon::parse($entryDate)->format('Y-m-d');
+                    $ref = $row['invoice_no'] ?? '-';
+                    if ($ref === '-' || empty($ref)) {
+                        if (preg_match('/PUR-(\S+)/', $desc, $matches)) {
+                            $ref = 'PUR-' . $matches[1];
+                        } elseif (preg_match('/Payment #(\S+)/', $desc, $matches)) {
+                            $ref = $matches[1];
+                        } elseif (preg_match('/Purchase #(\S+)/', $desc, $matches)) {
+                            $ref = $matches[1];
+                        } elseif (preg_match('/PVID-(\S+)/', $desc, $matches)) {
+                            $ref = 'PVID-' . $matches[1];
+                        } elseif (preg_match('/PA-\d+-\d+/', $desc, $matches)) {
+                            $ref = $matches[0];
+                        }
                     }
 
                     $invoiceUrl = null;
@@ -3218,11 +3215,29 @@ class ReportingController extends Controller
                         if (!empty($row['source_id'])) {
                             $invoiceUrl = route('purchase.invoice', $row['source_id']);
                         }
+                    } elseif (($row['source_type'] ?? '') === \App\Models\VoucherMaster::class) {
+                        if (!empty($row['source_id'])) {
+                            $vm = \App\Models\VoucherMaster::find($row['source_id']);
+                            if ($vm && $vm->voucher_type === 'payment') {
+                                $invoiceUrl = route('Paymentprint', $vm->id);
+                            }
+                        }
+                    } elseif (($row['source_type'] ?? '') === \App\Models\PaymentVoucher::class || ($row['source_type'] ?? '') === 'PaymentVoucher' || str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
+                        $pvId = $row['source_id'] ?? null;
+                        if (!$pvId && (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-'))) {
+                            $pvId = \App\Models\PaymentVoucher::where('pvid', $ref)->value('id') ?? \App\Models\VoucherMaster::where('voucher_no', $ref)->value('id') ?? $ref;
+                        }
+                        if ($pvId) {
+                            $invoiceUrl = route('Paymentprint', $pvId);
+                        }
                     }
+
                     if (!$invoiceUrl && $ref !== '-') {
                         $purchaseId = \App\Models\Purchase::where('invoice_no', $ref)->orWhere('id', $ref)->value('id');
                         if ($purchaseId) {
                             $invoiceUrl = route('purchase.invoice', $purchaseId);
+                        } elseif (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
+                            $invoiceUrl = route('Paymentprint', $ref);
                         }
                     }
 
@@ -3285,13 +3300,19 @@ class ReportingController extends Controller
                 $desc .= ' [A/C: ' . $accountName . ']';
             }
 
-            $ref = '-';
-            if (preg_match('/PUR-(\S+)/', $desc, $matches)) {
-                $ref = 'PUR-' . $matches[1];
-            } elseif (preg_match('/Payment #(\S+)/', $desc, $matches)) {
-                $ref = $matches[1];
-            } elseif (preg_match('/Purchase #(\S+)/', $desc, $matches)) {
-                $ref = $matches[1];
+            $ref = $row['invoice_no'] ?? '-';
+            if ($ref === '-' || empty($ref)) {
+                if (preg_match('/PUR-(\S+)/', $desc, $matches)) {
+                    $ref = 'PUR-' . $matches[1];
+                } elseif (preg_match('/Payment #(\S+)/', $desc, $matches)) {
+                    $ref = $matches[1];
+                } elseif (preg_match('/Purchase #(\S+)/', $desc, $matches)) {
+                    $ref = $matches[1];
+                } elseif (preg_match('/PVID-(\S+)/', $desc, $matches)) {
+                    $ref = 'PVID-' . $matches[1];
+                } elseif (preg_match('/PA-\d+-\d+/', $desc, $matches)) {
+                    $ref = $matches[0];
+                }
             }
 
             $invoiceUrl = null;
@@ -3299,11 +3320,29 @@ class ReportingController extends Controller
                 if (!empty($row['source_id'])) {
                     $invoiceUrl = route('purchase.invoice', $row['source_id']);
                 }
+            } elseif (($row['source_type'] ?? '') === \App\Models\VoucherMaster::class) {
+                if (!empty($row['source_id'])) {
+                    $vm = \App\Models\VoucherMaster::find($row['source_id']);
+                    if ($vm && $vm->voucher_type === 'payment') {
+                        $invoiceUrl = route('Paymentprint', $vm->id);
+                    }
+                }
+            } elseif (($row['source_type'] ?? '') === \App\Models\PaymentVoucher::class || ($row['source_type'] ?? '') === 'PaymentVoucher' || str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
+                $pvId = $row['source_id'] ?? null;
+                if (!$pvId && (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-'))) {
+                    $pvId = \App\Models\PaymentVoucher::where('pvid', $ref)->value('id') ?? \App\Models\VoucherMaster::where('voucher_no', $ref)->value('id') ?? $ref;
+                }
+                if ($pvId) {
+                    $invoiceUrl = route('Paymentprint', $pvId);
+                }
             }
+
             if (!$invoiceUrl && $ref !== '-') {
                 $purchaseId = \App\Models\Purchase::where('invoice_no', $ref)->orWhere('id', $ref)->value('id');
                 if ($purchaseId) {
                     $invoiceUrl = route('purchase.invoice', $purchaseId);
+                } elseif (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
+                    $invoiceUrl = route('Paymentprint', $ref);
                 }
             }
 
@@ -3381,6 +3420,14 @@ class ReportingController extends Controller
                 $sortDate = $row->date ? $row->date->format('Y-m-d') : '-';
                 $invoiceUrl = $row->purchase_id ? route('purchase.invoice', $row->purchase_id) : null;
                 $ref = $row->reference_no ?: ($row->purchase_id ? 'PUR-' . $row->purchase_id : '-');
+                if (!$invoiceUrl && !empty($ref) && $ref !== '-') {
+                    if (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
+                        $invoiceUrl = route('Paymentprint', $ref);
+                    } elseif (str_starts_with((string)$ref, 'PUR-')) {
+                        $pId = \App\Models\Purchase::where('invoice_no', $ref)->value('id');
+                        if ($pId) $invoiceUrl = route('purchase.invoice', $pId);
+                    }
+                }
 
                 return [
                     'sort_date'         => $sortDate,
@@ -3427,6 +3474,14 @@ class ReportingController extends Controller
             $sortDate = $row['date'] ? \Carbon\Carbon::parse($row['date'])->format('Y-m-d') : '-';
             $invoiceUrl = !empty($row['purchase_id']) ? route('purchase.invoice', $row['purchase_id']) : null;
             $ref = $row['reference_no'] ?: ($row['purchase_id'] ? 'PUR-' . $row['purchase_id'] : '-');
+            if (!$invoiceUrl && !empty($ref) && $ref !== '-') {
+                if (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
+                    $invoiceUrl = route('Paymentprint', $ref);
+                } elseif (str_starts_with((string)$ref, 'PUR-')) {
+                    $pId = \App\Models\Purchase::where('invoice_no', $ref)->value('id');
+                    if ($pId) $invoiceUrl = route('purchase.invoice', $pId);
+                }
+            }
 
             return [
                 'sort_date'         => $sortDate,
