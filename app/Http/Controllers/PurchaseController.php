@@ -473,17 +473,25 @@ class PurchaseController extends Controller
 
                 // Process Batch Creation/Stock
                 $batchId = null;
+                $itemLineTotal = (float) ($item->line_total ?? 0);
+                $effectiveUnitCost = ($baseQty > 0 && $itemLineTotal > 0)
+                    ? round($itemLineTotal / $baseQty, 2)
+                    : (float) $item->price;
+
                 if (!empty($item->batch_no)) {
                     $batch = \App\Models\ProductBatch::firstOrCreate([
                         'product_id' => $item->product_id,
                         'warehouse_id' => $itemWarehouseId,
                         'batch_no' => $item->batch_no,
                     ], [
-                        'cost_price' => $item->price,
+                        'cost_price' => $effectiveUnitCost,
                         'mfg_date' => $item->mfg_date,
                         'expiry_date' => $item->exp_date,
                         'qty' => 0,
                     ]);
+                    if ($effectiveUnitCost > 0) {
+                        $batch->cost_price = $effectiveUnitCost;
+                    }
                     if (!empty($item->mfg_date) && empty($batch->mfg_date)) {
                         $batch->mfg_date = $item->mfg_date;
                     }
@@ -517,6 +525,11 @@ class PurchaseController extends Controller
                 // Process Serial / IMEI Numbers Creation
                 $serialsList = is_array($item->serials) ? $item->serials : (is_string($item->serials) ? json_decode($item->serials, true) : []);
                 if (is_array($serialsList) && count($serialsList) > 0) {
+                    $serialPieces = $baseQty > 0 ? $baseQty : count($serialsList);
+                    $effectiveSerialCost = ($serialPieces > 0 && $itemLineTotal > 0)
+                        ? round($itemLineTotal / $serialPieces, 2)
+                        : (float) $item->price;
+
                     foreach ($serialsList as $sNum) {
                         $sNum = trim($sNum);
                         if ($sNum !== '') {
@@ -527,7 +540,7 @@ class PurchaseController extends Controller
                                 'warehouse_id' => $itemWarehouseId,
                                 'batch_id' => $batchId,
                                 'status' => 'available',
-                                'cost_price' => $item->price,
+                                'cost_price' => $effectiveSerialCost,
                             ]);
                         }
                     }
@@ -1015,6 +1028,28 @@ class PurchaseController extends Controller
                     'length' => $lengths[$i] ?? null,
                     'width' => $widths[$i] ?? null,
                 ]);
+
+                // Update / create serials in purchase update
+                if (!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) {
+                    $serialPieces = $baseQty > 0 ? $baseQty : count($itemSerialsParsed);
+                    $effectiveSerialCost = ($serialPieces > 0 && $lineTotal > 0)
+                        ? round($lineTotal / $serialPieces, 2)
+                        : (float) $price;
+
+                    foreach ($itemSerialsParsed as $sNum) {
+                        $sNum = trim($sNum);
+                        if ($sNum !== '') {
+                            \App\Models\ProductSerial::updateOrCreate([
+                                'product_id' => $pid,
+                                'serial_number' => $sNum,
+                            ], [
+                                'warehouse_id' => $itemWh,
+                                'status' => 'available',
+                                'cost_price' => $effectiveSerialCost,
+                            ]);
+                        }
+                    }
+                }
 
                 $subtotal += $lineTotal;
                 $totalExclusiveGst += $exclusiveGstAmount;
@@ -1801,6 +1836,28 @@ class PurchaseController extends Controller
                     'length' => $lengths[$i] ?? null,
                     'width' => $widths[$i] ?? null,
                 ]);
+
+                // Update / create serials in purchase update
+                if (!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) {
+                    $serialPieces = $baseQty > 0 ? $baseQty : count($itemSerialsParsed);
+                    $effectiveSerialCost = ($serialPieces > 0 && $lineTotal > 0)
+                        ? round($lineTotal / $serialPieces, 2)
+                        : (float) $price;
+
+                    foreach ($itemSerialsParsed as $sNum) {
+                        $sNum = trim($sNum);
+                        if ($sNum !== '') {
+                            \App\Models\ProductSerial::updateOrCreate([
+                                'product_id' => $pid,
+                                'serial_number' => $sNum,
+                            ], [
+                                'warehouse_id' => $itemWh,
+                                'status' => 'available',
+                                'cost_price' => $effectiveSerialCost,
+                            ]);
+                        }
+                    }
+                }
 
                 $subtotal += $lineTotal;
                 $totalExclusiveGst += $exclusiveGstAmount;

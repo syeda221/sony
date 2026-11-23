@@ -1119,6 +1119,89 @@ class ReportingController extends Controller
         try {
             $product = Product::with(['unit', 'category_relation'])->findOrFail($productId);
 
+            // Determine product default purchase price per piece
+            $productPurchPrice = (float) ($product->purchase_price_per_piece ?? 0);
+            if ($product->size_mode === 'by_size' || $product->size_mode === 'by_m2') {
+                $m2PerPiece        = (float) ($product->pieces_per_m2 ?? 0);
+                $purchPerM2        = (float) ($product->purchase_price_per_m2 ?? 0);
+                $productPurchPrice = $m2PerPiece * $purchPerM2;
+            }
+
+            // Fetch all approved purchases for this product to map exact serial & batch purchase costs
+            $pItemsAll = DB::table('purchase_items as pi')
+                ->join('purchases as p', 'p.id', '=', 'pi.purchase_id')
+                ->where('pi.product_id', $productId)
+                ->whereIn('p.status_purchase', ['approved', 'Returned', 'Partial'])
+                ->select('pi.*', 'p.invoice_no', 'p.purchase_date')
+                ->orderBy('pi.id', 'asc')
+                ->get();
+
+            $totalPurchPieces = 0;
+            $totalPurchAmount = 0;
+            $serialCostMap = [];
+            $serialInvoiceMap = [];
+            $batchCostMap = [];
+
+            foreach ($pItemsAll as $pi) {
+                $ppb = (float) ($pi->pieces_per_box > 0 ? $pi->pieces_per_box : ($product->pieces_per_box > 0 ? $product->pieces_per_box : 1));
+                if ($ppb <= 0) $ppb = 1;
+                $unit = strtolower(trim($pi->unit ?? ''));
+                $isPiece = in_array($unit, ['pcs', 'pc', 'piece']);
+                $isCarton = in_array($unit, ['carton', 'ctn', 'box', 'bandal', 'bundal', 'bndl']) || (!$isPiece && in_array($pi->size_mode, ['by_cartons', 'by_bandal']));
+
+                if ($isCarton) {
+                    if (isset($pi->boxes_qty) && ($pi->boxes_qty > 0 || $pi->loose_qty > 0)) {
+                        $pPieces = (((int) $pi->boxes_qty) * $ppb) + ((int) $pi->loose_qty);
+                    } else {
+                        [$b, $l] = \App\Http\Controllers\PurchaseController::parseCartonQty($pi->qty);
+                        $pPieces = ($b * $ppb) + $l;
+                    }
+                } elseif (in_array($unit, ['gm', 'g'])) {
+                    $pPieces = ((float) $pi->qty) / 1000.0;
+                } else {
+                    $pPieces = (float) $pi->qty;
+                }
+
+                $sRaw = $pi->serials;
+                $sList = is_array($sRaw) ? $sRaw : json_decode($sRaw, true);
+                if (!is_array($sList) && is_string($sRaw)) {
+                    $sList = preg_split('/[\r\n,]+/', $sRaw);
+                }
+
+                if ($pPieces <= 0 && is_array($sList) && count($sList) > 0) {
+                    $pPieces = count($sList);
+                }
+
+                $lineTotal = (float) ($pi->line_total ?? 0);
+                $lineUnitCost = ($pPieces > 0 && $lineTotal > 0)
+                    ? round($lineTotal / $pPieces, 2)
+                    : (float) $pi->price;
+
+                $totalPurchPieces += $pPieces;
+                $totalPurchAmount += $lineTotal;
+
+                if (is_array($sList)) {
+                    foreach ($sList as $sn) {
+                        $cleanSn = trim((string)$sn);
+                        if ($cleanSn !== '') {
+                            $serialCostMap[$cleanSn] = $lineUnitCost;
+                            $serialInvoiceMap[$cleanSn] = $pi->invoice_no ?? null;
+                        }
+                    }
+                }
+
+                if (!empty($pi->batch_no)) {
+                    $cleanBNo = trim((string)$pi->batch_no);
+                    if ($cleanBNo !== '') {
+                        $batchCostMap[$cleanBNo] = $lineUnitCost;
+                    }
+                }
+            }
+
+            $productAvgPurchCost = ($totalPurchPieces > 0 && $totalPurchAmount > 0)
+                ? round($totalPurchAmount / $totalPurchPieces, 2)
+                : $productPurchPrice;
+
             // 1. Batches
             $batches = [];
             if (\Illuminate\Support\Facades\Schema::hasTable('product_batches')) {
@@ -1175,6 +1258,27 @@ class ReportingController extends Controller
                         }
 
                         $bKey = !empty($b->batch_no) ? $b->batch_no : ('BATCH-' . $b->id);
+                        $batchCost = null;
+                        if (!empty($b->batch_no) && isset($batchCostMap[$b->batch_no])) {
+                            $batchCost = $batchCostMap[$b->batch_no];
+                        } else {
+                            $storedBCost = (float) ($b->cost_price ?? 0);
+                            if ($storedBCost > 0 && abs($storedBCost - $productPurchPrice) > 0.001) {
+                                $batchCost = $storedBCost;
+                            } elseif ($productAvgPurchCost > 0) {
+                                $batchCost = $productAvgPurchCost;
+                            } else {
+                                $batchCost = $storedBCost > 0 ? $storedBCost : $productPurchPrice;
+                            }
+                        }
+
+                        // Auto-sync product_batches cost price if outdated
+                        if ($batchCost > 0 && !empty($b->id) && abs((float)($b->cost_price ?? 0) - $batchCost) > 0.001) {
+                            try {
+                                DB::table('product_batches')->where('id', $b->id)->update(['cost_price' => $batchCost]);
+                            } catch (\Throwable $e) {}
+                        }
+
                         $batchMap[$bKey] = [
                             'id'             => $b->id ?? 0,
                             'batch_no'       => $b->batch_no ?? '-',
@@ -1183,7 +1287,7 @@ class ReportingController extends Controller
                             'mfg_date'       => !empty($mfgDate) ? date('d M Y', strtotime($mfgDate)) : '-',
                             'expiry_date'    => !empty($expDate) ? date('d M Y', strtotime($expDate)) : '-',
                             'qty'            => (float) ($b->qty ?? 0),
-                            'cost_price'     => (float) ($b->cost_price ?? 0),
+                            'cost_price'     => (float) $batchCost,
                             'remarks'        => $b->remarks ?? '-',
                             'status'         => $status,
                         ];
@@ -1262,7 +1366,7 @@ class ReportingController extends Controller
                         )
                         ->orderBy('s.created_at', 'desc')
                         ->get()
-                        ->map(function ($s) use ($productId) {
+                        ->map(function ($s) use ($productId, $serialCostMap, $serialInvoiceMap, $productAvgPurchCost, $productPurchPrice) {
                             $expDate = $s->expiry_date ?? null;
                             if (empty($expDate) && !empty($s->batch_no)) {
                                 $saleExp = DB::table('sale_items')
@@ -1273,6 +1377,40 @@ class ReportingController extends Controller
                                 if ($saleExp) $expDate = $saleExp;
                             }
 
+                            $cleanSn = trim((string)($s->serial_number ?? ''));
+                            $cost = null;
+                            $invNo = null;
+
+                            // 1. Exact match from purchase invoices
+                            if ($cleanSn !== '' && isset($serialCostMap[$cleanSn])) {
+                                $cost = $serialCostMap[$cleanSn];
+                                $invNo = $serialInvoiceMap[$cleanSn] ?? null;
+                            }
+
+                            // 2. Fallback to existing cost_price if custom or product average purchase cost
+                            if ($cost === null) {
+                                $storedCost = (float) ($s->cost_price ?? 0);
+                                if ($storedCost > 0 && abs($storedCost - $productPurchPrice) > 0.001) {
+                                    $cost = $storedCost;
+                                } elseif ($productAvgPurchCost > 0) {
+                                    $cost = $productAvgPurchCost;
+                                } else {
+                                    $cost = $storedCost > 0 ? $storedCost : $productPurchPrice;
+                                }
+                            }
+
+                            // Auto-sync product_serials table in DB if outdated
+                            if ($cost > 0 && !empty($s->id) && abs((float)($s->cost_price ?? 0) - $cost) > 0.001) {
+                                try {
+                                    DB::table('product_serials')->where('id', $s->id)->update(['cost_price' => $cost]);
+                                } catch (\Throwable $e) {}
+                            }
+
+                            $remarks = $s->remarks ?? '-';
+                            if (($remarks === '-' || empty($remarks)) && $invNo) {
+                                $remarks = 'Purchased on ' . $invNo;
+                            }
+
                             return [
                                 'id'             => $s->id ?? 0,
                                 'serial_number'  => $s->serial_number ?? '-',
@@ -1280,9 +1418,9 @@ class ReportingController extends Controller
                                 'variant_key'    => $s->variant_key ?? '-',
                                 'warehouse_name' => $s->warehouse_name ?? 'Main Stock',
                                 'status'         => strtolower($s->status ?? 'available'),
-                                'cost_price'     => (float) ($s->cost_price ?? 0),
+                                'cost_price'     => (float) $cost,
                                 'expiry_date'    => !empty($expDate) ? date('d M Y', strtotime($expDate)) : '-',
-                                'remarks'        => $s->remarks ?? '-',
+                                'remarks'        => $remarks,
                                 'created_at'     => !empty($s->created_at) ? date('d M Y h:i A', strtotime($s->created_at)) : '-',
                             ];
                         });
