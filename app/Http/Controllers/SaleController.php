@@ -2149,6 +2149,17 @@ class SaleController extends Controller
                 $notes = $request->input('installment_notes');
                 $totalAmount = (float) $sale->total_net;
                 $financedAmount = max(0, $totalAmount - $advanceAmount);
+
+                $customInstallments = $request->input('installments');
+                if (is_array($customInstallments) && count($customInstallments) > 0) {
+                    $durationMonths = count($customInstallments);
+                    if (!empty($customInstallments[0]['due_date'])) {
+                        try {
+                            $startDate = \Carbon\Carbon::parse($customInstallments[0]['due_date']);
+                        } catch (\Exception $e) {}
+                    }
+                }
+
                 $monthlyInstallment = $durationMonths > 0 ? round($financedAmount / $durationMonths, 2) : 0;
 
                 $planPayload = [
@@ -2176,26 +2187,49 @@ class SaleController extends Controller
                 $hasPaid = $plan->installments()->where('status', 'paid')->exists();
                 if (!$hasPaid) {
                     $plan->installments()->delete();
-                    $accumulated = 0;
-                    for ($i = 1; $i <= $durationMonths; $i++) {
-                        $dueDate = $startDate->copy()->addMonthsNoOverflow($i - 1)->format('Y-m-d');
-                        if ($i === $durationMonths) {
-                            $instAmount = round($financedAmount - $accumulated, 2);
-                        } else {
-                            $instAmount = $monthlyInstallment;
-                            $accumulated += $instAmount;
-                        }
+                    
+                    if (is_array($customInstallments) && count($customInstallments) > 0) {
+                        $instNo = 1;
+                        foreach ($customInstallments as $cInst) {
+                            $cAmount = max(0, (float) ($cInst['amount'] ?? 0));
+                            $cDueDate = !empty($cInst['due_date']) 
+                                ? \Carbon\Carbon::parse($cInst['due_date'])->format('Y-m-d') 
+                                : $startDate->copy()->addMonthsNoOverflow($instNo - 1)->format('Y-m-d');
 
-                        \App\Models\SaleInstallment::create([
-                            'plan_id'        => $plan->id,
-                            'sale_id'        => $sale->id,
-                            'customer_id'    => $sale->customer_id,
-                            'installment_no' => $i,
-                            'due_date'       => $dueDate,
-                            'amount'         => max(0, $instAmount),
-                            'paid_amount'    => 0,
-                            'status'         => 'pending',
-                        ]);
+                            \App\Models\SaleInstallment::create([
+                                'plan_id'        => $plan->id,
+                                'sale_id'        => $sale->id,
+                                'customer_id'    => $sale->customer_id,
+                                'installment_no' => $instNo,
+                                'due_date'       => $cDueDate,
+                                'amount'         => round($cAmount, 2),
+                                'paid_amount'    => 0,
+                                'status'         => 'pending',
+                            ]);
+                            $instNo++;
+                        }
+                    } else {
+                        $accumulated = 0;
+                        for ($i = 1; $i <= $durationMonths; $i++) {
+                            $dueDate = $startDate->copy()->addMonthsNoOverflow($i - 1)->format('Y-m-d');
+                            if ($i === $durationMonths) {
+                                $instAmount = round($financedAmount - $accumulated, 2);
+                            } else {
+                                $instAmount = $monthlyInstallment;
+                                $accumulated += $instAmount;
+                            }
+
+                            \App\Models\SaleInstallment::create([
+                                'plan_id'        => $plan->id,
+                                'sale_id'        => $sale->id,
+                                'customer_id'    => $sale->customer_id,
+                                'installment_no' => $i,
+                                'due_date'       => $dueDate,
+                                'amount'         => max(0, $instAmount),
+                                'paid_amount'    => 0,
+                                'status'         => 'pending',
+                            ]);
+                        }
                     }
                 }
             } else {

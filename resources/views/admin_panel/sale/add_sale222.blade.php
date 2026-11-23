@@ -2137,28 +2137,41 @@
                                 </div>
 
                                 {{-- Collapsible Schedule Preview --}}
-                                <div class="card border rounded-3 overflow-hidden">
+                                <div class="card border rounded-3 overflow-hidden shadow-xs">
                                     <div class="card-header bg-light py-2 px-3 d-flex justify-content-between align-items-center" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#collapseInstallmentSchedule" aria-expanded="true">
                                         <span class="fw-bold text-dark" style="font-size: 12px;">
                                             <i class="fas fa-list-ol text-purple me-1" style="color: #9333EA;"></i> Generated Installment Schedule Preview
                                         </span>
-                                        <i class="fas fa-chevron-down text-muted" style="font-size: 11px;"></i>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn btn-xs btn-outline-purple py-0 px-2 fw-semibold" id="btnResetEqualSplit" style="font-size: 10.5px; border-color: #c084fc; color: #7e22ce;" title="Reset schedule to equal split across all months">
+                                                <i class="fas fa-undo-alt me-1"></i> Equal Split
+                                            </button>
+                                            <i class="fas fa-chevron-down text-muted" style="font-size: 11px;"></i>
+                                        </div>
                                     </div>
                                     <div id="collapseInstallmentSchedule" class="collapse show">
-                                        <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
-                                            <table class="table table-sm table-hover mb-0" style="font-size: 12px;">
+                                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                            <table class="table table-sm table-hover mb-0 align-middle" style="font-size: 12px;">
                                                 <thead class="table-light sticky-top" style="font-size: 11px;">
                                                     <tr>
-                                                        <th class="ps-3 py-1">Inst #</th>
-                                                        <th class="py-1">Due Date</th>
-                                                        <th class="text-end py-1">Amount</th>
-                                                        <th class="text-center py-1 pe-3">Status</th>
+                                                        <th class="ps-3 py-1" style="width: 15%;">Inst #</th>
+                                                        <th class="py-1" style="width: 35%;">Due Date</th>
+                                                        <th class="text-end py-1" style="width: 35%;">Amount</th>
+                                                        <th class="text-center py-1 pe-3" style="width: 15%;">Status</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="installmentScheduleTbody">
                                                     {{-- Dynamically populated via recalculateInstallmentPlan() --}}
                                                 </tbody>
                                             </table>
+                                        </div>
+                                        <div class="bg-light px-3 py-1 border-top d-flex justify-content-between align-items-center flex-wrap gap-1" style="font-size: 11px;">
+                                            <span id="scheduleBalanceStatus" class="fw-semibold">
+                                                {{-- Live balance status --}}
+                                            </span>
+                                            <span class="text-muted" style="font-size: 10px;">
+                                                <i class="fas fa-magic text-purple me-1" style="color: #9333ea;"></i> Edit any month's amount; remaining balance distributes automatically.
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -3175,7 +3188,98 @@
                 if (typeof updateBalancesOnPaymentChange === 'function') updateBalancesOnPaymentChange();
             };
 
-            window.recalculateInstallmentPlan = function() {
+            function getInstallmentDateSafe(baseDate, monthOffset) {
+                var year = baseDate.getFullYear();
+                var month = baseDate.getMonth() + monthOffset;
+                var targetDate = baseDate.getDate();
+
+                var d = new Date(year, month, 1);
+                var lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+                d.setDate(Math.min(targetDate, lastDay));
+                return d;
+            }
+
+            function formatDateToYMD(d) {
+                var year = d.getFullYear();
+                var month = (d.getMonth() + 1).toString().padStart(2, '0');
+                var day = d.getDate().toString().padStart(2, '0');
+                return year + '-' + month + '-' + day;
+            }
+
+            function updateInstallmentScheduleSummary(financed) {
+                var totalAllocated = 0;
+                $('#installmentScheduleTbody .inst-amount-input').each(function() {
+                    totalAllocated += parseFloat($(this).val()) || 0;
+                });
+                totalAllocated = Math.round(totalAllocated * 100) / 100;
+                var diff = Math.round((financed - totalAllocated) * 100) / 100;
+
+                var $statusEl = $('#scheduleBalanceStatus');
+                if (Math.abs(diff) < 0.01) {
+                    $statusEl.html('<span class="badge bg-success-subtle text-success border border-success"><i class="fas fa-check-circle me-1"></i> Total Scheduled: Rs. ' + totalAllocated.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' (Balanced)</span>');
+                } else if (diff > 0.01) {
+                    $statusEl.html('<span class="badge bg-warning-subtle text-dark border border-warning"><i class="fas fa-exclamation-triangle text-warning me-1"></i> Allocated: Rs. ' + totalAllocated.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' / Financed: Rs. ' + financed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' (Remaining: Rs. ' + diff.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')</span>');
+                } else {
+                    $statusEl.html('<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-exclamation-circle me-1"></i> Allocated: Rs. ' + totalAllocated.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' (Exceeds Financed by Rs. ' + Math.abs(diff).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ')</span>');
+                }
+            }
+
+            function handleInstallmentAmountChange($changedInput) {
+                var changedIndex = parseInt($changedInput.data('index'));
+                var allInputs = $('#installmentScheduleTbody .inst-amount-input');
+                var totalCount = allInputs.length;
+                if (totalCount === 0 || isNaN(changedIndex)) return;
+
+                // 1. Get current financed total
+                var totalBill = 0;
+                if ($('#walkinNetTotal').length && parseFloat($('#walkinNetTotal').text()) > 0) {
+                    totalBill = parseFloat($('#walkinNetTotal').text());
+                } else if ($('#totalBalance').length && parseFloat($('#totalBalance').val()) > 0) {
+                    totalBill = parseFloat($('#totalBalance').val());
+                } else if ($('#tCurrentBill').length && parseFloat($('#tCurrentBill').text()) > 0) {
+                    totalBill = parseFloat($('#tCurrentBill').text());
+                } else if ($('#tSub').length && parseFloat($('#tSub').text()) > 0) {
+                    totalBill = parseFloat($('#tSub').text());
+                }
+                var advance = parseFloat($('#installmentAdvanceAmount').val()) || 0;
+                var financed = Math.max(0, totalBill - advance);
+
+                // 2. Sum up amounts from index 0 up to changedIndex
+                var sumUpToK = 0;
+                for (var i = 0; i <= changedIndex; i++) {
+                    var val = parseFloat(allInputs.eq(i).val()) || 0;
+                    if (val < 0) {
+                        val = 0;
+                        allInputs.eq(i).val('0.00');
+                    }
+                    sumUpToK += val;
+                }
+
+                // 3. Remaining balance for subsequent months
+                var remaining = Math.max(0, financed - sumUpToK);
+                var remainingMonths = totalCount - 1 - changedIndex;
+
+                // 4. Distribute across remaining months
+                if (remainingMonths > 0) {
+                    var baseSplit = Math.floor((remaining / remainingMonths) * 100) / 100;
+                    var distributedSoFar = 0;
+                    for (var j = changedIndex + 1; j < totalCount; j++) {
+                        var thisAmt = 0;
+                        if (j === totalCount - 1) {
+                            thisAmt = Math.max(0, Math.round((remaining - distributedSoFar) * 100) / 100);
+                        } else {
+                            thisAmt = Math.max(0, baseSplit);
+                            distributedSoFar += thisAmt;
+                        }
+                        allInputs.eq(j).val(thisAmt.toFixed(2));
+                    }
+                }
+
+                // 5. Update status
+                updateInstallmentScheduleSummary(financed);
+            }
+
+            window.recalculateInstallmentPlan = function(resetEqual) {
                 if (!$('#toggleInstallmentPlan').is(':checked')) {
                     return;
                 }
@@ -3225,24 +3329,36 @@
                 }
 
                 var accumulated = 0;
-                var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
                 for (var i = 1; i <= durationMonths; i++) {
-                    var dueD = new Date(baseDate.getFullYear(), baseDate.getMonth() + (i - 1), baseDate.getDate());
-                    var dFormatted = dueD.getDate().toString().padStart(2, '0') + '-' + monthNames[dueD.getMonth()] + '-' + dueD.getFullYear();
+                    var idx = i - 1;
+                    var dueD = getInstallmentDateSafe(baseDate, idx);
+                    var dIso = formatDateToYMD(dueD);
                     
                     var instAmount = (i === durationMonths) ? (financed - accumulated) : monthlyInstallment;
-                    instAmount = Math.max(0, instAmount);
-                    accumulated += Math.round(monthlyInstallment * 100) / 100;
+                    instAmount = Math.max(0, Math.round(instAmount * 100) / 100);
+                    accumulated += instAmount;
 
                     var rowHtml = '<tr>' +
-                        '<td class="ps-3 fw-bold text-purple" style="color: #9333EA;">#' + i + '</td>' +
-                        '<td><i class="far fa-calendar-alt text-muted me-1"></i> ' + dFormatted + '</td>' +
-                        '<td class="text-end fw-bold">Rs. ' + instAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
+                        '<td class="ps-3 fw-bold" style="color: #9333EA;">' +
+                            '#' + i +
+                            '<input type="hidden" name="installments[' + idx + '][installment_no]" value="' + i + '">' +
+                        '</td>' +
+                        '<td>' +
+                            '<input type="date" class="form-control form-control-sm inst-date-input" name="installments[' + idx + '][due_date]" value="' + dIso + '" style="font-size: 11.5px; height: 30px; width: 135px; display: inline-block;">' +
+                        '</td>' +
+                        '<td class="text-end">' +
+                            '<div class="input-group input-group-sm ms-auto" style="max-width: 155px;">' +
+                                '<span class="input-group-text py-0 px-2 bg-light text-muted fw-bold" style="font-size: 11px;">Rs.</span>' +
+                                '<input type="number" step="any" min="0" class="form-control form-control-sm text-end fw-bold text-dark inst-amount-input" data-index="' + idx + '" name="installments[' + idx + '][amount]" value="' + instAmount.toFixed(2) + '" style="font-size: 12px; height: 30px; background-color: #faf5ff; border: 1px solid #d8b4fe;">' +
+                            '</div>' +
+                        '</td>' +
                         '<td class="text-center pe-3"><span class="badge bg-light text-secondary border" style="font-size: 10px;">Scheduled</span></td>' +
                         '</tr>';
                     tbody.append(rowHtml);
                 }
+
+                updateInstallmentScheduleSummary(financed);
             };
 
             // Toggle switch handler
@@ -3300,7 +3416,27 @@
 
             // Due date picker change
             $('#installmentStartDate').on('change', function() {
-                window.recalculateInstallmentPlan();
+                var startDateStr = $(this).val();
+                if (!startDateStr) return;
+                var baseDate = new Date(startDateStr);
+                if (isNaN(baseDate.getTime())) return;
+                var dateInputs = $('#installmentScheduleTbody .inst-date-input');
+                dateInputs.each(function(idx) {
+                    var d = getInstallmentDateSafe(baseDate, idx);
+                    $(this).val(formatDateToYMD(d));
+                });
+            });
+
+            // Installment schedule manual amount edit: auto-distribute remaining
+            $(document).on('input change', '#installmentScheduleTbody .inst-amount-input', function() {
+                handleInstallmentAmountChange($(this));
+            });
+
+            // Reset to equal split button
+            $(document).on('click', '#btnResetEqualSplit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.recalculateInstallmentPlan(true);
             });
 
             // If already checked on edit load
