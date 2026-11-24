@@ -12,6 +12,11 @@ class Warehouse extends Model
 
     protected $guarded = [];
 
+    public function getNameAttribute()
+    {
+        return $this->attributes['warehouse_name'] ?? $this->attributes['name'] ?? '';
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class, 'creater_id');

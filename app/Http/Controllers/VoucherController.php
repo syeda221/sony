@@ -275,24 +275,50 @@ class VoucherController extends Controller
                     $party->address = $party->address ?? '-';
                     $party->mobile = $party->mobile ?? '-';
 
-                    // Find CustomerLedger entry associated with this voucher
-                    $ledgerEntry = \App\Models\CustomerLedger::where('customer_id', $party->id)
+                    // 1. Try finding by JournalEntry for precise historical balance
+                    $firstJe = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+                        ->where('party_id', $party->id)
                         ->where(function($q) use ($voucherV2) {
                             $q->where('description', 'like', "%{$voucherV2->voucher_no}%");
-                            if (preg_match('/Ref:\s*([^)]+)/', $voucherV2->remarks, $matches)) {
-                                $q->orWhere('description', 'like', "%{$matches[1]}%");
+                            if (!empty($voucherV2->remarks) && preg_match('/Ref:\s*([^)]+)/', $voucherV2->remarks, $matches)) {
+                                $q->orWhere('description', 'like', "%" . trim($matches[1]) . "%");
                             }
                         })
-                        ->orderBy('id', 'desc')
+                        ->orderBy('id', 'asc')
                         ->first();
 
-                    if ($ledgerEntry) {
-                        $previousBalance = (float) $ledgerEntry->previous_balance;
+                    if ($firstJe) {
+                        $previousBalance = (float) \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+                            ->where('party_id', $party->id)
+                            ->where('id', '<', $firstJe->id)
+                            ->sum(\Illuminate\Support\Facades\DB::raw('debit - credit'));
                     } else {
-                        $previousBalance = (float) (\App\Models\CustomerLedger::where('customer_id', $party->id)
-                            ->where('created_at', '<', $voucherV2->created_at)
+                        // 2. Try CustomerLedger entry associated with this voucher
+                        $refPattern = null;
+                        if (!empty($voucherV2->remarks) && preg_match('/Ref:\s*([^)]+)/', $voucherV2->remarks, $matches)) {
+                            $refPattern = trim($matches[1]);
+                        }
+                        $ledgerEntry = \App\Models\CustomerLedger::where('customer_id', $party->id)
+                            ->where(function($q) use ($voucherV2, $refPattern) {
+                                $q->where('description', 'like', "%{$voucherV2->voucher_no}%");
+                                if ($refPattern) {
+                                    $q->orWhere('description', 'like', "%{$refPattern}%");
+                                }
+                            })
                             ->orderBy('id', 'desc')
-                            ->value('closing_balance') ?? ($party->opening_balance ?? 0));
+                            ->first();
+
+                        if ($ledgerEntry && (float)$ledgerEntry->previous_balance != 0) {
+                            $previousBalance = (float) $ledgerEntry->previous_balance;
+                        } else {
+                            // 3. Fallback to authoritative BalanceService
+                            $rawBalance = (float) app(\App\Services\BalanceService::class)->getCustomerBalance($party->id);
+                            if ($voucherV2->status === 'posted') {
+                                $previousBalance = $rawBalance + (float)$voucherAmount;
+                            } else {
+                                $previousBalance = $rawBalance;
+                            }
+                        }
                     }
 
                 } elseif ($party instanceof \App\Models\Vendor) {
@@ -397,20 +423,23 @@ class VoucherController extends Controller
                 ->orderByDesc('id')
                 ->value('closing_balance') ?? 0;
 
-            // ✅ If customer
-        } elseif ($voucher->type === 'customer') {
+            // ✅ If customer or walkin
+        } elseif ($voucher->type === 'customer' || $voucher->type === 'walkin') {
             $party = DB::table('customers')->where('id', $voucher->party_id)->first();
-            $previousBalance = DB::table('customer_ledgers')
-                ->where('customer_id', $voucher->party_id)
-                ->orderByDesc('id')
-                ->value('closing_balance') ?? 0;
+            if ($party) {
+                $ledgerEntry = DB::table('customer_ledgers')
+                    ->where('customer_id', $party->id)
+                    ->where('description', 'like', "%{$voucher->rvid}%")
+                    ->orderBy('id', 'desc')
+                    ->first();
 
-            // ✅ If walkin
-        } elseif ($voucher->type === 'walkin') {
-            $party = DB::table('customers')
-                ->where('id', $voucher->party_id)
-                ->where('customer_type', 'Walking Customer')
-                ->first();
+                if ($ledgerEntry && (float)$ledgerEntry->previous_balance != 0) {
+                    $previousBalance = (float) $ledgerEntry->previous_balance;
+                } else {
+                    $rawBalance = (float) app(\App\Services\BalanceService::class)->getCustomerBalance($party->id);
+                    $previousBalance = $rawBalance + (float)($voucher->total_amount ?? 0);
+                }
+            }
         }
 
         return view('admin_panel.vochers.print', compact('voucher', 'rows', 'party', 'previousBalance'));

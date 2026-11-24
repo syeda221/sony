@@ -201,16 +201,20 @@
         $pmtCompName = \App\Models\Setting::get('company_name', 'Prowave Technologies');
 
         $pmtData = [
-            'vendor_name' => $pmtPartyName,
-            'party_name' => $pmtPartyName,
-            'customer_name' => $pmtPartyName,
-            'voucher_no' => $pmtVoucherNo,
-            'invoice_no' => $pmtVoucherNo,
-            'date' => $pmtDate,
-            'total_amount' => $pmtPaid,
-            'paid_amount' => $pmtPaid,
+            'vendor_name'       => $pmtPartyName,
+            'party_name'        => $pmtPartyName,
+            'customer_name'     => $pmtPartyName,
+            'voucher_no'        => $pmtVoucherNo,
+            'invoice_no'        => $pmtVoucherNo,
+            'date'              => $pmtDate,
+            'total_amount'      => $pmtPaid,
+            'paid_amount'       => $pmtPaid,
             'remaining_balance' => $pmtRemaining,
-            'company_name' => $pmtCompName,
+            'balance'           => $pmtRemaining,
+            'current_balance'   => $pmtRemaining,
+            'net_balance'       => $pmtRemaining,
+            'previous_balance'  => number_format((float)($previousBalance ?? 0), 2),
+            'company_name'      => $pmtCompName,
         ];
         $pmtMessage = \App\Services\WhatsAppService::getPaymentVoucherMessage($pmtData);
         $pmtCleanPhone = \App\Services\WhatsAppService::formatPhoneNumber($pmtPartyPhone);

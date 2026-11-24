@@ -920,7 +920,7 @@
                                                     <strong class="text-primary"><i class="fas fa-file-invoice mr-1"></i> 1. Sale Invoice WhatsApp Message (Customer)</strong>
                                                 </div>
                                                 <div class="card-body p-3">
-                                                    <textarea name="settings[whatsapp_sale_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_sale_template', 'Assalam-o-Alaikum {customer_name}, aapka Invoice #{invoice_no} ba-tareekh {date} tayar hai. Total Bill: Rs {total_amount}, Wasool: Rs {paid_amount}, Baqiya Balance: Rs {remaining_balance}. Shukriya! - {company_name}') }}</textarea>
+                                                    <textarea name="settings[whatsapp_sale_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_sale_template', 'Dear {customer_name}, your Invoice #{invoice_no} dated {date} has been prepared. Total Bill: Rs. {total_amount}, Received: Rs. {paid_amount}, Remaining Balance: Rs. {remaining_balance}. Thank you! - {company_name}') }}</textarea>
                                                     <small class="text-muted mt-1 d-block">Supported tags: {customer_name}, {invoice_no}, {date}, {total_amount}, {paid_amount}, {remaining_balance}, {company_name}</small>
                                                 </div>
                                             </div>
@@ -932,7 +932,7 @@
                                                     <strong class="text-primary"><i class="fas fa-shopping-bag mr-1"></i> 2. Purchase Invoice WhatsApp Message (Vendor)</strong>
                                                 </div>
                                                 <div class="card-body p-3">
-                                                    <textarea name="settings[whatsapp_purchase_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_purchase_template', 'Assalam-o-Alaikum {vendor_name}, Purchase Bill #{invoice_no} ba-tareekh {date} record ho chuka hai. Total Bill: Rs {total_amount}, Paid: Rs {paid_amount}, Baqiya Balance: Rs {remaining_balance}. Shukriya! - {company_name}') }}</textarea>
+                                                    <textarea name="settings[whatsapp_purchase_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_purchase_template', 'Dear {vendor_name}, Purchase Bill #{invoice_no} dated {date} has been recorded. Total Bill: Rs. {total_amount}, Paid: Rs. {paid_amount}, Remaining Balance: Rs. {remaining_balance}. Thank you! - {company_name}') }}</textarea>
                                                     <small class="text-muted mt-1 d-block">Supported tags: {vendor_name}, {invoice_no}, {date}, {total_amount}, {paid_amount}, {remaining_balance}, {company_name}</small>
                                                 </div>
                                             </div>
@@ -944,7 +944,7 @@
                                                     <strong class="text-success"><i class="fas fa-hand-holding-usd mr-1"></i> 3. Customer Receipt Voucher WhatsApp Message (Payment Received)</strong>
                                                 </div>
                                                 <div class="card-body p-3">
-                                                    <textarea name="settings[whatsapp_receipt_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_receipt_template', 'Mohtaram {customer_name}, humein aapki taraf se Voucher #{voucher_no} ke tehat Rs {paid_amount} wasool ho chuke hain. Aapka current baqiya balance: Rs {remaining_balance} hai. Shukriya! - {company_name}') }}</textarea>
+                                                    <textarea name="settings[whatsapp_receipt_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_receipt_template', 'Dear {customer_name}, we have received payment of Rs. {paid_amount} against Voucher #{voucher_no} on {date}. Your remaining balance is Rs. {remaining_balance}. Thank you! - {company_name}') }}</textarea>
                                                     <small class="text-muted mt-1 d-block">Supported tags: {customer_name}, {voucher_no}, {date}, {paid_amount}, {remaining_balance}, {company_name}</small>
                                                 </div>
                                             </div>
@@ -956,7 +956,7 @@
                                                     <strong class="text-danger"><i class="fas fa-money-check-alt mr-1"></i> 4. Vendor Payment Voucher WhatsApp Message (Payment Paid)</strong>
                                                 </div>
                                                 <div class="card-body p-3">
-                                                    <textarea name="settings[whatsapp_payment_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_payment_template', 'Mohtaram {vendor_name}, aapko Voucher #{voucher_no} ke tehat Rs {paid_amount} ada kar diye gaye hain. Aapka remaining ledger balance: Rs {remaining_balance} hai. Shukriya! - {company_name}') }}</textarea>
+                                                    <textarea name="settings[whatsapp_payment_template]" class="form-control" rows="3" {{ !$canEditSettings ? 'disabled' : '' }}>{{ \App\Models\Setting::get('whatsapp_payment_template', 'Dear {vendor_name}, payment of Rs. {paid_amount} has been made under Voucher #{voucher_no} on {date}. Your remaining ledger balance is Rs. {remaining_balance}. Thank you! - {company_name}') }}</textarea>
                                                     <small class="text-muted mt-1 d-block">Supported tags: {vendor_name}, {voucher_no}, {date}, {paid_amount}, {remaining_balance}, {company_name}</small>
                                                 </div>
                                             </div>

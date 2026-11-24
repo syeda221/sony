@@ -64,7 +64,7 @@ class WhatsAppService
      */
     public static function getSaleInvoiceMessage(array $data): string
     {
-        $default = "Assalam-o-Alaikum {customer_name}, aapka Invoice #{invoice_no} ba-tareekh {date} tayar hai. Total Bill: Rs {total_amount}, Wasool: Rs {paid_amount}, Baqiya Balance: Rs {remaining_balance}. Shukriya! - {company_name}";
+        $default = "Dear {customer_name}, your Invoice #{invoice_no} dated {date} has been prepared. Total Bill: Rs. {total_amount}, Received: Rs. {paid_amount}, Remaining Balance: Rs. {remaining_balance}. Thank you! - {company_name}";
         try {
             $template = Setting::get('whatsapp_sale_template', $default) ?: $default;
         } catch (\Throwable $e) {
@@ -78,7 +78,7 @@ class WhatsAppService
      */
     public static function getPurchaseInvoiceMessage(array $data): string
     {
-        $default = "Assalam-o-Alaikum {vendor_name}, Purchase Bill #{invoice_no} ba-tareekh {date} record ho chuka hai. Total Bill: Rs {total_amount}, Paid: Rs {paid_amount}, Baqiya Balance: Rs {remaining_balance}. Shukriya! - {company_name}";
+        $default = "Dear {vendor_name}, Purchase Bill #{invoice_no} dated {date} has been recorded. Total Bill: Rs. {total_amount}, Paid: Rs. {paid_amount}, Remaining Balance: Rs. {remaining_balance}. Thank you! - {company_name}";
         try {
             $template = Setting::get('whatsapp_purchase_template', $default) ?: $default;
         } catch (\Throwable $e) {
@@ -92,7 +92,7 @@ class WhatsAppService
      */
     public static function getReceiptVoucherMessage(array $data): string
     {
-        $default = "Mohtaram {customer_name}, humein aapki taraf se Voucher #{voucher_no} ke tehat Rs {paid_amount} wasool ho chuke hain. Aapka current baqiya balance: Rs {remaining_balance} hai. Shukriya! - {company_name}";
+        $default = "Dear {customer_name}, we have received payment of Rs. {paid_amount} against Voucher #{voucher_no} on {date}. Your remaining balance is Rs. {remaining_balance}. Thank you! - {company_name}";
         try {
             $template = Setting::get('whatsapp_receipt_template', $default) ?: $default;
         } catch (\Throwable $e) {
@@ -106,7 +106,7 @@ class WhatsAppService
      */
     public static function getPaymentVoucherMessage(array $data): string
     {
-        $default = "Mohtaram {vendor_name}, aapko Voucher #{voucher_no} ke tehat Rs {paid_amount} ada kar diye gaye hain. Aapka remaining ledger balance: Rs {remaining_balance} hai. Shukriya! - {company_name}";
+        $default = "Dear {vendor_name}, payment of Rs. {paid_amount} has been made under Voucher #{voucher_no} on {date}. Your remaining ledger balance is Rs. {remaining_balance}. Thank you! - {company_name}";
         try {
             $template = Setting::get('whatsapp_payment_template', $default) ?: $default;
         } catch (\Throwable $e) {

@@ -1132,20 +1132,33 @@
                 $waInvNo = $sale->invoice_no ?: ('SAL-' . $sale->id);
                 $waDate = !empty($sale->invoice_date) ? \Carbon\Carbon::parse($sale->invoice_date)->format('d/m/Y') : \Carbon\Carbon::parse($sale->created_at)->format('d/m/Y');
                 $waTotalAmount = number_format((float)($sale->total_net ?? ($sale->grand_total ?? 0)), 2);
-                $waPaidAmount = number_format((float)($paidAmount ?? ($sale->received_amount ?? ($sale->paid_amount ?? 0))), 2);
-                $waRemainingBal = number_format((float)($currentBalance ?? 0), 2);
+                $saleActualPaid = (float)($paidAmount ?? ($sale->received_amount ?? ($sale->paid_amount ?? ($sale->cash ?? 0))));
+                if ($saleActualPaid <= 0 && ((float)($sale->cash ?? 0) > 0 || (float)($sale->card ?? 0) > 0)) {
+                    $saleActualPaid = (float)($sale->cash ?? 0) + (float)($sale->card ?? 0);
+                }
+                $waPaidAmount = number_format($saleActualPaid, 2);
+                $custBal = (float)($currentBalance ?? 0);
+                if ($custBal == 0 && !empty($sale->customer_id)) {
+                    $custBal = (float) app(\App\Services\BalanceService::class)->getCustomerBalance($sale->customer_id);
+                }
+                $waRemainingBal = number_format($custBal, 2);
                 $waCompName = \App\Models\Setting::get('company_name', 'Prowave Technologies');
 
                 $waData = [
-                    'customer_name' => $waCustomerName,
-                    'party_name' => $waCustomerName,
-                    'invoice_no' => $waInvNo,
-                    'voucher_no' => $waInvNo,
-                    'date' => $waDate,
-                    'total_amount' => $waTotalAmount,
-                    'paid_amount' => $waPaidAmount,
+                    'customer_name'     => $waCustomerName,
+                    'party_name'        => $waCustomerName,
+                    'invoice_no'        => $waInvNo,
+                    'voucher_no'        => $waInvNo,
+                    'date'              => $waDate,
+                    'total_amount'      => $waTotalAmount,
+                    'paid_amount'       => $waPaidAmount,
+                    'received'          => $waPaidAmount,
+                    'received_amount'   => $waPaidAmount,
                     'remaining_balance' => $waRemainingBal,
-                    'company_name' => $waCompName,
+                    'balance'           => $waRemainingBal,
+                    'current_balance'   => $waRemainingBal,
+                    'net_balance'       => $waRemainingBal,
+                    'company_name'      => $waCompName,
                 ];
                 $waMessage = \App\Services\WhatsAppService::getSaleInvoiceMessage($waData);
                 $waCleanPhone = \App\Services\WhatsAppService::formatPhoneNumber($waCustomerPhone);
@@ -1269,18 +1282,6 @@
                 <div class="company-meta">
                     @if(!empty($companyAddress))
                         <span>{{ $companyAddress }}</span>
-                    @endif
-                    @if(!empty($companyAddress) && (!empty($companyPhone) || !empty($companyEmail)))
-                        <span class="mx-1">•</span>
-                    @endif
-                    @if(!empty($companyPhone))
-                        <span class="fw-bold"><i class="fas fa-phone-alt me-1" style="font-size: 10px;"></i>{{ $companyPhone }}</span>
-                    @endif
-                    @if(!empty($companyEmail))
-                        @if(!empty($companyPhone))
-                            <span class="mx-1">•</span>
-                        @endif
-                        <span><i class="fas fa-envelope me-1" style="font-size: 10px;"></i>{{ $companyEmail }}</span>
                     @endif
                     @if($showCompTax && (!empty($companyNtn) || !empty($companyStrn)))
                         <div class="mt-1" style="font-size: 11px;">
@@ -1453,29 +1454,14 @@
                             </tr>
                             @endif
 
-                            @if($showCompTax)
-                                @if(!empty($compNtn))
-                                <tr>
-                                    <td class="lbl">NTN Number</td>
-                                    <td class="col">:</td>
-                                    <td class="val fw-bold">{{ $compNtn }}</td>
-                                </tr>
-                                @endif
-
-                                @if(!empty($compStrn))
-                                <tr>
-                                    <td class="lbl">STRN Number</td>
-                                    <td class="col">:</td>
-                                    <td class="val fw-bold">{{ $compStrn }}</td>
-                                </tr>
-                                @endif
-                            @endif
-
-                            @if(!empty($compEmail))
+                            @php
+                                $whNames = collect($saleItems)->pluck('warehouse_name')->filter()->unique()->values();
+                            @endphp
+                            @if($whNames->isNotEmpty())
                             <tr>
-                                <td class="lbl">Email</td>
+                                <td class="lbl">Warehouse</td>
                                 <td class="col">:</td>
-                                <td class="val">{{ $compEmail }}</td>
+                                <td class="val fw-bold">{{ $whNames->implode(', ') }}</td>
                             </tr>
                             @endif
 
@@ -1487,11 +1473,19 @@
                             </tr>
                             @endif
 
-                            @if($showCompPhone && !empty($compPhone))
+                            @if(!empty($compPhone))
                             <tr>
                                 <td class="lbl">Contact Details</td>
                                 <td class="col">:</td>
                                 <td class="val">{{ $compPhone }}</td>
+                            </tr>
+                            @endif
+
+                            @if(!empty($compEmail))
+                            <tr>
+                                <td class="lbl">Email</td>
+                                <td class="col">:</td>
+                                <td class="val">{{ $compEmail }}</td>
                             </tr>
                             @endif
                         </table>
@@ -1525,13 +1519,14 @@
                         @if($showBatchCol)
                             <th style="width: 10%;" class="text-center">Batch / Sr. No</th>
                         @endif
+                        <th style="width: 9%;" class="text-center">Warehouse</th>
                         <th style="width: 6%;" class="text-center">Quantity</th>
                         <th style="width: 8%;" class="text-end">Rate</th>
                         <th style="width: 9%;" class="text-end">Gross Amount</th>
                         @if($showDiscCol)
                             <th style="width: 5%;" class="text-end">Disc %</th>
                         @endif
-                        <th style="width: 10%;" class="text-end">Exclusive GST</th>
+                        <th style="width: 9%;" class="text-end">Exclusive GST</th>
                         <th style="width: 7%;" class="text-end">Sales Tax</th>
                         <th style="width: 7%;" class="text-end">Further Tax {{ ((float)($sale->total_further_tax ?? 0) > 0) ? '@3%' : '(0%)' }}</th>
                         <th style="width: 8%;" class="text-end">Net Amount</th>
@@ -1539,8 +1534,9 @@
                         <th style="width: 5%;" class="text-center">S.No</th>
                         <th class="text-start">Description of Product</th>
                         @if($showBatchCol)
-                            <th style="width: 13%;" class="text-center">Batch / Sr. No</th>
+                            <th style="width: 12%;" class="text-center">Batch / Sr. No</th>
                         @endif
+                        <th style="width: 10%;" class="text-center">Warehouse</th>
                         <th style="width: 8%;" class="text-center">Quantity</th>
                         <th style="width: 10%;" class="text-end">Rate</th>
                         <th style="width: 12%;" class="text-end">Gross Amount</th>
@@ -1668,6 +1664,14 @@
                         </td>
                         @endif
 
+                        <td class="text-center">
+                            @if(!empty($item['warehouse_name']))
+                                <span class="badge bg-light text-dark border">{{ $item['warehouse_name'] }}</span>
+                            @else
+                                <span class="text-muted">-</span>
+                            @endif
+                        </td>
+
                         <td class="text-center fw-bold">
                             {{ $itemQty == (int)$itemQty ? (int)$itemQty : number_format($itemQty, 2) }}
                         </td>
@@ -1709,7 +1713,7 @@
 
             <tfoot>
                 <tr>
-                    <td colspan="{{ $showBatchCol ? 3 : 2 }}" class="text-end fw-bold">
+                    <td colspan="{{ $showBatchCol ? 4 : 3 }}" class="text-end fw-bold">
                         TOTAL:
                     </td>
 
@@ -2278,6 +2282,16 @@
                     <span class="meta-value">{{ $sale->reference }}</span>
                 </div>
             @endif
+
+            @php
+                $tWhNames = collect($saleItems)->pluck('warehouse_name')->filter()->unique()->values();
+            @endphp
+            @if($tWhNames->isNotEmpty())
+                <div class="meta-row">
+                    <span class="meta-label">Warehouse:</span>
+                    <span class="meta-value">{{ $tWhNames->implode(', ') }}</span>
+                </div>
+            @endif
         </div>
 
         <div class="divider"></div>
@@ -2380,6 +2394,11 @@
                             @if(!empty($tSerialsList))
                                 <span class="item-variant" style="font-weight: 600; color: #000; font-size: 9px; display: block; word-break: break-all; margin-top: 1px;">
                                     S/N: {{ implode(', ', $tSerialsList) }}
+                                </span>
+                            @endif
+                            @if(!empty($item['warehouse_name']))
+                                <span class="item-variant" style="font-weight: 500; color: #333; font-size: 8.5px; display: block; margin-top: 1px;">
+                                    Wh: {{ $item['warehouse_name'] }}
                                 </span>
                             @endif
                         </td>

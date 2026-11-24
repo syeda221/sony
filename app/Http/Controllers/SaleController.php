@@ -924,13 +924,19 @@ class SaleController extends Controller
 
     public function saleinvoice($id)
     {
-        $sale = Sale::with(['customer_relation.salesOfficer', 'installmentPlan.installments', 'installmentPlan.advanceAccount'])->findOrFail($id);
+        $sale = Sale::with(['customer_relation.salesOfficer', 'installmentPlan.installments', 'installmentPlan.advanceAccount', 'items.warehouse'])->findOrFail($id);
         $items = $this->_getSaleItems($sale);
         $isEstimate = request()->query('type') === 'estimate';
 
         // Calculate Balances for Invoice
         $previousBalance = 0;
         $paidAmount = (float)($sale->cash ?? 0);
+        if ($paidAmount <= 0 && (float)($sale->paid_amount ?? 0) > 0) {
+            $paidAmount = (float)$sale->paid_amount;
+        }
+        if ((float)($sale->card ?? 0) > 0) {
+            $paidAmount += (float)$sale->card;
+        }
 
         if ($sale->customer_id) {
             // Find the Journal Entry for this Sale (Debit side)
@@ -2852,7 +2858,15 @@ class SaleController extends Controller
 
             $variantUnit = $variant['unit'] ?? ($liveVariant['unit'] ?? ($item->product->unit->name ?? ''));
 
+            $warehouseName = $item->warehouse ? ($item->warehouse->warehouse_name ?? $item->warehouse->name) : null;
+            if (!$warehouseName && !empty($item->warehouse_id)) {
+                $wh = \App\Models\Warehouse::find($item->warehouse_id);
+                $warehouseName = $wh ? ($wh->warehouse_name ?? $wh->name) : null;
+            }
+
             return [
+                'warehouse_id' => $item->warehouse_id,
+                'warehouse_name' => $warehouseName,
                 'is_manual' => $item->is_manual,
                 'product_id' => $item->product_id,
                 'item_name' => $item->is_manual ? ($item->product_name ?? 'Manual Product') . ' (Manual)' : ($item->product_name ?? $item->product->item_name ?? 'Item'),

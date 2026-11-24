@@ -201,16 +201,22 @@
         $rcvCompName = \App\Models\Setting::get('company_name', 'Prowave Technologies');
 
         $rcvData = [
-            'customer_name' => $rcvPartyName,
-            'party_name' => $rcvPartyName,
-            'vendor_name' => $rcvPartyName,
-            'voucher_no' => $rcvVoucherNo,
-            'invoice_no' => $rcvVoucherNo,
-            'date' => $rcvDate,
-            'total_amount' => $rcvPaid,
-            'paid_amount' => $rcvPaid,
+            'customer_name'     => $rcvPartyName,
+            'party_name'        => $rcvPartyName,
+            'vendor_name'       => $rcvPartyName,
+            'voucher_no'        => $rcvVoucherNo,
+            'invoice_no'        => $rcvVoucherNo,
+            'date'              => $rcvDate,
+            'total_amount'      => $rcvPaid,
+            'paid_amount'       => $rcvPaid,
+            'received'          => $rcvPaid,
+            'received_amount'   => $rcvPaid,
             'remaining_balance' => $rcvRemaining,
-            'company_name' => $rcvCompName,
+            'balance'           => $rcvRemaining,
+            'current_balance'   => $rcvRemaining,
+            'net_balance'       => $rcvRemaining,
+            'previous_balance'  => number_format((float)($previousBalance ?? 0), 2),
+            'company_name'      => $rcvCompName,
         ];
         $rcvMessage = \App\Services\WhatsAppService::getReceiptVoucherMessage($rcvData);
         $rcvCleanPhone = \App\Services\WhatsAppService::formatPhoneNumber($rcvPartyPhone);
