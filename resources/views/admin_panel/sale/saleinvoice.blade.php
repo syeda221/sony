@@ -1044,6 +1044,8 @@
     $showCustLicense = \App\Models\Setting::get('inv_show_cust_license', '1') == '1';
     $showCustContact = \App\Models\Setting::get('inv_show_cust_contact', '1') == '1';
     $showCustTax     = \App\Models\Setting::get('inv_show_cust_tax', '1') == '1';
+    $showCustCnic    = \App\Models\Setting::get('inv_show_cust_cnic', '1') == '1';
+    $showCustEmail   = \App\Models\Setting::get('inv_show_cust_email', '1') == '1';
 
     $showBatchCol    = \App\Models\Setting::get('inv_show_batch_column', '1') == '1';
     $showDiscCol     = \App\Models\Setting::get('inv_show_disc_column', '1') == '1';
@@ -1311,11 +1313,15 @@
                 $cnicDef = \App\Models\CustomerFieldDefinition::where('field_key', 'cnic')->first();
                 $isCnicEnabled = $cnicDef ? ($cnicDef->is_enabled && $cnicDef->visible_in_view && $cnicDef->canView()) : true;
 
+                $emailDef = \App\Models\CustomerFieldDefinition::where('field_key', 'email_address')->orWhere('field_key', 'email')->first();
+                $isEmailEnabled = $emailDef ? ($emailDef->is_enabled && $emailDef->visible_in_view && $emailDef->canView()) : true;
+
                 $relCust = $sale->customer_relation;
                 $custLicense = $relCust ? ($relCust->getCustomValue('drug_license_no') ?? $relCust->getCustomValue('license_no') ?? $relCust->license_no ?? $relCust->drug_license_no ?? null) : null;
                 $custNtn = ($isNtnEnabled && $relCust) ? ($relCust->getCustomValue('ntn_number') ?? $relCust->ntn_number ?? null) : null;
                 $custStrn = ($isStrnEnabled && $relCust) ? ($relCust->getCustomValue('strn_number') ?? $relCust->strn_number ?? null) : null;
-                $custCnic = ($isCnicEnabled && $relCust) ? ($relCust->getCustomValue('cnic') ?? $relCust->cnic ?? null) : null;
+                $custCnic = ($isCnicEnabled && $relCust) ? ($relCust->getCustomValue('cnic') ?? $relCust->cnic ?? null) : ($sale->cnic ?? $sale->customer_cnic ?? null);
+                $custEmail = ($isEmailEnabled && $relCust) ? ($relCust->email_address ?? $relCust->email ?? $relCust->getCustomValue('email_address') ?? $relCust->getCustomValue('email') ?? null) : ($sale->email ?? $sale->customer_email ?? null);
                 $custMobile = $sale->walkin_mobile ?? ($relCust->mobile ?? $relCust->phone ?? null);
                 $custContactPerson = $relCust ? ($relCust->contact_person ?? $relCust->getCustomValue('contact_person') ?? null) : null;
 
@@ -1388,13 +1394,23 @@
                                     <td class="col">:</td>
                                     <td class="val">{{ $custStrn }}</td>
                                 </tr>
-                                @elseif(!empty($custCnic) && $isCnicEnabled)
-                                <tr>
-                                    <td class="lbl">CNIC Number</td>
-                                    <td class="col">:</td>
-                                    <td class="val">{{ $custCnic }}</td>
-                                </tr>
                                 @endif
+                            @endif
+
+                            @if($showCustCnic && !empty($custCnic) && $isCnicEnabled)
+                            <tr>
+                                <td class="lbl">CNIC Number</td>
+                                <td class="col">:</td>
+                                <td class="val">{{ $custCnic }}</td>
+                            </tr>
+                            @endif
+
+                            @if($showCustEmail && !empty($custEmail) && $isEmailEnabled)
+                            <tr>
+                                <td class="lbl">Email Address</td>
+                                <td class="col">:</td>
+                                <td class="val">{{ $custEmail }}</td>
+                            </tr>
                             @endif
 
                             @if($showCustContact && !empty($custMobile))
@@ -2232,6 +2248,20 @@
                 <div class="meta-row">
                     <span class="meta-label">STRN:</span>
                     <span class="meta-value">{{ $custStrn }}</span>
+                </div>
+            @endif
+
+            @if($showCustCnic && !empty($custCnic) && $isCnicEnabled)
+                <div class="meta-row">
+                    <span class="meta-label">CNIC:</span>
+                    <span class="meta-value">{{ $custCnic }}</span>
+                </div>
+            @endif
+
+            @if($showCustEmail && !empty($custEmail) && $isEmailEnabled)
+                <div class="meta-row">
+                    <span class="meta-label">Email:</span>
+                    <span class="meta-value">{{ $custEmail }}</span>
                 </div>
             @endif
 

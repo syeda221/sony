@@ -440,7 +440,7 @@
                                                 </div>
                                                 <div class="row">
                                                     <!-- Customer Address -->
-                                                    <div class="col-md-3 col-sm-6 mb-2">
+                                                    <div class="col-md-4 col-sm-6 mb-2">
                                                         <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
                                                             <div>
                                                                 <div class="font-weight-bold text-dark" style="font-size: 12px;">
@@ -460,7 +460,7 @@
                                                     </div>
 
                                                     <!-- Customer Drug License No -->
-                                                    <div class="col-md-3 col-sm-6 mb-2">
+                                                    <div class="col-md-4 col-sm-6 mb-2">
                                                         <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
                                                             <div>
                                                                 <div class="font-weight-bold text-dark" style="font-size: 12px;">
@@ -480,7 +480,7 @@
                                                     </div>
 
                                                     <!-- Customer Phone & Contact Person -->
-                                                    <div class="col-md-3 col-sm-6 mb-2">
+                                                    <div class="col-md-4 col-sm-6 mb-2">
                                                         <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
                                                             <div>
                                                                 <div class="font-weight-bold text-dark" style="font-size: 12px;">
@@ -499,14 +499,14 @@
                                                         </div>
                                                     </div>
 
-                                                    <!-- Customer NTN / STRN / CNIC -->
-                                                    <div class="col-md-3 col-sm-6 mb-2">
+                                                    <!-- Customer NTN / STRN -->
+                                                    <div class="col-md-4 col-sm-6 mb-2">
                                                         <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
                                                             <div>
                                                                 <div class="font-weight-bold text-dark" style="font-size: 12px;">
-                                                                    <i class="fas fa-fingerprint text-primary mr-1"></i> NTN / STRN / CNIC
+                                                                    <i class="fas fa-landmark text-secondary mr-1"></i> Customer NTN / STRN
                                                                 </div>
-                                                                <small class="text-muted">Tax & ID numbers</small>
+                                                                <small class="text-muted">Tax ID numbers</small>
                                                             </div>
                                                             <div class="custom-control custom-switch custom-switch-md ml-2">
                                                                 <input type="hidden" name="settings[inv_show_cust_tax]" value="0">
@@ -515,6 +515,46 @@
                                                                     {{ \App\Models\Setting::get('inv_show_cust_tax', '1') == '1' ? 'checked' : '' }}
                                                                     {{ !$canEditSettings ? 'disabled' : '' }}>
                                                                 <label class="custom-control-label" for="setting_inv_show_cust_tax"></label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Customer CNIC -->
+                                                    <div class="col-md-4 col-sm-6 mb-2">
+                                                        <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <div class="font-weight-bold text-dark" style="font-size: 12px;">
+                                                                    <i class="fas fa-id-card-alt text-primary mr-1"></i> Customer CNIC
+                                                                </div>
+                                                                <small class="text-muted">National ID / CNIC</small>
+                                                            </div>
+                                                            <div class="custom-control custom-switch custom-switch-md ml-2">
+                                                                <input type="hidden" name="settings[inv_show_cust_cnic]" value="0">
+                                                                <input type="checkbox" class="custom-control-input invoice-display-switch" id="setting_inv_show_cust_cnic" 
+                                                                    name="settings[inv_show_cust_cnic]" value="1" 
+                                                                    {{ \App\Models\Setting::get('inv_show_cust_cnic', '1') == '1' ? 'checked' : '' }}
+                                                                    {{ !$canEditSettings ? 'disabled' : '' }}>
+                                                                <label class="custom-control-label" for="setting_inv_show_cust_cnic"></label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Customer Email -->
+                                                    <div class="col-md-4 col-sm-6 mb-2">
+                                                        <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <div class="font-weight-bold text-dark" style="font-size: 12px;">
+                                                                    <i class="fas fa-envelope text-info mr-1"></i> Customer Email
+                                                                </div>
+                                                                <small class="text-muted">Customer email address</small>
+                                                            </div>
+                                                            <div class="custom-control custom-switch custom-switch-md ml-2">
+                                                                <input type="hidden" name="settings[inv_show_cust_email]" value="0">
+                                                                <input type="checkbox" class="custom-control-input invoice-display-switch" id="setting_inv_show_cust_email" 
+                                                                    name="settings[inv_show_cust_email]" value="1" 
+                                                                    {{ \App\Models\Setting::get('inv_show_cust_email', '1') == '1' ? 'checked' : '' }}
+                                                                    {{ !$canEditSettings ? 'disabled' : '' }}>
+                                                                <label class="custom-control-label" for="setting_inv_show_cust_email"></label>
                                                             </div>
                                                         </div>
                                                     </div>
