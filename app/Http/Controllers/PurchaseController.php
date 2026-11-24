@@ -968,6 +968,17 @@ class PurchaseController extends Controller
                 $totalBackupAmount += $backupAmount;
                 $totalAnnualAmount += $annualAmount;
 
+                if ($isPiece) {
+                    $baseQty = $qty;
+                } elseif ($isCarton) {
+                    [$boxes, $loose] = self::parseCartonQty($rawQtyStr);
+                    $baseQty = ($boxes * $curPPB) + $loose;
+                } elseif (in_array($u, ['gm', 'g', 'gram', 'grams'])) {
+                    $baseQty = $qty / 1000.0;
+                } else {
+                    $baseQty = $qty;
+                }
+
                 // Snapshots
                 $bQty = (float) ($boxesQtys[$i] ?? 0);
                 $lQty = (float) ($looseQtys[$i] ?? 0);
@@ -1029,9 +1040,9 @@ class PurchaseController extends Controller
                     'width' => $widths[$i] ?? null,
                 ]);
 
-                // Update / create serials in purchase update
+                // Update / create serials in purchase
                 if (!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) {
-                    $serialPieces = $baseQty > 0 ? $baseQty : count($itemSerialsParsed);
+                    $serialPieces = (!empty($baseQty) && $baseQty > 0) ? $baseQty : count($itemSerialsParsed);
                     $effectiveSerialCost = ($serialPieces > 0 && $lineTotal > 0)
                         ? round($lineTotal / $serialPieces, 2)
                         : (float) $price;
@@ -1837,9 +1848,9 @@ class PurchaseController extends Controller
                     'width' => $widths[$i] ?? null,
                 ]);
 
-                // Update / create serials in purchase update
+                // Update / create serials in purchase
                 if (!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) {
-                    $serialPieces = $baseQty > 0 ? $baseQty : count($itemSerialsParsed);
+                    $serialPieces = (!empty($baseQty) && $baseQty > 0) ? $baseQty : count($itemSerialsParsed);
                     $effectiveSerialCost = ($serialPieces > 0 && $lineTotal > 0)
                         ? round($lineTotal / $serialPieces, 2)
                         : (float) $price;
