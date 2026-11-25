@@ -1685,6 +1685,19 @@ class SaleController extends Controller
                             $exactCost = (float)$batchCost;
                         }
                     }
+                    if ($exactCost === null) {
+                        $saleDateOnly = $sale->created_at ? \Carbon\Carbon::parse($sale->created_at)->toDateString() : now()->toDateString();
+                        $costService = app(\App\Services\InventoryCostService::class);
+                        $computedCost = $costService->getCurrentUnitCostForSale(
+                            (int) $pid,
+                            $saleDateOnly,
+                            (int) $sale->id,
+                            is_array($liveVariant ?? null) ? $liveVariant : null
+                        );
+                        if ($computedCost > 0) {
+                            $exactCost = $computedCost;
+                        }
+                    }
                     if ($exactCost !== null) {
                         $saleItem->purchase_price = $exactCost;
                     }

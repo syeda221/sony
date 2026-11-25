@@ -906,6 +906,20 @@ class ReportingController extends Controller
                             $stockValue = (float) $availBatches->sum(fn($b) => (float)$b->qty * (float)$b->cost_price);
                             $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
                         }
+                    } elseif ($balance > 0) {
+                        $costService = app(\App\Services\InventoryCostService::class);
+                        $perpetual = $costService->computePerpetualState(
+                            (int) $product->id,
+                            $dateTo ?: null,
+                            null,
+                            count($parsedVariants) > 1 ? $v : null
+                        );
+                        if ($perpetual['qty'] > 0 && $perpetual['unit_cost'] > 0) {
+                            $averagePrice = $perpetual['unit_cost'];
+                            $stockValue = (abs($balance - $perpetual['qty']) < 0.0001 && (!$warehouseId || $warehouseId === 'all'))
+                                ? $perpetual['value']
+                                : ($balance * $averagePrice);
+                        }
                     }
                     $grandTotalValue += $stockValue;
                     $totalCurrentStock += $balance;
@@ -1054,6 +1068,15 @@ class ReportingController extends Controller
                     if ($availBatches->count() > 0) {
                         $stockValue = (float) $availBatches->sum(fn($b) => (float)$b->qty * (float)$b->cost_price);
                         $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
+                    }
+                } elseif ($balance > 0) {
+                    $costService = app(\App\Services\InventoryCostService::class);
+                    $perpetual = $costService->computePerpetualState((int) $product->id, $dateTo ?: null);
+                    if ($perpetual['qty'] > 0 && $perpetual['unit_cost'] > 0) {
+                        $averagePrice = $perpetual['unit_cost'];
+                        $stockValue = (abs($balance - $perpetual['qty']) < 0.0001 && (!$warehouseId || $warehouseId === 'all'))
+                            ? $perpetual['value']
+                            : ($balance * $averagePrice);
                     }
                 }
                 $grandTotalValue  += $stockValue;
@@ -1649,7 +1672,10 @@ class ReportingController extends Controller
             $hasProductSerialsTable = Schema::hasTable('product_serials');
             $hasProductBatchesTable = Schema::hasTable('product_batches');
 
-            $calcItemCost = function($sItem, $productId, $fallbackAvgPrice) use ($hasProductSerialsTable, $hasProductBatchesTable) {
+            $inventoryCostService = app(\App\Services\InventoryCostService::class);
+            $perpetualCostCache = [];
+
+            $calcItemCost = function($sItem, $productId, $fallbackAvgPrice) use ($hasProductSerialsTable, $hasProductBatchesTable, $inventoryCostService, &$perpetualCostCache) {
                 $pieces = (float) ($sItem->total_pieces ?? 0);
                 $itSerials = !empty($sItem->serials) ? (is_array($sItem->serials) ? $sItem->serials : json_decode($sItem->serials, true)) : [];
                 if (!empty($itSerials) && is_array($itSerials) && $hasProductSerialsTable) {
@@ -1674,10 +1700,24 @@ class ReportingController extends Controller
                 } elseif (!empty($sItem->purchase_price) && (float)$sItem->purchase_price > 0) {
                     return $pieces * (float)$sItem->purchase_price;
                 }
+
+                // Fallback for legacy/unlinked sale items: use chronological perpetual cost up to sale time
+                // instead of period-wide average (which would let future purchases alter past COGS).
+                if (!empty($sItem->sale_item_id)) {
+                    $pidKey = (int) $productId;
+                    if (!isset($perpetualCostCache[$pidKey])) {
+                        $perpetualCostCache[$pidKey] = $inventoryCostService->computePerpetualState($pidKey);
+                    }
+                    if (isset($perpetualCostCache[$pidKey]['sold_cogs_map'][$sItem->sale_item_id])) {
+                        return (float) $perpetualCostCache[$pidKey]['sold_cogs_map'][$sItem->sale_item_id];
+                    }
+                }
+
                 return $pieces * $fallbackAvgPrice;
             };
 
             $saleItemSelectCols = [
+                'sale_items.id as sale_item_id',
                 'sale_items.total_pieces',
                 'sale_items.qty',
                 'sale_items.total',
@@ -1696,6 +1736,7 @@ class ReportingController extends Controller
             ];
 
             $custSaleItemSelectCols = [
+                'sale_items.id as sale_item_id',
                 'sale_items.product_id',
                 'sale_items.is_manual',
                 'sale_items.color',
