@@ -123,6 +123,233 @@
         .text-right { text-align: right !important; }
         .fw-bold { font-weight: bold !important; }
     }
+
+    /* Collapsible Customer Container Styling (Colorful Accordion Cards) */
+    .cust-acc-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding: 10px 14px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+    }
+    .cust-acc-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-left-width: 5px;
+        border-radius: 14px;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+        margin-bottom: 14px;
+        overflow: hidden;
+        transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .cust-acc-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    }
+    .cust-acc-card.is-open {
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.10);
+    }
+    .cust-acc-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 14px 18px;
+        cursor: pointer;
+        user-select: none;
+        transition: filter 0.15s ease;
+    }
+    .cust-acc-header:hover {
+        filter: brightness(0.985);
+    }
+    .cust-acc-left {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        min-width: 240px;
+        flex: 1 1 auto;
+    }
+    .cust-acc-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        flex-shrink: 0;
+        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.14);
+    }
+    .cust-acc-title-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+    }
+    .cust-acc-name {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.2px;
+    }
+    .cust-acc-chip {
+        font-size: 0.70rem;
+        font-weight: 700;
+        padding: 2px 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.85);
+        color: #334155;
+        border: 1px solid #cbd5e1;
+    }
+    .cust-acc-sub {
+        font-size: 0.74rem;
+        color: #475569;
+        margin-top: 3px;
+    }
+    .cust-acc-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .cust-kpi-box {
+        min-width: 110px;
+        padding: 6px 11px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: rgba(255, 255, 255, 0.92);
+        text-align: right;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+    .cust-kpi-box.kpi-debit {
+        background: #fef2f2;
+        border-color: #fca5a5;
+    }
+    .cust-kpi-box.kpi-credit {
+        background: #ecfdf5;
+        border-color: #86efac;
+    }
+    .cust-kpi-box.kpi-closing {
+        background: #eff6ff;
+        border-color: #93c5fd;
+    }
+    .cust-kpi-val {
+        font-size: 0.85rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+    .cust-kpi-lbl {
+        font-size: 0.60rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: #475569;
+    }
+    .cust-acc-chevron {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s ease, background-color 0.15s ease, color 0.15s ease;
+    }
+    .cust-acc-card.is-open .cust-acc-chevron {
+        transform: rotate(180deg);
+        color: #ffffff;
+    }
+
+    /* 6 Rotating Customer Header Themes */
+    .cust-theme-0 { border-left-color: #4f46e5; }
+    .cust-theme-0 .cust-acc-header { background: linear-gradient(95deg, #eef2ff 0%, #f8faff 48%, #ffffff 100%); }
+    .cust-theme-0 .cust-acc-icon { background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%); }
+    .cust-theme-0 .chip-entries { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+    .cust-theme-0.is-open .cust-acc-chevron { background: #4f46e5; border-color: #4f46e5; }
+
+    .cust-theme-1 { border-left-color: #059669; }
+    .cust-theme-1 .cust-acc-header { background: linear-gradient(95deg, #ecfdf5 0%, #f4fbf8 48%, #ffffff 100%); }
+    .cust-theme-1 .cust-acc-icon { background: linear-gradient(135deg, #10b981 0%, #047857 100%); }
+    .cust-theme-1 .chip-entries { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+    .cust-theme-1.is-open .cust-acc-chevron { background: #059669; border-color: #059669; }
+
+    .cust-theme-2 { border-left-color: #0284c7; }
+    .cust-theme-2 .cust-acc-header { background: linear-gradient(95deg, #e0f2fe 0%, #f3faff 48%, #ffffff 100%); }
+    .cust-theme-2 .cust-acc-icon { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); }
+    .cust-theme-2 .chip-entries { background: #bae6fd; color: #075985; border-color: #7dd3fc; }
+    .cust-theme-2.is-open .cust-acc-chevron { background: #0284c7; border-color: #0284c7; }
+
+    .cust-theme-3 { border-left-color: #d97706; }
+    .cust-theme-3 .cust-acc-header { background: linear-gradient(95deg, #fffbeb 0%, #fefcf3 48%, #ffffff 100%); }
+    .cust-theme-3 .cust-acc-icon { background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%); }
+    .cust-theme-3 .chip-entries { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+    .cust-theme-3.is-open .cust-acc-chevron { background: #d97706; border-color: #d97706; }
+
+    .cust-theme-4 { border-left-color: #7c3aed; }
+    .cust-theme-4 .cust-acc-header { background: linear-gradient(95deg, #f5f3ff 0%, #faf9ff 48%, #ffffff 100%); }
+    .cust-theme-4 .cust-acc-icon { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); }
+    .cust-theme-4 .chip-entries { background: #ede9fe; color: #5b21b6; border-color: #ddd6fe; }
+    .cust-theme-4.is-open .cust-acc-chevron { background: #7c3aed; border-color: #7c3aed; }
+
+    .cust-theme-5 { border-left-color: #e11d48; }
+    .cust-theme-5 .cust-acc-header { background: linear-gradient(95deg, #fff1f2 0%, #fff8f9 48%, #ffffff 100%); }
+    .cust-theme-5 .cust-acc-icon { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%); }
+    .cust-theme-5 .chip-entries { background: #ffe4e6; color: #9f1239; border-color: #fecdd3; }
+    .cust-theme-5.is-open .cust-acc-chevron { background: #e11d48; border-color: #e11d48; }
+
+    .cust-acc-body {
+        display: none;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+        padding: 14px 18px 16px 18px;
+    }
+    .cust-acc-inner-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .cust-acc-table-wrap {
+        max-height: 460px;
+        overflow-y: auto;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        background: #ffffff;
+    }
+    .cust-acc-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #1e293b !important;
+        color: #ffffff !important;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        border-bottom: 2px solid #334155;
+        padding: 10px 12px;
+        white-space: nowrap;
+    }
+    .cust-acc-table tbody td {
+        font-size: 0.79rem;
+        padding: 9px 12px;
+        vertical-align: middle;
+    }
+    @media print {
+        .cust-acc-toolbar, #customerGroupsContainer { display: none !important; }
+    }
 </style>
 
 <div class="sale-report-container">
@@ -411,30 +638,56 @@
             </div>
         </div>
 
-        {{-- DESKTOP TABLE VIEW (d-none d-md-block) --}}
-        <div class="card border-0 shadow-sm mb-3 rounded-3 bg-white d-none d-md-block">
-            <div class="card-body p-0">
-                <div class="sale-table-wrap">
-                    <table class="table table-bordered table-hover align-middle mb-0 report-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 10%;">Date</th>
-                                <th style="width: 12%;">Ref / Invoice</th>
-                                <th style="width: 18%;">Customer</th>
-                                <th>Description</th>
-                                <th style="width: 12%;">Debit (Dr)</th>
-                                <th style="width: 12%;">Credit (Cr)</th>
-                                <th style="width: 14%;">Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ledgerBody"></tbody>
-                    </table>
+        {{-- COLLAPSIBLE CUSTOMER CONTAINERS TOOLBAR & LIST --}}
+        <div id="customerAccordionSection">
+            <div class="cust-acc-toolbar no-print" id="custAccToolbar">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold" id="customerCountBadge" style="font-size: 0.78rem;">0 Customers</span>
+                    <div class="input-group input-group-sm" style="width: 260px;">
+                        <span class="input-group-text bg-white border-end-0 text-muted"><i class="fas fa-search"></i></span>
+                        <input type="text" id="customerCardSearchInput" class="form-control border-start-0" placeholder="Filter customer cards by name...">
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-light border fw-bold text-primary" id="btnExpandAllCustomers">
+                        <i class="fas fa-angle-double-down me-1"></i> Expand All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light border fw-bold text-secondary" id="btnCollapseAllCustomers">
+                        <i class="fas fa-angle-double-up me-1"></i> Collapse All
+                    </button>
                 </div>
             </div>
+
+            <div id="customerGroupsContainer" class="no-print"></div>
         </div>
 
-        {{-- MOBILE CARDS CONTAINER (d-md-none) --}}
-        <div class="d-md-none no-print" id="ledgerMobileContainer">
+        {{-- COMBINED STATEMENT FALLBACK VIEW (For linked Customer+Vendor "Both" tab) --}}
+        <div id="singleCombinedSection" style="display:none;">
+            {{-- DESKTOP TABLE VIEW (d-none d-md-block) --}}
+            <div class="card border-0 shadow-sm mb-3 rounded-3 bg-white d-none d-md-block">
+                <div class="card-body p-0">
+                    <div class="sale-table-wrap">
+                        <table class="table table-bordered table-hover align-middle mb-0 report-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%;">Date</th>
+                                    <th style="width: 12%;">Ref / Invoice</th>
+                                    <th style="width: 18%;">Customer</th>
+                                    <th>Description</th>
+                                    <th style="width: 12%;">Debit (Dr)</th>
+                                    <th style="width: 12%;">Credit (Cr)</th>
+                                    <th style="width: 14%;">Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ledgerBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {{-- MOBILE CARDS CONTAINER (d-md-none) --}}
+            <div class="d-md-none no-print" id="ledgerMobileContainer">
+            </div>
         </div>
 
         {{-- PRINT ONLY CONTAINER --}}
@@ -458,7 +711,9 @@
                 </div>
             </div>
 
-            <table class="print-table">
+            <div id="printGroupsContainer"></div>
+
+            <table class="print-table" id="printSingleTableFallback" style="display:none;">
                 <thead>
                     <tr>
                         <th class="text-left" style="width: 10%;">Date</th>
@@ -644,204 +899,429 @@
                         </div>
                     `);
 
-                    let totalDebit = 0;
-                    let totalCredit = 0;
-                    let lastBalance = parseFloat(res.opening_balance);
-
-                    // Update Top Metrics (Desktop & Mobile)
-                    let formattedOpening = 'Rs ' + lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    $('#pillOpeningBalance, #mobPillOpeningBalance').text(formattedOpening);
-
-                    // Desktop Opening Row
-                    let html = `
-                        <tr class="bg-light fw-bold">
-                            <td class="text-center">-</td>
-                            <td class="text-center">-</td>
-                            <td class="text-center">-</td>
-                            <td class="text-start">Opening Balance (B/F)</td>
-                            <td class="text-end">-</td>
-                            <td class="text-end">-</td>
-                            <td class="text-end text-dark">
-                                Rs ${lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2})} 
-                            </td>
-                        </tr>
-                    `;
-
-                    let mobHtml = `
-                        <div class="mob-card p-2.5 p-2 mb-2 bg-light">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <strong class="text-dark" style="font-size: 12.5px;">Opening Balance (B/F)</strong>
-                                <strong class="text-dark" style="font-size: 13px;">Rs ${lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong>
-                            </div>
-                        </div>
-                    `;
-
-                    res.transactions.forEach((t, i) => {
-                        let debit = t.debit && t.debit > 0 ? parseFloat(t.debit) : 0;
-                        let credit = t.credit && t.credit > 0 ? parseFloat(t.credit) : 0;
-                        totalDebit += debit;
-                        totalCredit += credit;
-                        lastBalance = parseFloat(t.balance);
-
-                        let balLabel = lastBalance >= 0 ? 'Dr' : 'Cr';
-                        let balClass = lastBalance >= 0 ? 'balance-positive' : 'balance-negative';
-                        let custName = t.customer_name || '-';
-
-                        let invoiceBadge = t.invoice_url 
-                            ? `<a href="${t.invoice_url}" target="_blank" class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace text-decoration-none py-1 px-2 shadow-sm" title="View & Print Invoice" style="cursor: pointer;"><i class="fas fa-file-invoice me-1"></i>${t.invoice} <i class="fas fa-external-link-alt ms-1" style="font-size: 8.5px;"></i></a>`
-                            : `<span class="badge bg-light text-primary border font-monospace">${t.invoice ?? '-'}</span>`;
-
-                        let mobInvoiceBadge = t.invoice_url 
-                            ? `<a href="${t.invoice_url}" target="_blank" class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace text-decoration-none" title="View & Print Invoice"><i class="fas fa-file-invoice me-1"></i>${t.invoice} <i class="fas fa-external-link-alt ms-1" style="font-size: 8.5px;"></i></a>`
-                            : `<span class="badge bg-light text-primary border font-monospace">${t.invoice ?? 'REF'}</span>`;
-
-                        // Desktop Row
-                        html += `
-                            <tr>
-                                <td class="text-center small text-nowrap">${t.date}</td>
-                                <td class="text-center">${invoiceBadge}</td>
-                                <td class="fw-bold text-dark">${custName}</td>
-                                <td class="text-start">${t.description}</td>
-                                <td class="text-end text-danger fw-semibold">${debit > 0 ? 'Rs ' + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                                <td class="text-end text-success fw-semibold">${credit > 0 ? 'Rs ' + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                                <td class="text-end fw-bold ${balClass}">
-                                    Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} 
-                                    <small class="text-muted" style="font-size:0.75em">${balLabel}</small>
-                                </td>
-                            </tr>
-                        `;
-
-                        // Mobile Card
-                        mobHtml += `
-                            <div class="mob-card p-2.5 p-2 mb-2">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    ${mobInvoiceBadge}
-                                    <small class="text-muted" style="font-size: 10.5px;">${t.date}</small>
-                                </div>
-                                <div class="mb-1">
-                                    <strong class="text-dark d-block" style="font-size: 12.5px;">${custName}</strong>
-                                    <small class="text-muted d-block" style="font-size: 11px;">${t.description}</small>
-                                </div>
-                                <div class="border-top pt-2 mt-1">
-                                    <div class="row g-1 text-center" style="font-size: 11px;">
-                                        <div class="col-4 border-end">
-                                            <span class="text-muted d-block" style="font-size: 10px;">Debit (Dr)</span>
-                                            <strong class="text-danger">${debit > 0 ? 'Rs ' + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</strong>
-                                        </div>
-                                        <div class="col-4 border-end">
-                                            <span class="text-muted d-block" style="font-size: 10px;">Credit (Cr)</span>
-                                            <strong class="text-success">${credit > 0 ? 'Rs ' + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</strong>
-                                        </div>
-                                        <div class="col-4">
-                                            <span class="text-muted d-block" style="font-size: 10px;">Balance</span>
-                                            <strong class="${balClass}">Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} <small>${balLabel}</small></strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    });
-
-                    // Totals Row
-                    html += `
-                        <tr class="fw-bold bg-light">
-                            <td colspan="4" class="text-end text-dark">Totals:</td>
-                            <td class="text-end text-danger">Rs ${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td class="text-end text-success">Rs ${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td class="text-end ${lastBalance >= 0 ? 'balance-positive' : 'balance-negative'}">Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} ${lastBalance >= 0 ? 'Dr' : 'Cr'}</td>
-                        </tr>
-                    `;
-
-                    $("#ledgerBody").html(html);
-                    $("#ledgerMobileContainer").html(mobHtml);
-
-                    // Update Top Summary Pills (Desktop & Mobile)
-                    let formattedDebit   = 'Rs ' + totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    let formattedCredit  = 'Rs ' + totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    let formattedClosing = 'Rs ' + Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + (lastBalance >= 0 ? 'Dr' : 'Cr');
-
-                    $('#pillTotalDebit, #mobPillTotalDebit').text(formattedDebit);
-                    $('#pillTotalCredit, #mobPillTotalCredit').text(formattedCredit);
-                    $('#pillClosingBalance, #mobPillClosingBalance').text(formattedClosing);
-
-                    // --- POPULATE PRINT LAYOUT ---
-                    $('#printCustName').text(res.customer.customer_name);
-                    $('#printDateRangeVal').text(displayStart + ' to ' + displayEnd);
-                    $('#printTotalDueVal').text(lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2}));
-
-                    let printHtml = `
-                        <tr>
-                            <td class="text-left fw-bold">-</td>
-                            <td class="text-left fw-bold">Opening Balance</td>
-                            <td class="text-center fw-bold">-</td>
-                            <td class="text-left fw-bold">Opening Balance (B/F)</td>
-                            <td class="text-right fw-bold">-</td>
-                            <td class="text-right fw-bold">-</td>
-                            <td class="text-right fw-bold">${parseFloat(res.opening_balance).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                        </tr>
-                    `;
-
-                    res.transactions.forEach((t) => {
-                        let debit = t.debit && t.debit > 0 ? parseFloat(t.debit) : 0;
-                        let credit = t.credit && t.credit > 0 ? parseFloat(t.credit) : 0;
-                        let bal = parseFloat(t.balance);
-
-                        // Extract details and bank from description/ref
-                        let type = 'Journal Entry';
-                        let refDesc = t.description || '';
-                        
-                        if (refDesc.toLowerCase().includes('payment') || refDesc.toLowerCase().includes('receipt')) {
-                            type = 'Payment Received';
-                        } else if (refDesc.toLowerCase().includes('sale invoice')) {
-                            type = 'Sale Invoice';
-                        }
-                        
-                        // Look for A/C: bank name
-                        let acMatch = refDesc.match(/\[A\/C:\s*([^\]]+)\]/);
-                        if (acMatch) {
-                            refDesc = refDesc.replace(acMatch[0], '').trim();
-                        }
-
-                        // Format date to DD-MMM-YYYY
-                        let dStr = t.date;
-                        if (t.sort_date) {
-                            let dObj = new Date(t.sort_date);
-                            if (!isNaN(dObj)) {
-                                let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                                dStr = ('0' + dObj.getDate()).slice(-2) + '-' + months[dObj.getMonth()] + '-' + dObj.getFullYear();
-                            }
-                        }
-
-                        let invNo = (t.invoice && t.invoice !== '-') ? t.invoice : '-';
-
-                        printHtml += `
-                            <tr>
-                                <td class="text-left">${dStr}</td>
-                                <td class="text-left">${type}</td>
-                                <td class="text-left font-monospace">${invNo}</td>
-                                <td class="text-left">${refDesc}</td>
-                                <td class="text-right">${debit > 0 ? debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                                <td class="text-right">${credit > 0 ? credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                                <td class="text-right">${bal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            </tr>
-                        `;
-                    });
-
-                    printHtml += `
-                        <tr>
-                            <td colspan="4" class="text-right fw-bold">Total:</td>
-                            <td class="text-right fw-bold">${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td class="text-right fw-bold">${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td class="text-right fw-bold">${lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                        </tr>
-                    `;
-                    $('#printLedgerBody').html(printHtml);
-                    // -----------------------------
+                    renderCustomerAccordionView(res, displayStart, displayEnd);
                 }).fail(function() {
                     $("#loader").hide();
                     alert("Error loading report data.");
                 });
             }
+
+            function fmtMoney(num) {
+                return Number(num || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+
+            function escapeHtml(str) {
+                return String(str ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function getCustomerBalanceMeta(bal) {
+                let val = parseFloat(bal || 0);
+                return {
+                    label: val >= 0 ? 'Dr' : 'Cr',
+                    cls: val >= 0 ? 'balance-positive' : 'balance-negative'
+                };
+            }
+
+            function renderCustomerAccordionView(res, displayStart, displayEnd) {
+                $('#singleCombinedSection').hide();
+                $('#customerAccordionSection').show();
+
+                let groups = Array.isArray(res.customer_groups) ? res.customer_groups : [];
+
+                if (groups.length === 0 && Array.isArray(res.transactions) && res.transactions.length > 0) {
+                    let td = 0, tc = 0;
+                    res.transactions.forEach(t => { td += parseFloat(t.debit || 0); tc += parseFloat(t.credit || 0); });
+                    groups = [{
+                        customer: res.customer || { id: 0, customer_name: 'Customer', mobile: '', address: '', city: '' },
+                        opening_balance: parseFloat(res.opening_balance || 0),
+                        total_debit: td,
+                        total_credit: tc,
+                        closing_balance: parseFloat(res.closing_balance ?? res.opening_balance ?? 0),
+                        entry_count: res.transactions.length,
+                        transactions: res.transactions
+                    }];
+                }
+
+                let grandOpening = parseFloat(res.opening_balance || 0);
+                let grandDebit = parseFloat(res.total_debit ?? groups.reduce((s, g) => s + parseFloat(g.total_debit || 0), 0));
+                let grandCredit = parseFloat(res.total_credit ?? groups.reduce((s, g) => s + parseFloat(g.total_credit || 0), 0));
+                let grandClosing = parseFloat(res.closing_balance ?? groups.reduce((s, g) => s + parseFloat(g.closing_balance || 0), 0));
+
+                // Top Summary Pills
+                $('#pillOpeningBalance, #mobPillOpeningBalance').text('Rs ' + fmtMoney(grandOpening));
+                $('#pillTotalDebit, #mobPillTotalDebit').text('Rs ' + fmtMoney(grandDebit));
+                $('#pillTotalCredit, #mobPillTotalCredit').text('Rs ' + fmtMoney(grandCredit));
+                $('#pillClosingBalance, #mobPillClosingBalance').text('Rs ' + fmtMoney(Math.abs(grandClosing)) + ' ' + (grandClosing >= 0 ? 'Dr' : 'Cr'));
+
+                $('#customerCountBadge').text(groups.length + (groups.length === 1 ? ' Customer' : ' Customers'));
+                $('#custAccToolbar').toggle(groups.length > 1 || res.mode === 'all');
+
+                if (groups.length === 0) {
+                    $('#customerGroupsContainer').html(`
+                        <div class="card border-0 shadow-sm rounded-3 bg-white p-4 text-center text-muted">
+                            <i class="fas fa-inbox fa-2x mb-2 opacity-50"></i>
+                            <div class="fw-bold">No customer ledger records found for this period.</div>
+                        </div>
+                    `);
+                    $('#printGroupsContainer').html('');
+                    return;
+                }
+
+                let autoExpand = (res.mode === 'single' || groups.length === 1);
+                let cardsHtml = '';
+
+                groups.forEach((g, idx) => {
+                    let c = g.customer || {};
+                    let cName = c.customer_name || 'Customer';
+                    let cPhone = c.mobile || '';
+                    let cLoc = [c.address, c.city].filter(Boolean).join(', ');
+                    let openBal = parseFloat(g.opening_balance || 0);
+                    let totDr = parseFloat(g.total_debit || 0);
+                    let totCr = parseFloat(g.total_credit || 0);
+                    let closeBal = parseFloat(g.closing_balance || 0);
+                    let closeMeta = getCustomerBalanceMeta(closeBal);
+                    let openMeta = getCustomerBalanceMeta(openBal);
+
+                    let subParts = [];
+                    if (cPhone) subParts.push(`<i class="fas fa-phone-alt me-1"></i>${escapeHtml(cPhone)}`);
+                    if (cLoc) subParts.push(`<i class="fas fa-map-marker-alt me-1"></i>${escapeHtml(cLoc)}`);
+
+                    cardsHtml += `
+                        <div class="cust-acc-card cust-theme-${idx % 6} ${autoExpand ? 'is-open' : ''}" data-group-idx="${idx}" data-cust-search="${escapeHtml((cName + ' ' + cPhone + ' ' + cLoc).toLowerCase())}">
+                            <div class="cust-acc-header">
+                                <div class="cust-acc-left">
+                                    <div class="cust-acc-icon">
+                                        <i class="fas fa-user-tie"></i>
+                                    </div>
+                                    <div>
+                                        <div class="cust-acc-title-row">
+                                            <span class="cust-acc-name">${escapeHtml(cName)}</span>
+                                            <span class="cust-acc-chip chip-entries">${g.entry_count || 0} ${(g.entry_count || 0) === 1 ? 'Entry' : 'Entries'}</span>
+                                            <span class="cust-acc-chip">Opening: Rs ${fmtMoney(Math.abs(openBal))} ${openMeta.label}</span>
+                                        </div>
+                                        ${subParts.length ? `<div class="cust-acc-sub">${subParts.join(' &nbsp;|&nbsp; ')}</div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="cust-acc-right">
+                                    <div class="cust-kpi-box kpi-debit">
+                                        <div class="cust-kpi-val text-danger">Rs ${fmtMoney(totDr)}</div>
+                                        <div class="cust-kpi-lbl">DEBIT (DR)</div>
+                                    </div>
+                                    <div class="cust-kpi-box kpi-credit">
+                                        <div class="cust-kpi-val text-success">Rs ${fmtMoney(totCr)}</div>
+                                        <div class="cust-kpi-lbl">CREDIT (CR)</div>
+                                    </div>
+                                    <div class="cust-kpi-box kpi-closing">
+                                        <div class="cust-kpi-val ${closeMeta.cls}">Rs ${fmtMoney(Math.abs(closeBal))} <small style="font-size:0.72em;">${closeMeta.label}</small></div>
+                                        <div class="cust-kpi-lbl">CLOSING BAL</div>
+                                    </div>
+                                    <button type="button" class="cust-acc-chevron" aria-label="Toggle customer ledger">
+                                        <i class="fas fa-chevron-down"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="cust-acc-body" style="${autoExpand ? 'display:block;' : 'display:none;'}">
+                                <div class="cust-acc-inner-bar">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold btn-print-single-customer" data-group-idx="${idx}" style="font-size: 0.74rem;">
+                                            <i class="fas fa-print me-1"></i> Print Customer
+                                        </button>
+                                    </div>
+                                    <div class="input-group input-group-sm" style="width: 260px;">
+                                        <span class="input-group-text bg-white border-end-0 text-muted"><i class="fas fa-search"></i></span>
+                                        <input type="text" class="form-control border-start-0 cust-inner-search" data-group-idx="${idx}" placeholder="Live search in ${escapeHtml(cName)}...">
+                                    </div>
+                                </div>
+
+                                {{-- Desktop Table --}}
+                                <div class="cust-acc-table-wrap d-none d-md-block">
+                                    <table class="table table-hover align-middle mb-0 cust-acc-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 11%;">Date</th>
+                                                <th style="width: 15%;">Ref / Invoice</th>
+                                                <th>Description</th>
+                                                <th class="text-end" style="width: 13%;">Debit (Dr)</th>
+                                                <th class="text-end" style="width: 13%;">Credit (Cr)</th>
+                                                <th class="text-end" style="width: 15%;">Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="custGroupTableBody_${idx}"></tbody>
+                                    </table>
+                                </div>
+
+                                {{-- Mobile Rows --}}
+                                <div class="d-md-none" id="custGroupMobileBody_${idx}"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                $('#customerGroupsContainer').html(cardsHtml);
+                groups.forEach((g, idx) => renderCustomerGroupRows(idx, res));
+                populateAllCustomerGroupsPrintLayout(res, groups, displayStart, displayEnd);
+            }
+
+            function renderCustomerGroupRows(idx, res) {
+                let groups = (res && res.customer_groups) ? res.customer_groups : [];
+                let g = groups[idx];
+                if (!g) return;
+
+                let searchQ = ($('.cust-inner-search[data-group-idx="' + idx + '"]').val() || '').toLowerCase().trim();
+                let allTx = Array.isArray(g.transactions) ? g.transactions : [];
+                let visibleTx = allTx.filter(t => {
+                    if (!searchQ) return true;
+                    let hay = ((t.date || '') + ' ' + (t.invoice || '') + ' ' + (t.description || '')).toLowerCase();
+                    return hay.includes(searchQ);
+                });
+
+                let openBal = parseFloat(g.opening_balance || 0);
+                let openMeta = getCustomerBalanceMeta(openBal);
+
+                let deskHtml = `
+                    <tr class="bg-light fw-bold">
+                        <td class="text-nowrap text-muted">-</td>
+                        <td>-</td>
+                        <td>Opening Balance (B/F)</td>
+                        <td class="text-end">-</td>
+                        <td class="text-end">-</td>
+                        <td class="text-end ${openMeta.cls}">Rs ${fmtMoney(Math.abs(openBal))} <small class="text-muted">${openMeta.label}</small></td>
+                    </tr>
+                `;
+
+                let mobHtml = `
+                    <div class="mob-card p-2 mb-2 bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="text-dark" style="font-size: 12px;">Opening Balance (B/F)</strong>
+                            <strong class="${openMeta.cls}" style="font-size: 12.5px;">Rs ${fmtMoney(Math.abs(openBal))} <small>${openMeta.label}</small></strong>
+                        </div>
+                    </div>
+                `;
+
+                if (visibleTx.length === 0) {
+                    deskHtml += `
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-3">No matching transactions found.</td>
+                        </tr>
+                    `;
+                }
+
+                visibleTx.forEach(t => {
+                    let debit = t.debit && t.debit > 0 ? parseFloat(t.debit) : 0;
+                    let credit = t.credit && t.credit > 0 ? parseFloat(t.credit) : 0;
+                    let bal = parseFloat(t.balance || 0);
+                    let meta = getCustomerBalanceMeta(bal);
+
+                    let invoiceBadge = t.invoice_url
+                        ? `<a href="${t.invoice_url}" target="_blank" class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace text-decoration-none py-1 px-2 shadow-sm" title="View & Print Invoice"><i class="fas fa-file-invoice me-1"></i>${escapeHtml(t.invoice)} <i class="fas fa-external-link-alt ms-1" style="font-size: 8.5px;"></i></a>`
+                        : `<span class="badge bg-light text-primary border font-monospace">${escapeHtml(t.invoice ?? '-')}</span>`;
+
+                    let debitDisplay = debit > 0 ? 'Rs ' + fmtMoney(debit) : '-';
+                    let creditDisplay = credit > 0 ? 'Rs ' + fmtMoney(credit) : '-';
+
+                    deskHtml += `
+                        <tr>
+                            <td class="text-nowrap small">${escapeHtml(t.date)}</td>
+                            <td>${invoiceBadge}</td>
+                            <td>${escapeHtml(t.description || '')}</td>
+                            <td class="text-end text-danger fw-semibold">${debitDisplay}</td>
+                            <td class="text-end text-success fw-semibold">${creditDisplay}</td>
+                            <td class="text-end fw-bold ${meta.cls}">Rs ${fmtMoney(Math.abs(bal))} <small class="text-muted" style="font-size:0.75em">${meta.label}</small></td>
+                        </tr>
+                    `;
+
+                    mobHtml += `
+                        <div class="mob-card p-2 mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                ${invoiceBadge}
+                                <small class="text-muted" style="font-size: 10.5px;">${escapeHtml(t.date)}</small>
+                            </div>
+                            <div class="mb-1">
+                                <small class="text-muted d-block" style="font-size: 11px;">${escapeHtml(t.description || '')}</small>
+                            </div>
+                            <div class="border-top pt-2 mt-1">
+                                <div class="row g-1 text-center" style="font-size: 11px;">
+                                    <div class="col-4 border-end">
+                                        <span class="text-muted d-block" style="font-size: 10px;">Debit (Dr)</span>
+                                        <strong class="text-danger">${debitDisplay}</strong>
+                                    </div>
+                                    <div class="col-4 border-end">
+                                        <span class="text-muted d-block" style="font-size: 10px;">Credit (Cr)</span>
+                                        <strong class="text-success">${creditDisplay}</strong>
+                                    </div>
+                                    <div class="col-4">
+                                        <span class="text-muted d-block" style="font-size: 10px;">Balance</span>
+                                        <strong class="${meta.cls}">Rs ${fmtMoney(Math.abs(bal))} <small>${meta.label}</small></strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                let closeBal = parseFloat(g.closing_balance || 0);
+                let closeMeta = getCustomerBalanceMeta(closeBal);
+                deskHtml += `
+                    <tr class="fw-bold bg-light">
+                        <td colspan="3" class="text-end text-dark">Customer Totals:</td>
+                        <td class="text-end text-danger">Rs ${fmtMoney(g.total_debit)}</td>
+                        <td class="text-end text-success">Rs ${fmtMoney(g.total_credit)}</td>
+                        <td class="text-end ${closeMeta.cls}">Rs ${fmtMoney(Math.abs(closeBal))} <small class="text-muted" style="font-size:0.75em">${closeMeta.label}</small></td>
+                    </tr>
+                `;
+
+                $('#custGroupTableBody_' + idx).html(deskHtml);
+                $('#custGroupMobileBody_' + idx).html(mobHtml);
+            }
+
+            function populateAllCustomerGroupsPrintLayout(res, groups, displayStart, displayEnd) {
+                let cTitle = groups.length === 1 ? (groups[0].customer?.customer_name || 'CUSTOMER') : ('ALL CUSTOMERS (' + groups.length + ')');
+                $('#printCustName').text(cTitle);
+                $('#printDateRangeVal').text(displayStart + ' to ' + displayEnd);
+                let grandClosing = groups.reduce((s, g) => s + parseFloat(g.closing_balance || 0), 0);
+                $('#printTotalDueVal').text(fmtMoney(grandClosing));
+                $('#printSingleTableFallback').hide();
+
+                let html = '';
+                groups.forEach(g => {
+                    html += buildSingleCustomerGroupPrintHtml(g);
+                });
+                $('#printGroupsContainer').html(html);
+            }
+
+            function buildSingleCustomerGroupPrintHtml(g) {
+                let cName = g.customer?.customer_name || 'Customer';
+                let openBal = parseFloat(g.opening_balance || 0);
+                let closeBal = parseFloat(g.closing_balance || 0);
+
+                let rows = `
+                    <tr>
+                        <td class="text-left fw-bold">-</td>
+                        <td class="text-left fw-bold">Opening Balance</td>
+                        <td class="text-center fw-bold">-</td>
+                        <td class="text-left fw-bold">Opening Balance (B/F)</td>
+                        <td class="text-right fw-bold">-</td>
+                        <td class="text-right fw-bold">-</td>
+                        <td class="text-right fw-bold">${fmtMoney(openBal)}</td>
+                    </tr>
+                `;
+
+                (g.transactions || []).forEach(t => {
+                    let debit = t.debit && t.debit > 0 ? parseFloat(t.debit) : 0;
+                    let credit = t.credit && t.credit > 0 ? parseFloat(t.credit) : 0;
+                    let bal = parseFloat(t.balance || 0);
+
+                    let type = 'Journal Entry';
+                    let refDesc = t.description || '';
+                    if (refDesc.toLowerCase().includes('payment') || refDesc.toLowerCase().includes('receipt')) {
+                        type = 'Payment Received';
+                    } else if (refDesc.toLowerCase().includes('sale invoice')) {
+                        type = 'Sale Invoice';
+                    }
+
+                    let acMatch = refDesc.match(/\[A\/C:\s*([^\]]+)\]/);
+                    if (acMatch) refDesc = refDesc.replace(acMatch[0], '').trim();
+
+                    let invNo = (t.invoice && t.invoice !== '-') ? t.invoice : '-';
+
+                    rows += `
+                        <tr>
+                            <td class="text-left">${escapeHtml(t.date || '-')}</td>
+                            <td class="text-left">${escapeHtml(type)}</td>
+                            <td class="text-left font-monospace">${escapeHtml(invNo)}</td>
+                            <td class="text-left">${escapeHtml(refDesc)}</td>
+                            <td class="text-right">${debit > 0 ? fmtMoney(debit) : '-'}</td>
+                            <td class="text-right">${credit > 0 ? fmtMoney(credit) : '-'}</td>
+                            <td class="text-right">${fmtMoney(bal)}</td>
+                        </tr>
+                    `;
+                });
+
+                rows += `
+                    <tr>
+                        <td colspan="4" class="text-right fw-bold">Total:</td>
+                        <td class="text-right fw-bold">${fmtMoney(g.total_debit)}</td>
+                        <td class="text-right fw-bold">${fmtMoney(g.total_credit)}</td>
+                        <td class="text-right fw-bold">${fmtMoney(closeBal)}</td>
+                    </tr>
+                `;
+
+                return `
+                    <div style="margin-bottom: 18px; page-break-inside: avoid;">
+                        <div style="font-weight: 800; font-size: 13px; border-bottom: 1px solid #000; padding-bottom: 3px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                            <span>${escapeHtml(cName)}</span>
+                            <span>Closing: PKR ${fmtMoney(Math.abs(closeBal))} ${closeBal >= 0 ? 'Dr' : 'Cr'}</span>
+                        </div>
+                        <table class="print-table">${rows}</table>
+                    </div>
+                `;
+            }
+
+            // Accordion Header Toggle
+            $(document).on('click', '.cust-acc-header', function() {
+                let $card = $(this).closest('.cust-acc-card');
+                let $body = $card.find('> .cust-acc-body');
+                $card.toggleClass('is-open');
+                $body.slideToggle(180);
+            });
+
+            // Expand All / Collapse All
+            $(document).on('click', '#btnExpandAllCustomers', function() {
+                $('#customerGroupsContainer .cust-acc-card:visible').each(function() {
+                    $(this).addClass('is-open').find('> .cust-acc-body').slideDown(150);
+                });
+            });
+
+            $(document).on('click', '#btnCollapseAllCustomers', function() {
+                $('#customerGroupsContainer .cust-acc-card').each(function() {
+                    $(this).removeClass('is-open').find('> .cust-acc-body').slideUp(150);
+                });
+            });
+
+            // Filter Customer Containers by Name/Phone/Location
+            $(document).on('input', '#customerCardSearchInput', function() {
+                let q = ($(this).val() || '').toLowerCase().trim();
+                let visibleCount = 0;
+                $('#customerGroupsContainer .cust-acc-card').each(function() {
+                    let hay = $(this).data('cust-search') || '';
+                    let match = !q || hay.includes(q);
+                    $(this).toggle(match);
+                    if (match) visibleCount++;
+                });
+                $('#customerCountBadge').text(visibleCount + (visibleCount === 1 ? ' Customer' : ' Customers'));
+            });
+
+            // Live search inside individual customer card
+            $(document).on('input', '.cust-inner-search', function() {
+                let idx = $(this).data('group-idx');
+                if (window.currentLedgerResponse) {
+                    renderCustomerGroupRows(idx, window.currentLedgerResponse);
+                }
+            });
+
+            // Print Single Customer from inside its container
+            $(document).on('click', '.btn-print-single-customer', function(e) {
+                e.stopPropagation();
+                let idx = $(this).data('group-idx');
+                let res = window.currentLedgerResponse;
+                if (!res || !res.customer_groups || !res.customer_groups[idx]) return;
+                let g = res.customer_groups[idx];
+                $('#printCustName').text(g.customer?.customer_name || 'CUSTOMER');
+                $('#printTotalDueVal').text(fmtMoney(g.closing_balance));
+                $('#printGroupsContainer').html(buildSingleCustomerGroupPrintHtml(g));
+                updateReportTitle(g.customer?.customer_name);
+                window.print();
+                setTimeout(function() {
+                    let start = $('.startDateInput').val() || '2000-01-01';
+                    let end = $('.endDateInput').val() || '{{ date("Y-m-d") }}';
+                    populateAllCustomerGroupsPrintLayout(res, res.customer_groups, formatDisplayDate(start), formatDisplayDate(end));
+                }, 500);
+            });
 
             function formatDisplayDate(dateStr) {
                 if (!dateStr) return '-';
@@ -854,7 +1334,9 @@
                 $('#partyLedgerTabs button').removeClass('active');
                 $(this).addClass('active');
                 if (window.currentLedgerResponse) {
-                    renderCustomerView(window.currentLedgerResponse);
+                    let start = $('.startDateInput').val() || '2000-01-01';
+                    let end = $('.endDateInput').val() || '{{ date("Y-m-d") }}';
+                    renderCustomerAccordionView(window.currentLedgerResponse, formatDisplayDate(start), formatDisplayDate(end));
                 }
             });
 
@@ -862,6 +1344,8 @@
                 $('#partyLedgerTabs button').removeClass('active');
                 $(this).addClass('active');
                 if (window.currentLedgerResponse && window.currentLedgerResponse.combined_ledger) {
+                    $('#customerAccordionSection').hide();
+                    $('#singleCombinedSection').show();
                     renderCombinedView(window.currentLedgerResponse.combined_ledger);
                 }
             });
@@ -969,121 +1453,6 @@
                 $('#pillClosingBalance, #mobPillClosingBalance').text('Rs ' + Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2}) + ' ' + (lastBalance >= 0 ? 'Dr (Lene)' : 'Cr (Dene)'));
             }
 
-            function renderCustomerView(res) {
-                let totalDebit = 0;
-                let totalCredit = 0;
-                let lastBalance = parseFloat(res.opening_balance);
-
-                let formattedOpening = 'Rs ' + lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                $('#pillOpeningBalance, #mobPillOpeningBalance').text(formattedOpening);
-
-                let html = `
-                    <tr class="bg-light fw-bold">
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-start">Opening Balance (B/F)</td>
-                        <td class="text-end">-</td>
-                        <td class="text-end">-</td>
-                        <td class="text-end text-dark">
-                            Rs ${lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2})} 
-                        </td>
-                    </tr>
-                `;
-
-                let mobHtml = `
-                    <div class="mob-card p-2.5 p-2 mb-2 bg-light">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <strong class="text-dark" style="font-size: 12.5px;">Opening Balance (B/F)</strong>
-                            <strong class="text-dark" style="font-size: 13px;">Rs ${lastBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong>
-                        </div>
-                    </div>
-                `;
-
-                res.transactions.forEach((t, i) => {
-                    let debit = t.debit && t.debit > 0 ? parseFloat(t.debit) : 0;
-                    let credit = t.credit && t.credit > 0 ? parseFloat(t.credit) : 0;
-                    totalDebit += debit;
-                    totalCredit += credit;
-                    lastBalance = parseFloat(t.balance);
-
-                    let balLabel = lastBalance >= 0 ? 'Dr' : 'Cr';
-                    let balClass = lastBalance >= 0 ? 'balance-positive' : 'balance-negative';
-                    let custName = t.customer_name || '-';
-
-                    let invoiceBadge = t.invoice_url 
-                        ? `<a href="${t.invoice_url}" target="_blank" class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace text-decoration-none py-1 px-2 shadow-sm" title="View & Print Invoice" style="cursor: pointer;"><i class="fas fa-file-invoice me-1"></i>${t.invoice} <i class="fas fa-external-link-alt ms-1" style="font-size: 8.5px;"></i></a>`
-                        : `<span class="badge bg-light text-primary border font-monospace">${t.invoice ?? '-'}</span>`;
-
-                    let mobInvoiceBadge = t.invoice_url 
-                        ? `<a href="${t.invoice_url}" target="_blank" class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace text-decoration-none" title="View & Print Invoice"><i class="fas fa-file-invoice me-1"></i>${t.invoice} <i class="fas fa-external-link-alt ms-1" style="font-size: 8.5px;"></i></a>`
-                        : `<span class="badge bg-light text-primary border font-monospace">${t.invoice ?? 'REF'}</span>`;
-
-                    html += `
-                        <tr>
-                            <td class="text-center small text-nowrap">${t.date}</td>
-                            <td class="text-center">${invoiceBadge}</td>
-                            <td class="fw-bold text-dark">${custName}</td>
-                            <td class="text-start">${t.description}</td>
-                            <td class="text-end text-danger fw-semibold">${debit > 0 ? 'Rs ' + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                            <td class="text-end text-success fw-semibold">${credit > 0 ? 'Rs ' + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                            <td class="text-end fw-bold ${balClass}">
-                                Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} 
-                                <small class="text-muted" style="font-size:0.75em">${balLabel}</small>
-                            </td>
-                        </tr>
-                    `;
-
-                    mobHtml += `
-                        <div class="mob-card p-2.5 p-2 mb-2">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                ${mobInvoiceBadge}
-                                <small class="text-muted" style="font-size: 10.5px;">${t.date}</small>
-                            </div>
-                            <div class="mb-1">
-                                <strong class="text-dark d-block" style="font-size: 12.5px;">${custName}</strong>
-                                <small class="text-muted d-block" style="font-size: 11px;">${t.description}</small>
-                            </div>
-                            <div class="border-top pt-2 mt-1">
-                                <div class="row g-1 text-center" style="font-size: 11px;">
-                                    <div class="col-4 border-end">
-                                        <span class="text-muted d-block" style="font-size: 10px;">Debit (Dr)</span>
-                                        <strong class="text-danger">${debit > 0 ? 'Rs ' + debit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</strong>
-                                    </div>
-                                    <div class="col-4 border-end">
-                                        <span class="text-muted d-block" style="font-size: 10px;">Credit (Cr)</span>
-                                        <strong class="text-success">${credit > 0 ? 'Rs ' + credit.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</strong>
-                                    </div>
-                                    <div class="col-4">
-                                        <span class="text-muted d-block" style="font-size: 10px;">Balance</span>
-                                        <strong class="${balClass}">Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} <small>${balLabel}</small></strong>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                html += `
-                    <tr class="fw-bold bg-light">
-                        <td colspan="4" class="text-end text-dark">Totals:</td>
-                        <td class="text-end text-danger">Rs ${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                        <td class="text-end text-success">Rs ${totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                        <td class="text-end ${lastBalance >= 0 ? 'balance-positive' : 'balance-negative'}">Rs ${Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2})} ${lastBalance >= 0 ? 'Dr' : 'Cr'}</td>
-                    </tr>
-                `;
-
-                $("#ledgerBody").html(html);
-                $("#ledgerMobileContainer").html(mobHtml);
-
-                let formattedDebit   = 'Rs ' + totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                let formattedCredit  = 'Rs ' + totalCredit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                let formattedClosing = 'Rs ' + Math.abs(lastBalance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + (lastBalance >= 0 ? 'Dr' : 'Cr');
-
-                $('#pillTotalDebit, #mobPillTotalDebit').text(formattedDebit);
-                $('#pillTotalCredit, #mobPillTotalCredit').text(formattedCredit);
-                $('#pillClosingBalance, #mobPillClosingBalance').text(formattedClosing);
-            }
         });
     </script>
 @include('admin_panel.partials.location_selector_script')
