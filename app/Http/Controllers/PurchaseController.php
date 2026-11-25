@@ -524,13 +524,29 @@ class PurchaseController extends Controller
 
                 // Process Serial / IMEI Numbers Creation
                 $serialsList = is_array($item->serials) ? $item->serials : (is_string($item->serials) ? json_decode($item->serials, true) : []);
-                if (is_array($serialsList) && count($serialsList) > 0) {
-                    $serialPieces = $baseQty > 0 ? $baseQty : count($serialsList);
+                $isSerialProduct = $pRec && $pRec->tracking_type === 'serial';
+                if ((is_array($serialsList) && count($serialsList) > 0) || $isSerialProduct) {
+                    $serialPieces = $baseQty > 0 ? (int)$baseQty : count($serialsList ?? []);
                     $effectiveSerialCost = ($serialPieces > 0 && $itemLineTotal > 0)
                         ? round($itemLineTotal / $serialPieces, 2)
                         : (float) $item->price;
 
-                    foreach ($serialsList as $sNum) {
+                    $finalSerials = is_array($serialsList) ? $serialsList : [];
+                    if ($serialPieces > count($finalSerials)) {
+                        $baseSeed = !empty($finalSerials[0]) ? trim($finalSerials[0]) : ('SN-' . $purchase->id . '-' . $item->id);
+                        $needed = $serialPieces - count($finalSerials);
+                        for ($k = 1; $k <= $needed; $k++) {
+                            $cand = $baseSeed . '-' . ($k + 1);
+                            $suffix = 1;
+                            while (\App\Models\ProductSerial::where('product_id', $item->product_id)->where('serial_number', $cand)->exists() || in_array($cand, $finalSerials)) {
+                                $cand = $baseSeed . '-' . ($k + 1) . '-' . $suffix++;
+                            }
+                            $finalSerials[] = $cand;
+                        }
+                        $item->update(['serials' => json_encode(array_values($finalSerials))]);
+                    }
+
+                    foreach ($finalSerials as $sNum) {
                         $sNum = trim($sNum);
                         if ($sNum !== '') {
                             \App\Models\ProductSerial::updateOrCreate([
@@ -1042,13 +1058,30 @@ class PurchaseController extends Controller
                 ]);
 
                 // Update / create serials in purchase
-                if (!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) {
-                    $serialPieces = (!empty($baseQty) && $baseQty > 0) ? $baseQty : count($itemSerialsParsed);
+                $prodObj = \App\Models\Product::find($pid);
+                $isSerialProduct = $prodObj && $prodObj->tracking_type === 'serial';
+                if ((!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) || $isSerialProduct) {
+                    $serialPieces = (!empty($baseQty) && $baseQty > 0) ? (int)$baseQty : count($itemSerialsParsed ?? []);
                     $effectiveSerialCost = ($serialPieces > 0 && $lineTotal > 0)
                         ? round($lineTotal / $serialPieces, 2)
                         : (float) $price;
 
-                    foreach ($itemSerialsParsed as $sNum) {
+                    $finalSerials = is_array($itemSerialsParsed) ? $itemSerialsParsed : [];
+                    if ($serialPieces > count($finalSerials)) {
+                        $baseSeed = !empty($finalSerials[0]) ? trim($finalSerials[0]) : ('SN-' . $purchase->id . '-' . ($i + 1));
+                        $needed = $serialPieces - count($finalSerials);
+                        for ($k = 1; $k <= $needed; $k++) {
+                            $cand = $baseSeed . '-' . ($k + 1);
+                            $suffix = 1;
+                            while (\App\Models\ProductSerial::where('product_id', $pid)->where('serial_number', $cand)->exists() || in_array($cand, $finalSerials)) {
+                                $cand = $baseSeed . '-' . ($k + 1) . '-' . $suffix++;
+                            }
+                            $finalSerials[] = $cand;
+                        }
+                        $purchaseItem->update(['serials' => json_encode(array_values($finalSerials))]);
+                    }
+
+                    foreach ($finalSerials as $sNum) {
                         $sNum = trim($sNum);
                         if ($sNum !== '') {
                             \App\Models\ProductSerial::updateOrCreate([
@@ -1854,13 +1887,30 @@ class PurchaseController extends Controller
                 ]);
 
                 // Update / create serials in purchase
-                if (!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) {
-                    $serialPieces = (!empty($baseQty) && $baseQty > 0) ? $baseQty : count($itemSerialsParsed);
+                $prodObj = \App\Models\Product::find($pid);
+                $isSerialProduct = $prodObj && $prodObj->tracking_type === 'serial';
+                if ((!empty($itemSerialsParsed) && is_array($itemSerialsParsed) && count($itemSerialsParsed) > 0) || $isSerialProduct) {
+                    $serialPieces = (!empty($baseQty) && $baseQty > 0) ? (int)$baseQty : count($itemSerialsParsed ?? []);
                     $effectiveSerialCost = ($serialPieces > 0 && $lineTotal > 0)
                         ? round($lineTotal / $serialPieces, 2)
                         : (float) $price;
 
-                    foreach ($itemSerialsParsed as $sNum) {
+                    $finalSerials = is_array($itemSerialsParsed) ? $itemSerialsParsed : [];
+                    if ($serialPieces > count($finalSerials)) {
+                        $baseSeed = !empty($finalSerials[0]) ? trim($finalSerials[0]) : ('SN-' . $purchase->id . '-' . ($i + 1));
+                        $needed = $serialPieces - count($finalSerials);
+                        for ($k = 1; $k <= $needed; $k++) {
+                            $cand = $baseSeed . '-' . ($k + 1);
+                            $suffix = 1;
+                            while (\App\Models\ProductSerial::where('product_id', $pid)->where('serial_number', $cand)->exists() || in_array($cand, $finalSerials)) {
+                                $cand = $baseSeed . '-' . ($k + 1) . '-' . $suffix++;
+                            }
+                            $finalSerials[] = $cand;
+                        }
+                        $purchaseItem->update(['serials' => json_encode(array_values($finalSerials))]);
+                    }
+
+                    foreach ($finalSerials as $sNum) {
                         $sNum = trim($sNum);
                         if ($sNum !== '') {
                             \App\Models\ProductSerial::updateOrCreate([

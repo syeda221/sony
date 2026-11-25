@@ -885,7 +885,9 @@ class ReportingController extends Controller
                         }
                         $availSerials = $sQuery->get();
                         if ($availSerials->count() > 0) {
-                            $stockValue = (float) $availSerials->sum('cost_price');
+                            $foundCost = (float) $availSerials->sum('cost_price');
+                            $missingCount = max(0, (float)$balance - $availSerials->count());
+                            $stockValue = $foundCost + ($missingCount * $averagePrice);
                             $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
                         }
                     } elseif ($product->tracking_type === 'batch') {
@@ -1056,7 +1058,9 @@ class ReportingController extends Controller
                     }
                     $availSerials = $sQuery->get();
                     if ($availSerials->count() > 0) {
-                        $stockValue = (float) $availSerials->sum('cost_price');
+                        $foundCost = (float) $availSerials->sum('cost_price');
+                        $missingCount = max(0, (float)$balance - $availSerials->count());
+                        $stockValue = $foundCost + ($missingCount * $averagePrice);
                         $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
                     }
                 } elseif ($product->tracking_type === 'batch') {
