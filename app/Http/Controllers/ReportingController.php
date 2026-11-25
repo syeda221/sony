@@ -3023,123 +3023,67 @@ class ReportingController extends Controller
 
         $balanceService = app(\App\Services\BalanceService::class);
 
-        // If "all" or empty, fetch for ALL customers
+        // All Customers Mode: return strictly isolated per-customer containers
         if (!$customerId || $customerId === 'all') {
-            // Get all customers who have journal entries
-            $customerIds = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
-                ->distinct()
-                ->pluck('party_id')
-                ->toArray();
+            $custQuery = DB::table('customers')
+                ->select('id', 'customer_name', 'mobile', 'address', 'zone', 'province', 'city', 'area')
+                ->orderBy('customer_name');
 
-            // Also include customers with opening balance
-            $obCustomerIds = \App\Models\Customer::where('opening_balance', '>', 0)
-                ->pluck('id')
-                ->toArray();
-
-            $allIds = array_unique(array_merge($customerIds, $obCustomerIds));
-
-            // Apply zone filter if provided
             if ($zoneId) {
-                // Filter allIds to only those customers who belong to the selected zone
-                $validZoneIds = \App\Models\Customer::where('zone', $zoneId)->pluck('id')->toArray();
-                $allIds = array_intersect($allIds, $validZoneIds);
+                $custQuery->where('zone', $zoneId);
             }
-
             $provLedger = $request->province;
             $cityLedger = $request->city;
             $areaLedger = $request->area;
-            if (($provLedger && $provLedger !== 'all') || ($cityLedger && $cityLedger !== 'all') || ($areaLedger && $areaLedger !== 'all')) {
-                $locQ = \App\Models\Customer::query();
-                if ($provLedger && $provLedger !== 'all') $locQ->where('province', $provLedger);
-                if ($cityLedger && $cityLedger !== 'all') $locQ->where('city', $cityLedger);
-                if ($areaLedger && $areaLedger !== 'all') $locQ->where('area', $areaLedger);
-                $validLocIds = $locQ->pluck('id')->toArray();
-                $allIds = array_intersect($allIds, $validLocIds);
+            if ($provLedger && $provLedger !== 'all') {
+                $custQuery->where('province', $provLedger);
+            }
+            if ($cityLedger && $cityLedger !== 'all') {
+                $custQuery->where('city', $cityLedger);
+            }
+            if ($areaLedger && $areaLedger !== 'all') {
+                $custQuery->where('area', $areaLedger);
             }
 
-            $allTransactions = [];
-            $totalOpening = 0;
-            $totalClosing = 0;
+            $customers = $custQuery->get();
 
-            foreach ($allIds as $cid) {
-                $ledgerData = $balanceService->getCustomerLedger($cid, $start, $end);
-                $customerName = $ledgerData['customer']->customer_name ?? 'Unknown';
-                $totalOpening += $ledgerData['opening_balance'];
+            $groups = [];
+            $grandOpening = 0.0;
+            $grandDebit = 0.0;
+            $grandCredit = 0.0;
+            $grandClosing = 0.0;
 
-                foreach ($ledgerData['transactions'] as $row) {
-                    $desc = $row['description'] ?? '';
+            foreach ($customers as $c) {
+                $group = $this->buildCustomerLedgerGroup($c, $start, $end, $balanceService);
 
-                    // Try to find payment account name for receipt entries
-                    $accountName = '';
-                    if ($row['credit'] > 0 && $row['source_type']) {
-                        $accountName = $this->getPaymentAccountName($row['source_type'], $row['source_id']);
-                    }
-                    if ($accountName) {
-                        $desc .= ' [A/C: ' . $accountName . ']';
-                    }
-
-                    $ref = '-';
-                    if (preg_match('/Invoice #(\S+)/', $desc, $matches)) {
-                        $ref = $matches[1];
-                    } elseif (preg_match('/Receipt #(\S+)/', $desc, $matches)) {
-                        $ref = $matches[1];
-                    }
-
-                    $entryDate = $row['date'];
-                    if ($entryDate instanceof \Carbon\Carbon) {
-                        $formattedDate = $entryDate->format('d-M-Y');
-                        $sortDate = $entryDate->format('Y-m-d');
-                    } else {
-                        $formattedDate = \Carbon\Carbon::parse($entryDate)->format('d-M-Y');
-                        $sortDate = \Carbon\Carbon::parse($entryDate)->format('Y-m-d');
-                    }
-
-                    $invoiceUrl = null;
-                    if (($row['source_type'] ?? '') === \App\Models\Sale::class || ($row['source_type'] ?? '') === 'Sale' || ($row['source_type'] ?? '') === 'SaleInvoice') {
-                        if (!empty($row['source_id'])) {
-                            $invoiceUrl = route('sales.invoice', $row['source_id']);
-                        }
-                    }
-                    if (!$invoiceUrl && $ref !== '-') {
-                        $saleId = \App\Models\Sale::where('invoice_no', $ref)->orWhere('id', $ref)->value('id');
-                        if ($saleId) {
-                            $invoiceUrl = route('sales.invoice', $saleId);
-                        }
-                    }
-
-                    $allTransactions[] = [
-                        'sort_date' => $sortDate,
-                        'date' => $formattedDate,
-                        'invoice' => $ref,
-                        'invoice_url' => $invoiceUrl,
-                        'description' => $desc,
-                        'customer_name' => $customerName,
-                        'debit' => $row['debit'] ?? 0,
-                        'credit' => $row['credit'] ?? 0,
-                        'balance' => $row['balance'] ?? 0,
-                    ];
+                // Skip completely inactive zero-balance customers in All Customers mode
+                if (
+                    abs($group['opening_balance']) < 0.005
+                    && abs($group['closing_balance']) < 0.005
+                    && $group['entry_count'] === 0
+                ) {
+                    continue;
                 }
 
-                $totalClosing += $ledgerData['closing_balance'] ?? $ledgerData['opening_balance'];
-            }
-
-            // Sort by date
-            usort($allTransactions, function ($a, $b) {
-                return strcmp($a['sort_date'], $b['sort_date']);
-            });
-
-            // Recalculate running balance across all
-            $running = $totalOpening;
-            foreach ($allTransactions as &$t) {
-                $running += ($t['debit'] - $t['credit']);
-                $t['balance'] = $running;
+                $grandOpening += $group['opening_balance'];
+                $grandDebit += $group['total_debit'];
+                $grandCredit += $group['total_credit'];
+                $grandClosing += $group['closing_balance'];
+                $groups[] = $group;
             }
 
             return response()->json([
+                'mode' => 'all',
                 'customer' => (object)['customer_name' => 'All Customers'],
-                'opening_balance' => $totalOpening,
-                'closing_balance' => $totalClosing,
-                'transactions' => $allTransactions,
+                'is_both' => false,
+                'linked_vendor' => null,
+                'opening_balance' => round($grandOpening, 2),
+                'total_debit' => round($grandDebit, 2),
+                'total_credit' => round($grandCredit, 2),
+                'closing_balance' => round($grandClosing, 2),
+                'customer_groups' => $groups,
+                'transactions' => [],
+                'combined_ledger' => null,
                 'report_period' => "$start to $end",
             ]);
         }
@@ -3150,14 +3094,44 @@ class ReportingController extends Controller
             return response()->json(['error' => 'Customer not found'], 400);
         }
 
-        $ledgerData = $balanceService->getCustomerLedger($customerId, $start, $end);
+        $group = $this->buildCustomerLedgerGroup($customer, $start, $end, $balanceService);
 
-        $transactions = collect($ledgerData['transactions'])->map(function ($row) {
+        // Check if customer is both (Customer & Vendor)
+        $isBoth = ($customer->party_type ?? '') === 'both' || !empty($customer->linked_vendor_id);
+        $linkedVendor = $isBoth ? \App\Models\Vendor::find($customer->linked_vendor_id) : null;
+        $combinedLedger = null;
+        if ($isBoth) {
+            $combinedLedger = $balanceService->getCombinedPartyLedger($customer->id, $customer->linked_vendor_id, $start, $end);
+        }
+
+        return response()->json([
+            'mode' => 'single',
+            'customer' => $customer,
+            'is_both' => $isBoth,
+            'linked_vendor' => $linkedVendor,
+            'opening_balance' => $group['opening_balance'],
+            'total_debit' => $group['total_debit'],
+            'total_credit' => $group['total_credit'],
+            'closing_balance' => $group['closing_balance'],
+            'customer_groups' => [$group],
+            'transactions' => $group['transactions'],
+            'combined_ledger' => $combinedLedger,
+            'report_period' => "$start to $end",
+        ]);
+    }
+
+    private function buildCustomerLedgerGroup(object $customer, string $start, string $end, \App\Services\BalanceService $balanceService): array
+    {
+        $ledgerData = $balanceService->getCustomerLedger($customer->id, $start, $end);
+        $totalDebit = 0.0;
+        $totalCredit = 0.0;
+
+        $transactions = collect($ledgerData['transactions'])->map(function ($row) use ($customer, &$totalDebit, &$totalCredit) {
             $desc = $row['description'] ?? '';
 
             // Try to find payment account name for receipt entries
             $accountName = '';
-            if ($row['credit'] > 0 && ($row['source_type'] ?? null)) {
+            if (($row['credit'] ?? 0) > 0 && ($row['source_type'] ?? null)) {
                 $accountName = $this->getPaymentAccountName($row['source_type'], $row['source_id']);
             }
             if ($accountName) {
@@ -3172,54 +3146,71 @@ class ReportingController extends Controller
             }
 
             $invoiceUrl = null;
-            if (($row['source_type'] ?? '') === \App\Models\Sale::class || ($row['source_type'] ?? '') === 'Sale' || ($row['source_type'] ?? '') === 'SaleInvoice') {
-                if (!empty($row['source_id'])) {
-                    $invoiceUrl = route('sales.invoice', $row['source_id']);
+            try {
+                if (($row['source_type'] ?? '') === \App\Models\Sale::class || ($row['source_type'] ?? '') === 'Sale' || ($row['source_type'] ?? '') === 'SaleInvoice') {
+                    if (!empty($row['source_id'])) {
+                        $invoiceUrl = route('sales.invoice', $row['source_id']);
+                    }
                 }
-            }
-            if (!$invoiceUrl && $ref !== '-') {
-                $saleId = \App\Models\Sale::where('invoice_no', $ref)->orWhere('id', $ref)->value('id');
-                if ($saleId) {
-                    $invoiceUrl = route('sales.invoice', $saleId);
+                if (!$invoiceUrl && $ref !== '-') {
+                    $saleId = \App\Models\Sale::where('invoice_no', $ref)->orWhere('id', $ref)->value('id');
+                    if ($saleId) {
+                        $invoiceUrl = route('sales.invoice', $saleId);
+                    }
                 }
+            } catch (\Throwable $e) {
+                $invoiceUrl = null;
             }
 
-            $entryDate = $row['date'];
+            $entryDate = $row['date'] ?? null;
             if ($entryDate instanceof \Carbon\Carbon) {
                 $formattedDate = $entryDate->format('d-M-Y');
+                $sortDate = $entryDate->format('Y-m-d');
+            } elseif ($entryDate) {
+                $parsed = \Carbon\Carbon::parse($entryDate);
+                $formattedDate = $parsed->format('d-M-Y');
+                $sortDate = $parsed->format('Y-m-d');
             } else {
-                $formattedDate = \Carbon\Carbon::parse($entryDate)->format('d-M-Y');
+                $formattedDate = '-';
+                $sortDate = '1970-01-01';
             }
 
+            $debit = (float) ($row['debit'] ?? 0);
+            $credit = (float) ($row['credit'] ?? 0);
+            $totalDebit += $debit;
+            $totalCredit += $credit;
+
             return [
-                'date' => $formattedDate,
-                'invoice' => $ref,
-                'invoice_url' => $invoiceUrl,
-                'description' => $desc,
-                'debit' => $row['debit'] ?? 0,
-                'credit' => $row['credit'] ?? 0,
-                'balance' => $row['balance'] ?? 0,
+                'sort_date'     => $sortDate,
+                'date'          => $formattedDate,
+                'invoice'       => $ref,
+                'invoice_url'   => $invoiceUrl,
+                'description'   => $desc,
+                'customer_name' => $customer->customer_name,
+                'debit'         => $debit,
+                'credit'        => $credit,
+                'balance'       => (float) ($row['balance'] ?? 0),
             ];
-        });
+        })->values()->all();
 
-        // Check if customer is both (Customer & Vendor)
-        $isBoth = ($customer->party_type ?? '') === 'both' || !empty($customer->linked_vendor_id);
-        $linkedVendor = $isBoth ? \App\Models\Vendor::find($customer->linked_vendor_id) : null;
-        $combinedLedger = null;
-        if ($isBoth) {
-            $combinedLedger = $balanceService->getCombinedPartyLedger($customer->id, $customer->linked_vendor_id, $start, $end);
-        }
+        $opening = (float) ($ledgerData['opening_balance'] ?? 0);
+        $closing = (float) ($ledgerData['closing_balance'] ?? $opening);
 
-        return response()->json([
-            'customer' => $customer,
-            'is_both' => $isBoth,
-            'linked_vendor' => $linkedVendor,
-            'opening_balance' => $ledgerData['opening_balance'],
-            'closing_balance' => $ledgerData['closing_balance'] ?? $ledgerData['opening_balance'],
-            'transactions' => $transactions,
-            'combined_ledger' => $combinedLedger,
-            'report_period' => "$start to $end",
-        ]);
+        return [
+            'customer' => [
+                'id'            => $customer->id,
+                'customer_name' => $customer->customer_name,
+                'mobile'        => $customer->mobile ?? '',
+                'address'       => $customer->address ?? '',
+                'city'          => $customer->city ?? '',
+            ],
+            'opening_balance' => round($opening, 2),
+            'total_debit'     => round($totalDebit, 2),
+            'total_credit'    => round($totalCredit, 2),
+            'closing_balance' => round($closing, 2),
+            'entry_count'     => count($transactions),
+            'transactions'    => $transactions,
+        ];
     }
 
     /**
@@ -3271,20 +3262,53 @@ class ReportingController extends Controller
 
         $balanceService = app(\App\Services\BalanceService::class);
 
-        // Enforce strict vendor-wise isolation: never combine different vendors into one running balance
+        // All Vendors Mode: return strictly isolated per-vendor containers (never mix balances across vendors)
         if (!$vendorId || $vendorId === 'all') {
-            $defaultVendorId = DB::table('vendors')->orderBy('id')->value('id');
-            if ($defaultVendorId) {
-                $vendorId = $defaultVendorId;
-            } else {
-                return response()->json([
-                    'vendor' => (object)['name' => 'No Vendor Found'],
-                    'opening_balance' => 0,
-                    'closing_balance' => 0,
-                    'transactions' => [],
-                    'report_period' => "$start to $end",
-                ]);
+            $vendors = DB::table('vendors')
+                ->select('id', 'name', 'phone', 'address')
+                ->orderBy('name')
+                ->get();
+
+            $groups = [];
+            $grandOpening = 0.0;
+            $grandDebit = 0.0;
+            $grandCredit = 0.0;
+            $grandClosing = 0.0;
+
+            foreach ($vendors as $v) {
+                $group = $this->buildVendorMainGroup($v, $start, $end, $balanceService);
+
+                // Skip completely inactive zero-balance vendors in All Vendors mode
+                if (
+                    abs($group['opening_balance']) < 0.005
+                    && abs($group['closing_balance']) < 0.005
+                    && $group['entry_count'] === 0
+                ) {
+                    continue;
+                }
+
+                $grandOpening += $group['opening_balance'];
+                $grandDebit += $group['total_debit'];
+                $grandCredit += $group['total_credit'];
+                $grandClosing += $group['closing_balance'];
+                $groups[] = $group;
             }
+
+            return response()->json([
+                'mode' => 'all',
+                'ledger_type' => 'main',
+                'vendor' => (object)['name' => 'All Vendors'],
+                'is_both' => false,
+                'linked_customer' => null,
+                'opening_balance' => round($grandOpening, 2),
+                'total_debit' => round($grandDebit, 2),
+                'total_credit' => round($grandCredit, 2),
+                'closing_balance' => round($grandClosing, 2),
+                'vendor_groups' => $groups,
+                'transactions' => [],
+                'combined_ledger' => null,
+                'report_period' => "$start to $end",
+            ]);
         }
 
         // Single vendor (Strictly isolated)
@@ -3293,13 +3317,44 @@ class ReportingController extends Controller
             return response()->json(['error' => 'Vendor not found'], 400);
         }
 
-        $ledgerData = $balanceService->getVendorLedger($vendorId, $start, $end);
+        $group = $this->buildVendorMainGroup($vendor, $start, $end, $balanceService);
 
-        $transactions = collect($ledgerData['transactions'])->map(function ($row) {
+        // Check if vendor is both (Customer & Vendor)
+        $isBoth = ($vendor->party_type ?? '') === 'both' || !empty($vendor->linked_customer_id);
+        $linkedCustomer = $isBoth ? \App\Models\Customer::find($vendor->linked_customer_id) : null;
+        $combinedLedger = null;
+        if ($isBoth) {
+            $combinedLedger = $balanceService->getCombinedPartyLedger($vendor->linked_customer_id, $vendor->id, $start, $end);
+        }
+
+        return response()->json([
+            'mode' => 'single',
+            'ledger_type' => 'main',
+            'vendor' => $vendor,
+            'is_both' => $isBoth,
+            'linked_customer' => $linkedCustomer,
+            'opening_balance' => $group['opening_balance'],
+            'total_debit' => $group['total_debit'],
+            'total_credit' => $group['total_credit'],
+            'closing_balance' => $group['closing_balance'],
+            'vendor_groups' => [$group],
+            'transactions' => $group['transactions'],
+            'combined_ledger' => $combinedLedger,
+            'report_period' => "$start to $end",
+        ]);
+    }
+
+    private function buildVendorMainGroup(object $vendor, string $start, string $end, \App\Services\BalanceService $balanceService): array
+    {
+        $ledgerData = $balanceService->getVendorLedger($vendor->id, $start, $end);
+        $totalDebit = 0.0;
+        $totalCredit = 0.0;
+
+        $transactions = collect($ledgerData['transactions'])->map(function ($row) use ($vendor, &$totalDebit, &$totalCredit) {
             $desc = $row['description'] ?? '';
 
             $accountName = '';
-            if ($row['debit'] > 0 && ($row['source_type'] ?? null)) {
+            if (($row['debit'] ?? 0) > 0 && ($row['source_type'] ?? null)) {
                 $accountName = $this->getPaymentAccountName($row['source_type'], $row['source_id']);
             }
             if ($accountName) {
@@ -3359,13 +3414,23 @@ class ReportingController extends Controller
             $entryDate = $row['date'] ?? null;
             if ($entryDate instanceof \Carbon\Carbon) {
                 $formattedDate = $entryDate->format('d-M-Y');
+                $sortDate = $entryDate->format('Y-m-d');
             } elseif ($entryDate) {
-                $formattedDate = \Carbon\Carbon::parse($entryDate)->format('d-M-Y');
+                $parsed = \Carbon\Carbon::parse($entryDate);
+                $formattedDate = $parsed->format('d-M-Y');
+                $sortDate = $parsed->format('Y-m-d');
             } else {
                 $formattedDate = '-';
+                $sortDate = '1970-01-01';
             }
 
+            $debit = (float) ($row['debit'] ?? 0);
+            $credit = (float) ($row['credit'] ?? 0);
+            $totalDebit += $debit;
+            $totalCredit += $credit;
+
             return [
+                'sort_date'         => $sortDate,
                 'date'              => $formattedDate,
                 'invoice'           => $ref,
                 'invoice_no'        => $row['invoice_no'] ?? ($ref !== '-' ? $ref : null),
@@ -3373,30 +3438,30 @@ class ReportingController extends Controller
                 'vendor_invoice_no' => $row['vendor_invoice_no'] ?? null,
                 'source_type'       => $row['source_type'] ?? null,
                 'description'       => $desc,
-                'debit'             => $row['debit'] ?? 0,
-                'credit'            => $row['credit'] ?? 0,
-                'balance'           => $row['balance'] ?? 0,
+                'vendor_name'       => $vendor->name,
+                'debit'             => $debit,
+                'credit'            => $credit,
+                'balance'           => (float) ($row['balance'] ?? 0),
             ];
-        });
+        })->values()->all();
 
-        // Check if vendor is both (Customer & Vendor)
-        $isBoth = ($vendor->party_type ?? '') === 'both' || !empty($vendor->linked_customer_id);
-        $linkedCustomer = $isBoth ? \App\Models\Customer::find($vendor->linked_customer_id) : null;
-        $combinedLedger = null;
-        if ($isBoth) {
-            $combinedLedger = $balanceService->getCombinedPartyLedger($vendor->linked_customer_id, $vendor->id, $start, $end);
-        }
+        $opening = (float) ($ledgerData['opening_balance'] ?? 0);
+        $closing = (float) ($ledgerData['closing_balance'] ?? $opening);
 
-        return response()->json([
-            'vendor' => $vendor,
-            'is_both' => $isBoth,
-            'linked_customer' => $linkedCustomer,
-            'opening_balance' => $ledgerData['opening_balance'],
-            'closing_balance' => $ledgerData['closing_balance'] ?? $ledgerData['opening_balance'],
-            'transactions' => $transactions,
-            'combined_ledger' => $combinedLedger,
-            'report_period' => "$start to $end",
-        ]);
+        return [
+            'vendor' => [
+                'id'      => $vendor->id,
+                'name'    => $vendor->name,
+                'phone'   => $vendor->phone ?? '',
+                'address' => $vendor->address ?? '',
+            ],
+            'opening_balance' => round($opening, 2),
+            'total_debit'     => round($totalDebit, 2),
+            'total_credit'    => round($totalCredit, 2),
+            'closing_balance' => round($closing, 2),
+            'entry_count'     => count($transactions),
+            'transactions'    => $transactions,
+        ];
     }
 
     protected function fetch_vendor_incentive_ledger($vendorId, string $type, string $start, string $end)
@@ -3404,75 +3469,41 @@ class ReportingController extends Controller
         $balanceService = app(\App\Services\BalanceService::class);
 
         if (!$vendorId || $vendorId === 'all') {
-            // All Vendors
-            $opening = (float) (\App\Models\VendorIncentiveLedger::where('type', $type)
-                ->where('date', '<', $start)
-                ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as balance')
-                ->value('balance') ?? 0);
+            $vendors = \App\Models\Vendor::orderBy('name')->get();
+            $groups = [];
+            $grandOpening = 0.0;
+            $grandDebit = 0.0;
+            $grandCredit = 0.0;
+            $grandClosing = 0.0;
 
-            $records = \App\Models\VendorIncentiveLedger::with(['vendor', 'purchase'])
-                ->where('type', $type)
-                ->whereBetween('date', [$start, $end])
-                ->orderBy('date')
-                ->orderBy('id')
-                ->get();
-
-            $runningBalance = $opening;
-            $totalDebit = 0;
-            $totalCredit = 0;
-
-            $transactions = $records->map(function ($row) use (&$runningBalance, &$totalDebit, &$totalCredit, $type) {
-                $debit = (float) $row->debit;
-                $credit = (float) $row->credit;
-                $totalDebit += $debit;
-                $totalCredit += $credit;
-                $runningBalance += ($debit - $credit);
-
-                $formattedDate = $row->date ? $row->date->format('d-M-Y') : '-';
-                $sortDate = $row->date ? $row->date->format('Y-m-d') : '-';
-                $ref = $row->reference_no ?: ($row->purchase_id ? 'PUR-' . $row->purchase_id : '-');
-                $invoiceUrl = null;
-                try {
-                    $invoiceUrl = $row->purchase_id ? route('purchase.invoice', $row->purchase_id) : null;
-                    if (!$invoiceUrl && !empty($ref) && $ref !== '-') {
-                        if (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
-                            $invoiceUrl = route('Paymentprint', $ref);
-                        } elseif (str_starts_with((string)$ref, 'PUR-')) {
-                            $pId = \App\Models\Purchase::where('invoice_no', $ref)->value('id');
-                            if ($pId) $invoiceUrl = route('purchase.invoice', $pId);
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    $invoiceUrl = null;
+            foreach ($vendors as $v) {
+                $group = $this->buildVendorIncentiveGroup($v, $type, $start, $end, $balanceService);
+                if (
+                    abs($group['opening_balance']) < 0.005
+                    && abs($group['closing_balance']) < 0.005
+                    && $group['entry_count'] === 0
+                ) {
+                    continue;
                 }
-
-                return [
-                    'sort_date'         => $sortDate,
-                    'date'              => $formattedDate,
-                    'invoice'           => $ref,
-                    'invoice_no'        => $ref,
-                    'invoice_url'       => $invoiceUrl,
-                    'vendor_invoice_no' => null,
-                    'source_type'       => $row->entry_type,
-                    'description'       => $row->notes ?: ($row->entry_type === 'claim' ? ($type === 'backup' ? 'Backup Incentive Claim' : ($type === 'annual' ? 'Annual Rebate Claim' : 'Scheme Discount Claim')) : 'Payout / Adjustment Settlement'),
-                    'vendor_name'       => $row->vendor->name ?? 'Unknown',
-                    'debit'             => $debit,
-                    'credit'            => $credit,
-                    'balance'           => $runningBalance,
-                    'entry_type'        => $row->entry_type,
-                ];
-            });
+                $grandOpening += $group['opening_balance'];
+                $grandDebit += $group['total_debit'];
+                $grandCredit += $group['total_credit'];
+                $grandClosing += $group['closing_balance'];
+                $groups[] = $group;
+            }
 
             return response()->json([
+                'mode' => 'all',
                 'vendor' => (object)['name' => 'All Vendors'],
                 'ledger_type' => $type,
                 'is_both' => false,
                 'linked_customer' => null,
-                'opening_balance' => $opening,
-                'closing_balance' => $runningBalance,
-                'total_debit' => $totalDebit,
-                'total_credit' => $totalCredit,
-                'transactions' => $transactions,
+                'opening_balance' => round($grandOpening, 2),
+                'closing_balance' => round($grandClosing, 2),
+                'total_debit' => round($grandDebit, 2),
+                'total_credit' => round($grandCredit, 2),
+                'vendor_groups' => $groups,
+                'transactions' => [],
                 'combined_ledger' => null,
                 'report_period' => "$start to $end",
             ]);
@@ -3484,9 +3515,30 @@ class ReportingController extends Controller
             return response()->json(['error' => 'Vendor not found'], 400);
         }
 
-        $ledgerData = $balanceService->getVendorIncentiveLedger($vendorId, $type, $start, $end);
+        $group = $this->buildVendorIncentiveGroup($vendor, $type, $start, $end, $balanceService);
 
-        $transactions = collect($ledgerData['transactions'])->map(function ($row) use ($vendor, $type) {
+        return response()->json([
+            'mode' => 'single',
+            'vendor' => $vendor,
+            'ledger_type' => $type,
+            'is_both' => false,
+            'linked_customer' => null,
+            'opening_balance' => $group['opening_balance'],
+            'closing_balance' => $group['closing_balance'],
+            'total_debit' => $group['total_debit'],
+            'total_credit' => $group['total_credit'],
+            'vendor_groups' => [$group],
+            'transactions' => $group['transactions'],
+            'combined_ledger' => null,
+            'report_period' => "$start to $end",
+        ]);
+    }
+
+    private function buildVendorIncentiveGroup(\App\Models\Vendor $vendor, string $type, string $start, string $end, \App\Services\BalanceService $balanceService): array
+    {
+        $ledgerData = $balanceService->getVendorIncentiveLedger($vendor->id, $type, $start, $end);
+
+        $transactions = collect($ledgerData['transactions'])->map(function ($row) use ($vendor) {
             $formattedDate = $row['date'] ? \Carbon\Carbon::parse($row['date'])->format('d-M-Y') : '-';
             $sortDate = $row['date'] ? \Carbon\Carbon::parse($row['date'])->format('Y-m-d') : '-';
             $ref = $row['reference_no'] ?: ($row['purchase_id'] ? 'PUR-' . $row['purchase_id'] : '-');
@@ -3520,21 +3572,22 @@ class ReportingController extends Controller
                 'balance'           => (float) $row['balance'],
                 'entry_type'        => $row['entry_type'],
             ];
-        });
+        })->values()->all();
 
-        return response()->json([
-            'vendor' => $vendor,
-            'ledger_type' => $type,
-            'is_both' => false,
-            'linked_customer' => null,
-            'opening_balance' => $ledgerData['opening_balance'],
-            'closing_balance' => $ledgerData['closing_balance'],
-            'total_debit' => $ledgerData['total_claims'],
-            'total_credit' => $ledgerData['total_settled'],
-            'transactions' => $transactions,
-            'combined_ledger' => null,
-            'report_period' => "$start to $end",
-        ]);
+        return [
+            'vendor' => [
+                'id'      => $vendor->id,
+                'name'    => $vendor->name,
+                'phone'   => $vendor->phone ?? '',
+                'address' => $vendor->address ?? '',
+            ],
+            'opening_balance' => round((float) $ledgerData['opening_balance'], 2),
+            'total_debit'     => round((float) $ledgerData['total_claims'], 2),
+            'total_credit'    => round((float) $ledgerData['total_settled'], 2),
+            'closing_balance' => round((float) $ledgerData['closing_balance'], 2),
+            'entry_count'     => count($transactions),
+            'transactions'    => $transactions,
+        ];
     }
 
     public function balance_sheet_report()
