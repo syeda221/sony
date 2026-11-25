@@ -870,6 +870,43 @@ class ReportingController extends Controller
                     $averagePrice = $totalQtyIn > 0 ? ($totalAmountIn / $totalQtyIn) : $vPurchPrice;
 
                     $stockValue = $balance * $averagePrice;
+                    if ($product->tracking_type === 'serial') {
+                        $sQuery = \App\Models\ProductSerial::where('product_id', $product->id)->where('status', 'available');
+                        if ($warehouseId && $warehouseId !== 'all') {
+                            $sQuery->where('warehouse_id', $warehouseId);
+                        }
+                        if (count($parsedVariants) > 1) {
+                            $cleanVKey = str_replace(' ', '', $vKey);
+                            $sQuery->where(function($q) use ($vKey, $cleanVKey, $vName) {
+                                $q->where('variant_key', $vKey)
+                                  ->orWhere('variant_key', $cleanVKey)
+                                  ->orWhere('variant_key', $vName);
+                            });
+                        }
+                        $availSerials = $sQuery->get();
+                        if ($availSerials->count() > 0) {
+                            $stockValue = (float) $availSerials->sum('cost_price');
+                            $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
+                        }
+                    } elseif ($product->tracking_type === 'batch') {
+                        $bQuery = \App\Models\ProductBatch::where('product_id', $product->id)->where('qty', '>', 0);
+                        if ($warehouseId && $warehouseId !== 'all') {
+                            $bQuery->where('warehouse_id', $warehouseId);
+                        }
+                        if (count($parsedVariants) > 1) {
+                            $cleanVKey = str_replace(' ', '', $vKey);
+                            $bQuery->where(function($q) use ($vKey, $cleanVKey, $vName) {
+                                $q->where('variant_key', $vKey)
+                                  ->orWhere('variant_key', $cleanVKey)
+                                  ->orWhere('variant_key', $vName);
+                            });
+                        }
+                        $availBatches = $bQuery->get();
+                        if ($availBatches->count() > 0) {
+                            $stockValue = (float) $availBatches->sum(fn($b) => (float)$b->qty * (float)$b->cost_price);
+                            $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
+                        }
+                    }
                     $grandTotalValue += $stockValue;
                     $totalCurrentStock += $balance;
                     $totalAdjustments  += $adjustments;
@@ -998,6 +1035,27 @@ class ReportingController extends Controller
                 $averagePrice   = $totalQtyIn > 0 ? ($totalAmountIn / $totalQtyIn) : $productPurchPrice;
 
                 $stockValue        = $balance * $averagePrice;
+                if ($product->tracking_type === 'serial') {
+                    $sQuery = \App\Models\ProductSerial::where('product_id', $product->id)->where('status', 'available');
+                    if ($warehouseId && $warehouseId !== 'all') {
+                        $sQuery->where('warehouse_id', $warehouseId);
+                    }
+                    $availSerials = $sQuery->get();
+                    if ($availSerials->count() > 0) {
+                        $stockValue = (float) $availSerials->sum('cost_price');
+                        $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
+                    }
+                } elseif ($product->tracking_type === 'batch') {
+                    $bQuery = \App\Models\ProductBatch::where('product_id', $product->id)->where('qty', '>', 0);
+                    if ($warehouseId && $warehouseId !== 'all') {
+                        $bQuery->where('warehouse_id', $warehouseId);
+                    }
+                    $availBatches = $bQuery->get();
+                    if ($availBatches->count() > 0) {
+                        $stockValue = (float) $availBatches->sum(fn($b) => (float)$b->qty * (float)$b->cost_price);
+                        $averagePrice = $balance > 0 ? round($stockValue / $balance, 2) : $averagePrice;
+                    }
+                }
                 $grandTotalValue  += $stockValue;
                 $totalCurrentStock += $balance;
                 $totalAdjustments  += $adjustments;
