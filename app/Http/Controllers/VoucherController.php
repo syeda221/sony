@@ -865,12 +865,20 @@ class VoucherController extends Controller
                         }
 
                         $controlAccountId = null;
-                        if ($type == 'vendor' || $type == 'sales_officer') {
+                        $rowPartyType = null;
+                        $rowTypeLower = strtolower((string) $type);
+                        if ($rowTypeLower == 'vendor') {
                             $controlAccountId = $balanceService->getAccountsPayableId();
-                        } elseif ($type == 'customer' || $type == 'walkin') {
+                            $rowPartyType = \App\Models\Vendor::class;
+                        } elseif ($rowTypeLower == 'sales_officer') {
+                            $controlAccountId = $balanceService->getAccountsPayableId();
+                            $rowPartyType = \App\Models\SalesOfficer::class;
+                        } elseif ($rowTypeLower == 'customer' || $rowTypeLower == 'walkin') {
                             $controlAccountId = $balanceService->getAccountsReceivableId();
+                            $rowPartyType = \App\Models\Customer::class;
                         } else {
                             $controlAccountId = $partyId;
+                            $rowPartyType = \App\Models\Account::class;
                         }
 
                         if ($controlAccountId) {
@@ -878,6 +886,8 @@ class VoucherController extends Controller
                                 'account_id' => $controlAccountId,
                                 'debit' => $grossSettled,
                                 'credit' => 0,
+                                'party_type' => $rowPartyType,
+                                'party_id' => (int) $partyId,
                                 'narration' => ($request->narration_text[$idx] ?? ("Payment to " . $type)) . ($claimOffsetForThisRow > 0 ? " (Includes Rs. {$claimOffsetForThisRow} Claim Offset)" : ""),
                             ];
                         }
@@ -1180,6 +1190,11 @@ class VoucherController extends Controller
             $party = $voucherV2->party;
             $previousBalance = 0;
 
+            $vDateStr = $voucherV2->date->format('Y-m-d');
+            $firstJeId = \App\Models\JournalEntry::where('source_type', \App\Models\VoucherMaster::class)
+                ->where('source_id', $voucherV2->id)
+                ->min('id') ?? PHP_INT_MAX;
+
             if ($party) {
                 if ($party instanceof \App\Models\Customer) {
                     $voucher->type = ($party->customer_type == 'Walking Customer') ? 'walkin' : 'customer';
@@ -1188,20 +1203,70 @@ class VoucherController extends Controller
                     $party->address = $party->address ?? '-';
                     $party->mobile = $party->mobile ?? '-'; // View uses mobile/phone? View uses mobile for customer
 
-                    $previousBalance = \App\Models\CustomerLedger::where('customer_id', $party->id)
-                        ->where('created_at', '<', $voucherV2->created_at)
-                        ->orderBy('id', 'desc')
-                        ->value('closing_balance') ?? ($party->opening_balance ?? 0);
+                    $jeNet = (float) (\App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+                        ->where('party_id', $party->id)
+                        ->where(function ($q) use ($vDateStr, $firstJeId) {
+                            $q->where('entry_date', '<', $vDateStr)
+                              ->orWhere(function ($sub) use ($vDateStr, $firstJeId) {
+                                  $sub->where('entry_date', '=', $vDateStr)
+                                      ->where('id', '<', $firstJeId);
+                              });
+                        })
+                        ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as bal')
+                        ->value('bal') ?? 0);
+                    $previousBalance = (float) ($party->opening_balance ?? 0) + $jeNet;
 
                 } elseif ($party instanceof \App\Models\Vendor) {
                     $voucher->type = 'vendor';
                     $party->address = $party->address ?? '-';
                     $party->phone = $party->phone ?? '-'; // View uses phone
 
-                    $previousBalance = \App\Models\VendorLedger::where('vendor_id', $party->id)
-                        ->where('created_at', '<', $voucherV2->created_at)
-                        ->orderBy('id', 'desc')
-                        ->value('closing_balance') ?? ($party->opening_balance ?? 0);
+                    $jeNet = (float) (\App\Models\JournalEntry::where('party_type', \App\Models\Vendor::class)
+                        ->where('party_id', $party->id)
+                        ->where(function ($q) use ($vDateStr, $firstJeId) {
+                            $q->where('entry_date', '<', $vDateStr)
+                              ->orWhere(function ($sub) use ($vDateStr, $firstJeId) {
+                                  $sub->where('entry_date', '=', $vDateStr)
+                                      ->where('id', '<', $firstJeId);
+                              });
+                        })
+                        ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as bal')
+                        ->value('bal') ?? 0);
+                    $previousBalance = (float) ($party->opening_balance ?? 0) + $jeNet;
+
+                    // If this payment voucher paid multiple vendors/parties, reflect all parties and their combined prior balance
+                    $partyEntries = \App\Models\JournalEntry::where('source_type', \App\Models\VoucherMaster::class)
+                        ->where('source_id', $voucherV2->id)
+                        ->whereNotNull('party_id')
+                        ->where('debit', '>', 0)
+                        ->get();
+                    $uniquePartyIds = $partyEntries->pluck('party_id')->unique();
+                    if ($uniquePartyIds->count() > 1) {
+                        $partyLabels = [];
+                        $combinedPrev = 0.0;
+                        foreach ($partyEntries as $pe) {
+                            $pModel = class_exists($pe->party_type) ? ($pe->party_type)::find($pe->party_id) : null;
+                            $pLabel = $pModel ? ($pModel->name ?? $pModel->customer_name ?? 'Party #' . $pe->party_id) : ('Party #' . $pe->party_id);
+                            $partyLabels[] = $pLabel . ' (' . number_format((float)$pe->debit, 2) . ')';
+                        }
+                        foreach ($uniquePartyIds as $uPid) {
+                            $uModel = \App\Models\Vendor::find($uPid);
+                            $uJe = (float) (\App\Models\JournalEntry::where('party_type', \App\Models\Vendor::class)
+                                ->where('party_id', $uPid)
+                                ->where(function ($q) use ($vDateStr, $firstJeId) {
+                                    $q->where('entry_date', '<', $vDateStr)
+                                      ->orWhere(function ($sub) use ($vDateStr, $firstJeId) {
+                                          $sub->where('entry_date', '=', $vDateStr)
+                                              ->where('id', '<', $firstJeId);
+                                      });
+                                })
+                                ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as bal')
+                                ->value('bal') ?? 0);
+                            $combinedPrev += (float) ($uModel->opening_balance ?? 0) + $uJe;
+                        }
+                        $party->name = implode(', ', $partyLabels);
+                        $previousBalance = $combinedPrev;
+                    }
 
                 } elseif ($party instanceof \App\Models\SalesOfficer) {
                     $voucher->type = 'sales_officer';

@@ -38,6 +38,7 @@ class VoucherService
 
             $totalDebit = 0;
             $totalCredit = 0;
+            $detailPartyMap = [];
 
             // 2. Create Lines
             foreach ($lines as $line) {
@@ -50,13 +51,20 @@ class VoucherService
                 $totalDebit += $debit;
                 $totalCredit += $credit;
 
-                VoucherDetail::create([
+                $detail = VoucherDetail::create([
                     'voucher_master_id' => $voucher->id,
                     'account_id' => $line['account_id'],
                     'debit' => $debit,
                     'credit' => $credit,
                     'narration' => $line['narration'] ?? null,
                 ]);
+
+                if (!empty($line['party_type']) && !empty($line['party_id'])) {
+                    $detailPartyMap[$detail->id] = [
+                        'party_type' => $line['party_type'],
+                        'party_id' => (int) $line['party_id'],
+                    ];
+                }
             }
 
             // 3. Update Voucher Totals
@@ -70,7 +78,7 @@ class VoucherService
                 }
                 
                 // 5. Post to Journal
-                $this->postToJournal($voucher);
+                $this->postToJournal($voucher, $detailPartyMap);
             }
 
             return $voucher;
@@ -104,7 +112,7 @@ class VoucherService
     /**
      * Convert Voucher Details into Journal Entries
      */
-    private function postToJournal(VoucherMaster $voucher)
+    private function postToJournal(VoucherMaster $voucher, array $detailPartyMap = [])
     {
         foreach ($voucher->details as $detail) {
             
@@ -136,6 +144,20 @@ class VoucherService
                 }
             }
 
+            $partyForLine = null;
+            if ($includeParty) {
+                if (isset($detailPartyMap[$detail->id])) {
+                    $pType = $detailPartyMap[$detail->id]['party_type'];
+                    $pId = $detailPartyMap[$detail->id]['party_id'];
+                    if (class_exists($pType)) {
+                        $partyForLine = $pType::find($pId);
+                    }
+                }
+                if (!$partyForLine) {
+                    $partyForLine = $voucher->party;
+                }
+            }
+
             $this->journalService->recordEntry(
                 $voucher,
                 $detail->account_id,
@@ -143,7 +165,7 @@ class VoucherService
                 $detail->credit,
                 $detail->narration ?? $voucher->remarks,
                 $voucher->date->format('Y-m-d'),
-                $includeParty ? $voucher->party : null
+                $partyForLine
             );
         }
     }
