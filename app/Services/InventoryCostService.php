@@ -90,10 +90,8 @@ class InventoryCostService
             if ($pieces <= 0) {
                 continue;
             }
+            // Preserve line_total as product cost (order discount is tracked separately as vendor-level income)
             $netAmount = (float) $pItem->line_total;
-            if ((float) ($pItem->p_subtotal ?? 0) > 0) {
-                $netAmount = $netAmount / (float) $pItem->p_subtotal * (float) $pItem->p_net_amount;
-            }
 
             $pDate = $pItem->purchase_date ?: substr((string) $pItem->p_created_at, 0, 10);
             $pTime = $pItem->p_created_at ? substr((string) $pItem->p_created_at, 11, 8) : '00:00:00';

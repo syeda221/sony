@@ -387,12 +387,16 @@ class BalanceService
         $openingBalance = $this->getVendorBalanceBeforeDate($vendorId, $startDate);
 
         // Purchases in range (Increase payable - they go in Credit column = money we owe)
+        $purchaseCols = ['id', 'invoice_no', 'purchase_order_no', 'net_amount', 'total_scheme_amount', 'purchase_date'];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('purchases', 'order_discount')) {
+            $purchaseCols[] = 'order_discount';
+        }
         $purchasesRaw = DB::table('purchases')
             ->where('vendor_id', $vendorId)
             ->whereIn('status_purchase', ['approved', 'Returned'])
             ->whereNull('deleted_at')
             ->whereBetween('purchase_date', [$startDate, $endDate])
-            ->select('id', 'invoice_no', 'purchase_order_no', 'net_amount', 'total_scheme_amount', 'order_discount', 'purchase_date')
+            ->select($purchaseCols)
             ->get();
 
         $purchases = [];

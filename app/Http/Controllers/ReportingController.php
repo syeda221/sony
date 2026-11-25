@@ -2530,11 +2530,13 @@ class ReportingController extends Controller
         // 6B. Purchase Discount Received (Vendor Order Discount as Income in P&L)
         $totalPurchaseDiscount = 0;
         if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
-            $totalPurchaseDiscount = (float) DB::table('purchases')
-                ->whereIn('status_purchase', ['approved', 'Returned'])
-                ->whereNull('deleted_at')
-                ->whereBetween('purchase_date', [$startDateOnly, $endDateOnly])
-                ->sum('order_discount');
+            if (\Illuminate\Support\Facades\Schema::hasColumn('purchases', 'order_discount')) {
+                $totalPurchaseDiscount = (float) DB::table('purchases')
+                    ->whereIn('status_purchase', ['approved', 'Returned'])
+                    ->whereNull('deleted_at')
+                    ->whereBetween('purchase_date', [$startDateOnly, $endDateOnly])
+                    ->sum('order_discount');
+            }
         }
 
         // 7. Sales Officer Commission Expense (Tracked for report, NOT subtracted from Net Profit)
@@ -3554,20 +3556,26 @@ class ReportingController extends Controller
         $assetAccounts = DB::table('accounts')
             ->leftJoin('account_heads', 'account_heads.id', '=', 'accounts.head_id')
             ->where('accounts.status', 1)
-            // Exclude control accounts
-            ->whereNotIn('accounts.account_code', ['AP', 'AR', 'PURCHASE', 'SALES', 'CAP-0001'])
-            ->whereNotIn('accounts.title', ['Accounts Receivable', 'Accounts Payable', 'Sales Revenue', 'Purchase Expense', "Owner's Capital"])
-            // Exclude Expense, Capital, Revenue codes
+            // Exclude control, income, discount, and freight accounts
+            ->whereNotIn('accounts.account_code', ['AP', 'AR', 'PURCHASE', 'SALES', 'CAP-0001', 'DISC_REC', 'FREIGHT'])
+            ->whereNotIn('accounts.title', ['Accounts Receivable', 'Accounts Payable', 'Sales Revenue', 'Purchase Expense', "Owner's Capital", 'Purchase Discount Received', 'Freight In Expense'])
+            ->where(function ($q) {
+                $q->whereNull('accounts.type')
+                  ->orWhere('accounts.type', '!=', 'Credit');
+            })
+            // Exclude Expense, Capital, Revenue, Discount, Freight codes
             ->where(function ($q) {
                 $q->whereNull('accounts.account_code')
                   ->orWhere(function ($sub) {
                       $sub->whereRaw("LOWER(accounts.account_code) NOT LIKE 'exp%'")
                           ->whereRaw("LOWER(accounts.account_code) NOT LIKE '%cap%'")
                           ->whereRaw("LOWER(accounts.account_code) NOT LIKE 'rev%'")
-                          ->whereRaw("LOWER(accounts.account_code) NOT LIKE 'inc%'");
+                          ->whereRaw("LOWER(accounts.account_code) NOT LIKE 'inc%'")
+                          ->whereRaw("LOWER(accounts.account_code) NOT LIKE '%disc%'")
+                          ->whereRaw("LOWER(accounts.account_code) NOT LIKE 'freight%'");
                   });
             })
-            // Exclude heads that are Expense, Revenue, Capital, Equity, Liability
+            // Exclude heads that are Expense, Revenue, Income, Capital, Equity, Liability
             ->where(function ($q) {
                 $q->whereNull('account_heads.name')
                   ->orWhere(function ($sub) {
@@ -3582,15 +3590,17 @@ class ReportingController extends Controller
             })
             ->where(function ($q) {
                 $q->whereNull('account_heads.type')
-                  ->orWhereNotIn('account_heads.type', ['Expense', 'Revenue', 'Equity', 'Liability']);
+                  ->orWhereNotIn('account_heads.type', ['Expense', 'Revenue', 'Income', 'Equity', 'Liability']);
             })
-            // Exclude accounts with Expense, Capital, Owner, Revenue, Payable in title
+            // Exclude accounts with Expense, Capital, Owner, Revenue, Payable, Discount, Freight in title
             ->where(function ($q) {
                 $q->whereRaw("LOWER(accounts.title) NOT LIKE '%expense%'")
                   ->whereRaw("LOWER(accounts.title) NOT LIKE '%capital%'")
                   ->whereRaw("LOWER(accounts.title) NOT LIKE '%owner%'")
                   ->whereRaw("LOWER(accounts.title) NOT LIKE '%revenue%'")
-                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%payable%'");
+                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%payable%'")
+                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%discount%'")
+                  ->whereRaw("LOWER(accounts.title) NOT LIKE '%freight%'");
             })
             ->select('accounts.*')
             ->orderBy('accounts.id', 'asc')
