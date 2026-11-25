@@ -815,29 +815,41 @@ body {
                 <div class="row g-3 mb-4">
                     {{-- Source Party --}}
                     <div class="col-md-6">
-                        <div class="bg-light p-3 rounded-4 border">
+                        <div class="bg-light p-3 rounded-4 border h-100">
                             <h6 class="fw-bold text-danger mb-3"><i class="fas fa-minus-circle me-1"></i> Source Party (Deduct From)</h6>
                             <div class="mb-3">
-                                <label class="pw-label">PARTY TYPE</label>
+                                <label class="pw-label d-block">PARTY TYPE</label>
                                 <div class="d-flex gap-3">
-                                    <label><input type="radio" name="source_party_type_choice" class="pt-src-party-type" value="customer" checked> Customer</label>
-                                    <label><input type="radio" name="source_party_type_choice" class="pt-src-party-type" value="vendor"> Vendor</label>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input pt-src-party-type" type="radio" name="source_party_type_choice" id="pt_src_type_cust" value="customer" checked>
+                                        <label class="form-check-label fw-bold text-dark" for="pt_src_type_cust" style="cursor: pointer;">
+                                            <i class="fas fa-user text-primary me-1"></i> Customer
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input pt-src-party-type" type="radio" name="source_party_type_choice" id="pt_src_type_vend" value="vendor">
+                                        <label class="form-check-label fw-bold text-dark" for="pt_src_type_vend" style="cursor: pointer;">
+                                            <i class="fas fa-truck text-danger me-1"></i> Vendor
+                                        </label>
+                                    </div>
                                 </div>
                                 <input type="hidden" name="source_party_type" id="pt_source_party_type" value="customer">
                             </div>
                             <div id="pt_src_customer_wrapper">
+                                <label class="pw-label">SELECT SOURCE CUSTOMER <span class="text-danger">*</span></label>
                                 <select name="source_party_id" id="pt_src_customer_select" class="form-select select2-customer" required>
                                     <option value="">Select source customer...</option>
                                     @foreach($customers as $c)
-                                        <option value="{{ $c->id }}">{{ $c->customer_name }}</option>
+                                        <option value="{{ $c->id }}">{{ $c->customer_name }} @if(!empty($c->mobile)) ({{ $c->mobile }}) @endif</option>
                                     @endforeach
                                 </select>
                             </div>
                             <div id="pt_src_vendor_wrapper" style="display:none;">
+                                <label class="pw-label">SELECT SOURCE VENDOR <span class="text-danger">*</span></label>
                                 <select name="source_party_id_vendor" id="pt_src_vendor_select" class="form-select select2-vendor" disabled>
                                     <option value="">Select source vendor...</option>
                                     @foreach($vendors as $v)
-                                        <option value="{{ $v->id }}">{{ $v->name }}</option>
+                                        <option value="{{ $v->id }}">{{ $v->name }} @if(!empty($v->phone)) ({{ $v->phone }}) @endif</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -846,29 +858,41 @@ body {
 
                     {{-- Destination Party --}}
                     <div class="col-md-6">
-                        <div class="bg-light p-3 rounded-4 border">
+                        <div class="bg-light p-3 rounded-4 border h-100">
                             <h6 class="fw-bold text-primary mb-3"><i class="fas fa-plus-circle me-1"></i> Destination Party (Transfer To)</h6>
                             <div class="mb-3">
-                                <label class="pw-label">PARTY TYPE</label>
+                                <label class="pw-label d-block">PARTY TYPE</label>
                                 <div class="d-flex gap-3">
-                                    <label><input type="radio" name="destination_party_type_choice" class="pt-dst-party-type" value="vendor" checked> Vendor</label>
-                                    <label><input type="radio" name="destination_party_type_choice" class="pt-dst-party-type" value="customer"> Customer</label>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input pt-dst-party-type" type="radio" name="destination_party_type_choice" id="pt_dst_type_vend" value="vendor" checked>
+                                        <label class="form-check-label fw-bold text-dark" for="pt_dst_type_vend" style="cursor: pointer;">
+                                            <i class="fas fa-truck text-danger me-1"></i> Vendor
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input pt-dst-party-type" type="radio" name="destination_party_type_choice" id="pt_dst_type_cust" value="customer">
+                                        <label class="form-check-label fw-bold text-dark" for="pt_dst_type_cust" style="cursor: pointer;">
+                                            <i class="fas fa-user text-primary me-1"></i> Customer
+                                        </label>
+                                    </div>
                                 </div>
                                 <input type="hidden" name="destination_party_type" id="pt_destination_party_type" value="vendor">
                             </div>
                             <div id="pt_dst_vendor_wrapper">
+                                <label class="pw-label">SELECT DESTINATION VENDOR <span class="text-danger">*</span></label>
                                 <select name="destination_party_id" id="pt_dst_vendor_select" class="form-select select2-vendor" required>
                                     <option value="">Select destination vendor...</option>
                                     @foreach($vendors as $v)
-                                        <option value="{{ $v->id }}">{{ $v->name }}</option>
+                                        <option value="{{ $v->id }}">{{ $v->name }} @if(!empty($v->phone)) ({{ $v->phone }}) @endif</option>
                                     @endforeach
                                 </select>
                             </div>
                             <div id="pt_dst_customer_wrapper" style="display:none;">
+                                <label class="pw-label">SELECT DESTINATION CUSTOMER <span class="text-danger">*</span></label>
                                 <select name="destination_party_id_customer" id="pt_dst_customer_select" class="form-select select2-customer" disabled>
                                     <option value="">Select destination customer...</option>
                                     @foreach($customers as $c)
-                                        <option value="{{ $c->id }}">{{ $c->customer_name }}</option>
+                                        <option value="{{ $c->id }}">{{ $c->customer_name }} @if(!empty($c->mobile)) ({{ $c->mobile }}) @endif</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -999,6 +1023,10 @@ document.addEventListener('DOMContentLoaded', function() {
         $('.voucher-form-section').removeClass('active');
         $('#form-' + type).addClass('active');
         initSelect2();
+        if (type === 'party_transfer') {
+            $('.pt-src-party-type:checked').trigger('change');
+            $('.pt-dst-party-type:checked').trigger('change');
+        }
     });
 
     function initSelect2() {
@@ -1316,6 +1344,44 @@ document.addEventListener('DOMContentLoaded', function() {
         $('#po_total_amount').val(netCash.toFixed(2));
     }
 
+    // 6d. Party to Party Transfer: Source Party Type Toggle
+    $(document).on('change', '.pt-src-party-type', function() {
+        let type = $(this).val();
+        $('#pt_source_party_type').val(type);
+        if (type === 'customer') {
+            $('#pt_src_customer_wrapper').show();
+            $('#pt_src_customer_select').prop('disabled', false).attr('name', 'source_party_id').prop('required', true);
+            $('#pt_src_vendor_wrapper').hide();
+            $('#pt_src_vendor_select').prop('disabled', true).removeAttr('name').prop('required', false);
+            $('#pt_src_customer_select').select2({ width: '100%' });
+        } else {
+            $('#pt_src_customer_wrapper').hide();
+            $('#pt_src_customer_select').prop('disabled', true).removeAttr('name').prop('required', false);
+            $('#pt_src_vendor_wrapper').show();
+            $('#pt_src_vendor_select').prop('disabled', false).attr('name', 'source_party_id').prop('required', true);
+            $('#pt_src_vendor_select').select2({ width: '100%' });
+        }
+    });
+
+    // 6e. Party to Party Transfer: Destination Party Type Toggle
+    $(document).on('change', '.pt-dst-party-type', function() {
+        let type = $(this).val();
+        $('#pt_destination_party_type').val(type);
+        if (type === 'vendor') {
+            $('#pt_dst_vendor_wrapper').show();
+            $('#pt_dst_vendor_select').prop('disabled', false).attr('name', 'destination_party_id').prop('required', true);
+            $('#pt_dst_customer_wrapper').hide();
+            $('#pt_dst_customer_select').prop('disabled', true).removeAttr('name').prop('required', false);
+            $('#pt_dst_vendor_select').select2({ width: '100%' });
+        } else {
+            $('#pt_dst_vendor_wrapper').hide();
+            $('#pt_dst_vendor_select').prop('disabled', true).removeAttr('name').prop('required', false);
+            $('#pt_dst_customer_wrapper').show();
+            $('#pt_dst_customer_select').prop('disabled', false).attr('name', 'destination_party_id').prop('required', true);
+            $('#pt_dst_customer_select').select2({ width: '100%' });
+        }
+    });
+
     // 7. Form Submission AJAX
     $('.voucher-form').on('submit', function(e) {
         e.preventDefault();
@@ -1361,6 +1427,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Select2 & Defaults
     initSelect2();
     $('#expHeadTypeToggle .active-cash').trigger('click');
+
+    // Auto-open requested voucher type from URL param ?type=...
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedType = urlParams.get('type');
+    if (requestedType && $('#voucherTypeSelector .voucher-type-pill[data-type="' + requestedType + '"]').length) {
+        $('#voucherTypeSelector .voucher-type-pill[data-type="' + requestedType + '"]').trigger('click');
+    }
 });
 </script>
 
