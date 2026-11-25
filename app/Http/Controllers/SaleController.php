@@ -3440,6 +3440,16 @@ class SaleController extends Controller
             ->orderBy('serial_number', 'asc')
             ->get();
 
+        $fallbackCost = (float) ($product->purchase_price ?? $product->price ?? 0);
+        $serials->each(function ($s) use ($fallbackCost) {
+            $cost = (float) ($s->cost_price ?? 0);
+            if ($cost <= 0) {
+                $cost = $fallbackCost;
+            }
+            $s->cost_price = $cost;
+            $s->cost_formatted = number_format($cost, 2);
+        });
+
         $hasSerials = $serials->count() > 0 || \App\Models\ProductSerial::where('product_id', $productId)->exists();
         $isSerialProduct = ($product && $product->tracking_type === 'serial') || $hasSerials;
 

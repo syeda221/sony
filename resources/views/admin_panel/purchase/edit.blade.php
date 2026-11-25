@@ -867,14 +867,15 @@
                         @endif
 
                         <div class="s-row">
-                            <span class="s-label">Bill Discount</span>
+                            <span class="s-label">Order Discount (Rs)</span>
                             <div class="d-flex align-items-center gap-1 discount-input">
                                 <div class="input-group input-group-sm">
                                     <input type="number" step="0.01" class="form-control text-end fw-bold" id="billDiscountPct" placeholder="0" style="max-width: 45px;">
                                     <span class="input-group-text">%</span>
                                 </div>
-                                <input type="number" step="0.01" class="form-control text-end fw-bold" id="billDiscount" value="{{ (float)$purchase->discount }}">
-                                <input type="hidden" name="discount" id="discountInput" value="{{ (float)$purchase->discount }}">
+                                <input type="number" step="0.01" class="form-control text-end fw-bold" id="billDiscount" name="order_discount" value="{{ (float)($purchase->order_discount ?? $purchase->additional_discount ?? 0) }}">
+                                <input type="hidden" name="discount" id="legacyDiscount" value="{{ (float)$purchase->discount }}">
+                                <input type="hidden" name="discount_amt" id="discountInput" value="{{ (float)($purchase->order_discount ?? $purchase->additional_discount ?? 0) }}">
                             </div>
                         </div>
 
@@ -1856,26 +1857,16 @@
                 $('#tGstAmount').text(totalGstAmount.toFixed(2));
                 $('#totalGstInput').val(totalGstAmount.toFixed(2));
 
-                let additionalDiscount = parseFloat($('#discountInput').val()) || 0;
-                let billDiscVal = parseFloat($('#billDiscount').val());
-
-                if ($(document.activeElement).is('#billDiscount')) {
-                    if (!isNaN(billDiscVal)) {
-                        additionalDiscount = Math.max(0, billDiscVal - totalInlineDiscount);
-                    } else {
-                        additionalDiscount = 0;
-                    }
-                } else {
-                    billDiscVal = totalInlineDiscount + additionalDiscount;
-                    $('#billDiscount').val(billDiscVal.toFixed(2));
-                }
+                let orderDiscount = parseFloat($('#billDiscount').val()) || 0;
+                if (orderDiscount < 0) orderDiscount = 0;
                 
-                const pct = grossSubtotal > 0 ? (billDiscVal / grossSubtotal) * 100 : 0;
+                const pct = grossSubtotal > 0 ? (orderDiscount / grossSubtotal) * 100 : 0;
                 $('#billDiscountPct').val(pct.toFixed(2));
-                $('#discountInput').val(additionalDiscount.toFixed(2));
+                $('#discountInput').val(orderDiscount.toFixed(2));
+                $('#legacyDiscount').val((totalInlineDiscount + orderDiscount).toFixed(2));
 
                 const extraCost = parseFloat($('#extraCost').val()) || 0;
-                const net = Math.max(0, subtotal - additionalDiscount + extraCost);
+                const net = Math.max(0, subtotal - orderDiscount + extraCost);
 
                 $('#tPayable').text(net.toFixed(2));
                 $('#netAmountInput').val(net.toFixed(2));
@@ -1884,7 +1875,7 @@
                 const prevBal = parseFloat($('#tPrev').text()) || 0;
                 const totalPaid = parseFloat($('#totalPaid').text()) || 0;
                 const totalPayable = prevBal + net;
-                const balanceDue = totalPayable - totalPaid;
+                const balanceDue = Math.max(0, net - totalPaid);
                 
                 $('#tTotalPayable').text(totalPayable.toFixed(2));
                 $('#tBalanceDue').text(balanceDue.toFixed(2));
@@ -1925,16 +1916,9 @@
             }
 
             function normalizeDiscountInput() {
-                let totalInlineDiscount = 0;
-                $('#purchaseTableBody tr').each(function() {
-                    const rowDiscAmt = parseFloat($(this).find('.item-disc-amt').val()) || 0;
-                    totalInlineDiscount += rowDiscAmt;
-                });
-
-                let billDiscVal = parseFloat($('#billDiscount').val());
-                if (isNaN(billDiscVal) || billDiscVal < totalInlineDiscount) {
-                    $('#billDiscount').val(totalInlineDiscount.toFixed(2));
-                }
+                let orderDisc = parseFloat($('#billDiscount').val()) || 0;
+                if (orderDisc < 0) orderDisc = 0;
+                $('#billDiscount').val(orderDisc > 0 ? orderDisc.toFixed(2) : '0');
                 recalcAll();
             }
 

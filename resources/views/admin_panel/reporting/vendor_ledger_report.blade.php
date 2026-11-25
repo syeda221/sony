@@ -216,9 +216,8 @@
                     <div class="col-md-7">
                         <label for="vendor_id_desk" class="sale-filter-label mb-1">Vendor:</label>
                         <select name="vendor_id" id="vendor_id_desk" class="form-select form-select-sm select2 vendorSelect">
-                            <option value="all">-- All Vendors --</option>
                             @foreach ($vendors as $v)
-                                <option value="{{ $v->id }}">{{ $v->name }}</option>
+                                <option value="{{ $v->id }}" {{ $loop->first ? 'selected' : '' }}>{{ $v->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -253,9 +252,8 @@
                     <div class="col-12 mb-1">
                         <label class="form-label mb-1 fw-bold text-secondary" style="font-size: 11px;">Vendor</label>
                         <select name="vendor_id" class="form-select form-select-sm select2 vendorSelect">
-                            <option value="all">-- All Vendors --</option>
                             @foreach ($vendors as $v)
-                                <option value="{{ $v->id }}">{{ $v->name }}</option>
+                                <option value="{{ $v->id }}" {{ $loop->first ? 'selected' : '' }}>{{ $v->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -557,7 +555,7 @@
                 $("#ledgerBox").hide();
 
                 $.get("{{ route('report.vendor.ledger.fetch') }}", {
-                    vendor_id: vid || 'all',
+                    vendor_id: vid || $('.vendorSelect').val(),
                     start_date: start,
                     end_date: end,
                     ledger_type: ledgerType

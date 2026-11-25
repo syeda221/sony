@@ -15,6 +15,7 @@ class Purchase extends Model
         'purchase_date'       => 'date',
         'subtotal'            => 'decimal:2',
         'discount'            => 'decimal:2',
+        'order_discount'      => 'decimal:2',
         'additional_discount' => 'decimal:2',
         'extra_cost'          => 'decimal:2',
         'net_amount'          => 'decimal:2',

@@ -1968,10 +1968,8 @@ class ReportingController extends Controller
                                 ? ((float) $pItem->qty * $ppbP)
                                 : (in_array($u, ['gm', 'g']) ? ((float) $pItem->qty / 1000.0) : (float) $pItem->qty);
 
+                            // Item purchase cost preserves line_total (order discount is vendor-level income, not deducted from product cost)
                             $pNet = (float) $pItem->line_total;
-                            if ((float) $pItem->p_subtotal > 0) {
-                                $pNet = $pNet / (float) $pItem->p_subtotal * (float) $pItem->p_net_amount;
-                            }
                             $vPurchQty += $pPieces;
                             $vPurchAmount += $pNet;
                         }
@@ -2529,30 +2527,41 @@ class ReportingController extends Controller
             $totalIncentiveIncome = $backupIncome + $annualIncome;
         }
 
+        // 6B. Purchase Discount Received (Vendor Order Discount as Income in P&L)
+        $totalPurchaseDiscount = 0;
+        if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
+            $totalPurchaseDiscount = (float) DB::table('purchases')
+                ->whereIn('status_purchase', ['approved', 'Returned'])
+                ->whereNull('deleted_at')
+                ->whereBetween('purchase_date', [$startDateOnly, $endDateOnly])
+                ->sum('order_discount');
+        }
+
         // 7. Sales Officer Commission Expense (Tracked for report, NOT subtracted from Net Profit)
         $totalSalesOfficerCommission = 0;
         if ((!$customerId || $customerId === 'all') && (!$productId || $productId === 'all') && (!$categoryId || $categoryId === 'all')) {
             $totalSalesOfficerCommission = (float) $balanceService->getTotalSalesOfficerCommissionEarnedBetween($start, $end);
         }
 
-        $netProfit = $totalGrossProfit + $totalIncentiveIncome - $totalExpenses;
+        $netProfit = $totalGrossProfit + $totalIncentiveIncome + $totalPurchaseDiscount - $totalExpenses;
 
         return response()->json([
-            'products'                 => $productStats,
-            'total_gross_sales'        => round($totalGrossSales, 2),
-            'total_discounts_allowed'  => round($totalDiscountsAllowed, 2),
-            'net_sales'                => round($totalNetRevenue, 2),
-            'total_cogs'               => round($totalCogs, 2),
-            'total_extradiscount'      => round($totalOrderDiscount, 2),
-            'total_item_discount'      => round($totalItemDiscount, 2),
-            'total_gross_profit'       => round($totalGrossProfit, 2),
-            'vendor_incentive_income'  => round($totalIncentiveIncome, 2),
-            'backup_income'            => round($backupIncome, 2),
-            'annual_income'            => round($annualIncome, 2),
-            'total_expenses'           => round($totalExpenses, 2),
-            'sales_officer_commission' => round($totalSalesOfficerCommission, 2),
-            'net_profit'               => round($netProfit, 2),
-            'top_customers'            => $topCustomers
+            'products'                   => $productStats,
+            'total_gross_sales'          => round($totalGrossSales, 2),
+            'total_discounts_allowed'    => round($totalDiscountsAllowed, 2),
+            'net_sales'                  => round($totalNetRevenue, 2),
+            'total_cogs'                 => round($totalCogs, 2),
+            'total_extradiscount'        => round($totalOrderDiscount, 2),
+            'total_item_discount'        => round($totalItemDiscount, 2),
+            'total_gross_profit'         => round($totalGrossProfit, 2),
+            'vendor_incentive_income'    => round($totalIncentiveIncome, 2),
+            'backup_income'              => round($backupIncome, 2),
+            'annual_income'              => round($annualIncome, 2),
+            'purchase_discount_received' => round($totalPurchaseDiscount, 2),
+            'total_expenses'             => round($totalExpenses, 2),
+            'sales_officer_commission'   => round($totalSalesOfficerCommission, 2),
+            'net_profit'                 => round($netProfit, 2),
+            'top_customers'              => $topCustomers
         ]);
         } catch (\Throwable $e) {
             \Log::error('fetchProfitLoss error: ' . $e->getMessage() . ' on line ' . $e->getLine() . ' in ' . $e->getFile(), [
@@ -3260,144 +3269,23 @@ class ReportingController extends Controller
 
         $balanceService = app(\App\Services\BalanceService::class);
 
-        // If "all" or empty, fetch for ALL vendors
+        // Enforce strict vendor-wise isolation: never combine different vendors into one running balance
         if (!$vendorId || $vendorId === 'all') {
-            $vendorIds = \App\Models\JournalEntry::where('party_type', \App\Models\Vendor::class)
-                ->distinct()
-                ->pluck('party_id')
-                ->toArray();
-
-            // Also include vendors with opening balance
-            $obVendorIds = \App\Models\Vendor::where('opening_balance', '>', 0)
-                ->pluck('id')
-                ->toArray();
-
-            $allIds = array_unique(array_merge($vendorIds, $obVendorIds));
-
-            $allTransactions = [];
-            $totalOpening = 0;
-            $totalClosing = 0;
-
-            foreach ($allIds as $vid) {
-                $ledgerData = $balanceService->getVendorLedger($vid, $start, $end);
-                $vendorName = $ledgerData['vendor']->name ?? 'Unknown';
-                $totalOpening += $ledgerData['opening_balance'];
-
-                foreach ($ledgerData['transactions'] as $row) {
-                    $desc = $row['description'] ?? '';
-
-                    $accountName = '';
-                    if ($row['debit'] > 0 && ($row['source_type'] ?? null)) {
-                        $accountName = $this->getPaymentAccountName($row['source_type'], $row['source_id']);
-                    }
-                    if ($accountName) {
-                        $desc .= ' [A/C: ' . $accountName . ']';
-                    }
-
-                    $ref = $row['invoice_no'] ?? '-';
-                    if ($ref === '-' || empty($ref)) {
-                        if (preg_match('/PUR-(\S+)/', $desc, $matches)) {
-                            $ref = 'PUR-' . $matches[1];
-                        } elseif (preg_match('/Payment #(\S+)/', $desc, $matches)) {
-                            $ref = $matches[1];
-                        } elseif (preg_match('/Purchase #(\S+)/', $desc, $matches)) {
-                            $ref = $matches[1];
-                        } elseif (preg_match('/PVID-(\S+)/', $desc, $matches)) {
-                            $ref = 'PVID-' . $matches[1];
-                        } elseif (preg_match('/PA-\d+-\d+/', $desc, $matches)) {
-                            $ref = $matches[0];
-                        }
-                    }
-
-                    $invoiceUrl = null;
-                    try {
-                        if (($row['source_type'] ?? '') === \App\Models\Purchase::class || ($row['source_type'] ?? '') === 'Purchase') {
-                            if (!empty($row['source_id'])) {
-                                $invoiceUrl = route('purchase.invoice', $row['source_id']);
-                            }
-                        } elseif (($row['source_type'] ?? '') === \App\Models\VoucherMaster::class) {
-                            if (!empty($row['source_id'])) {
-                                $vm = \App\Models\VoucherMaster::find($row['source_id']);
-                                if ($vm && $vm->voucher_type === 'payment') {
-                                    $invoiceUrl = route('Paymentprint', $vm->id);
-                                }
-                            }
-                        } elseif (($row['source_type'] ?? '') === \App\Models\PaymentVoucher::class || ($row['source_type'] ?? '') === 'PaymentVoucher' || str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
-                            $pvId = $row['source_id'] ?? null;
-                            if (!$pvId && (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-'))) {
-                                $pvId = \App\Models\PaymentVoucher::where('pvid', $ref)->value('id') ?? \App\Models\VoucherMaster::where('voucher_no', $ref)->value('id') ?? $ref;
-                            }
-                            if ($pvId) {
-                                $invoiceUrl = route('Paymentprint', $pvId);
-                            }
-                        }
-
-                        if (!$invoiceUrl && $ref !== '-') {
-                            $purchaseId = \App\Models\Purchase::where('invoice_no', $ref)->orWhere('id', $ref)->value('id');
-                            if ($purchaseId) {
-                                $invoiceUrl = route('purchase.invoice', $purchaseId);
-                            } elseif (str_starts_with((string)$ref, 'PVID-') || str_starts_with((string)$ref, 'PA-')) {
-                                $invoiceUrl = route('Paymentprint', $ref);
-                            }
-                        }
-                    } catch (\Throwable $e) {
-                        $invoiceUrl = null;
-                    }
-
-                    $entryDate = $row['date'] ?? null;
-                    if ($entryDate instanceof \Carbon\Carbon) {
-                        $formattedDate = $entryDate->format('d-M-Y');
-                        $sortDate = $entryDate->format('Y-m-d');
-                    } elseif ($entryDate) {
-                        $parsedDate = \Carbon\Carbon::parse($entryDate);
-                        $formattedDate = $parsedDate->format('d-M-Y');
-                        $sortDate = $parsedDate->format('Y-m-d');
-                    } else {
-                        $formattedDate = '-';
-                        $sortDate = '1970-01-01';
-                    }
-
-                    $allTransactions[] = [
-                        'sort_date'         => $sortDate,
-                        'date'              => $formattedDate,
-                        'invoice'           => $ref,
-                        'invoice_no'        => $row['invoice_no'] ?? ($ref !== '-' ? $ref : null),
-                        'invoice_url'       => $invoiceUrl,
-                        'vendor_invoice_no' => $row['vendor_invoice_no'] ?? null,
-                        'source_type'       => $row['source_type'] ?? null,
-                        'description'       => $desc,
-                        'vendor_name'       => $vendorName,
-                        'debit'             => $row['debit'] ?? 0,
-                        'credit'            => $row['credit'] ?? 0,
-                        'balance'           => $row['balance'] ?? 0,
-                    ];
-                }
-
-                $totalClosing += $ledgerData['closing_balance'] ?? $ledgerData['opening_balance'];
+            $defaultVendorId = DB::table('vendors')->orderBy('id')->value('id');
+            if ($defaultVendorId) {
+                $vendorId = $defaultVendorId;
+            } else {
+                return response()->json([
+                    'vendor' => (object)['name' => 'No Vendor Found'],
+                    'opening_balance' => 0,
+                    'closing_balance' => 0,
+                    'transactions' => [],
+                    'report_period' => "$start to $end",
+                ]);
             }
-
-            // Sort by date
-            usort($allTransactions, function ($a, $b) {
-                return strcmp($a['sort_date'], $b['sort_date']);
-            });
-
-            // Recalculate running balance across all
-            $running = $totalOpening;
-            foreach ($allTransactions as &$t) {
-                $running += ($t['credit'] - $t['debit']);
-                $t['balance'] = $running;
-            }
-
-            return response()->json([
-                'vendor' => (object)['name' => 'All Vendors'],
-                'opening_balance' => $totalOpening,
-                'closing_balance' => $totalClosing,
-                'transactions' => $allTransactions,
-                'report_period' => "$start to $end",
-            ]);
         }
 
-        // Single vendor
+        // Single vendor (Strictly isolated)
         $vendor = DB::table('vendors')->where('id', $vendorId)->first();
         if (!$vendor) {
             return response()->json(['error' => 'Vendor not found'], 400);
@@ -4586,13 +4474,7 @@ class ReportingController extends Controller
                     ELSE purchase_items.qty
                 END
             ), 0) as total_qty,
-            COALESCE(SUM(
-                CASE
-                    WHEN COALESCE(purchases.subtotal, 0) > 0
-                    THEN purchase_items.line_total / purchases.subtotal * purchases.net_amount
-                    ELSE purchase_items.line_total
-                END
-            ), 0) as total_net_amount
+            COALESCE(SUM(purchase_items.line_total), 0) as total_net_amount
         "))->first();
 
         return [(float) $result->total_qty, (float) $result->total_net_amount];

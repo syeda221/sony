@@ -1281,15 +1281,27 @@
                 <div class="company-brand">{{ $companyName }}</div>
                 <div class="company-meta">
                     @if(!empty($companyAddress))
-                        <span>{{ $companyAddress }}</span>
+                        <div>{{ $companyAddress }}</div>
                     @endif
-                    @if($showCompTax && (!empty($companyNtn) || !empty($companyStrn)))
-                        <div class="mt-1" style="font-size: 11px;">
-                            @if(!empty($companyNtn))
-                                <span class="badge bg-light text-dark border px-2 py-1 me-1"><strong>NTN:</strong> {{ $companyNtn }}</span>
+                    @php
+                        $compHasTax = $showCompTax && (!empty($companyNtn) || !empty($companyStrn));
+                        $compHasContact = !empty($companyPhone) || !empty($companyEmail);
+                    @endphp
+                    @if($compHasTax || $compHasContact)
+                        <div class="mt-1 d-flex align-items-center justify-content-center flex-wrap gap-1" style="font-size: 11px;">
+                            @if(!empty($companyPhone))
+                                <span class="badge bg-light text-dark border px-2 py-1 me-1"><i class="fas fa-phone-alt me-1 text-muted"></i><strong>Contact:</strong> {{ $companyPhone }}</span>
                             @endif
-                            @if(!empty($companyStrn))
-                                <span class="badge bg-light text-dark border px-2 py-1"><strong>STRN:</strong> {{ $companyStrn }}</span>
+                            @if(!empty($companyEmail))
+                                <span class="badge bg-light text-dark border px-2 py-1 me-1"><i class="fas fa-envelope me-1 text-muted"></i><strong>Email:</strong> {{ $companyEmail }}</span>
+                            @endif
+                            @if($showCompTax)
+                                @if(!empty($companyNtn))
+                                    <span class="badge bg-light text-dark border px-2 py-1 me-1"><strong>NTN:</strong> {{ $companyNtn }}</span>
+                                @endif
+                                @if(!empty($companyStrn))
+                                    <span class="badge bg-light text-dark border px-2 py-1"><strong>STRN:</strong> {{ $companyStrn }}</span>
+                                @endif
                             @endif
                         </div>
                     @endif
@@ -1438,6 +1450,12 @@
                     </div>
                     <div class="card-body-meta">
                         <table class="meta-table">
+                            <tr>
+                                <td class="lbl">Shipper Name</td>
+                                <td class="col">:</td>
+                                <td class="val highlight">{{ $companyName }}</td>
+                            </tr>
+
                             @if($showInvNo)
                             <tr>
                                 <td class="lbl">{{ ($sale->sale_status === 'quotation' || ($isQuotation ?? false)) ? 'Quotation Number' : 'Invoice Number' }}</td>
@@ -1470,22 +1488,6 @@
                                 <td class="lbl">Sales Reference</td>
                                 <td class="col">:</td>
                                 <td class="val">{{ $salesOfficerName ?: $sale->reference }}</td>
-                            </tr>
-                            @endif
-
-                            @if(!empty($compPhone))
-                            <tr>
-                                <td class="lbl">Contact Details</td>
-                                <td class="col">:</td>
-                                <td class="val">{{ $compPhone }}</td>
-                            </tr>
-                            @endif
-
-                            @if(!empty($compEmail))
-                            <tr>
-                                <td class="lbl">Email</td>
-                                <td class="col">:</td>
-                                <td class="val">{{ $compEmail }}</td>
                             </tr>
                             @endif
                         </table>

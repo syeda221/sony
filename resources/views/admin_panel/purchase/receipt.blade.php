@@ -333,9 +333,16 @@
         </div>
 
         @php
+            $orderDiscReceipt = (float) ($purchase->order_discount ?? 0);
             $inlineSchemeReceipt = (float) $purchase->items->sum('scheme_discount');
-            $extraSchemeReceipt = max(0, (float)($purchase->additional_discount ?? 0) - $inlineSchemeReceipt);
+            $extraSchemeReceipt = max(0, (float)($purchase->additional_discount ?? 0) - $inlineSchemeReceipt - $orderDiscReceipt);
         @endphp
+        @if ($orderDiscReceipt > 0)
+            <div class="info-row">
+                <span>Order Discount:</span>
+                <span>-{{ number_format($orderDiscReceipt, 2) }}</span>
+            </div>
+        @endif
         @if ($extraSchemeReceipt > 0)
             <div class="info-row">
                 <span>Scheme Discount:</span>

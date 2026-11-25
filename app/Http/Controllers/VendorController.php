@@ -568,6 +568,7 @@ class VendorController extends Controller
             'annualBalance' => $annualBalance,
             'schemeBalance' => $schemeBalance,
             'cashAccounts' => $cashAccounts,
+            'allVendors' => Vendor::orderBy('name')->get(['id', 'name']),
         ]));
     }
 

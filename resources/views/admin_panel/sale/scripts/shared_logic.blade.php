@@ -2504,7 +2504,10 @@
                 serials.forEach(s => {
                     const isChecked = selectedList.includes(s.serial_number) ? 'checked' : '';
                     const whName = s.warehouse ? (s.warehouse.warehouse_name || s.warehouse.name) : (s.warehouse_name || '');
-                    const whBadge = whName ? `<span class="badge bg-light text-dark border me-2"><i class="fas fa-warehouse me-1 text-primary"></i>${whName}</span>` : '';
+                    const whBadge = whName ? `<span class="badge bg-light text-dark border me-1"><i class="fas fa-warehouse me-1 text-primary"></i>${whName}</span>` : '';
+                    const costVal = parseFloat(s.cost_price) || 0;
+                    const costFormatted = s.cost_formatted || costVal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    const costBadge = `<span class="badge bg-warning-subtle text-dark border border-warning me-1 fw-bold" title="Product Cost Price"><i class="fas fa-tag me-1 text-warning"></i>Rs. ${costFormatted}</span>`;
                     html += `
                         <div class="d-flex align-items-center justify-content-between p-2 border-bottom serial-item-row" style="font-size:0.85rem; cursor: pointer; user-select: none;">
                             <div class="form-check mb-0 flex-grow-1 d-flex align-items-center">
@@ -2515,6 +2518,7 @@
                             </div>
                             <div class="d-flex align-items-center gap-1">
                                 ${whBadge}
+                                ${costBadge}
                                 <span class="badge bg-success font-monospace">Available</span>
                             </div>
                         </div>`;

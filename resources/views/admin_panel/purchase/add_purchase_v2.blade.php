@@ -855,6 +855,10 @@
                                 <span class="field-label mb-0 fw-bold">Total Paid:</span>
                                 <span class="fw-bold fs-6 text-success">Rs. <span id="totalPaid">0.00</span></span>
                             </div>
+                            <div class="d-flex justify-content-between align-items-center pt-1">
+                                <span class="field-label mb-0 fw-bold text-danger">Balance Due:</span>
+                                <span class="fw-bold fs-6 text-danger">Rs. <span id="cardBalanceDue">0.00</span></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -896,10 +900,11 @@
                             <div class="s-row">
                                 <span class="s-label">Order Discount (Rs)</span>
                                 <div class="input-group input-group-sm discount-input">
-                                    <input type="number" step="0.01" class="form-control text-end" id="billDiscount" name="discount" value="0" placeholder="0">
+                                    <input type="number" step="0.01" class="form-control text-end" id="billDiscount" name="order_discount" value="0" placeholder="0">
                                     <span class="input-group-text">Rs</span>
                                 </div>
                                 <input type="hidden" id="discountInput" name="discount_amt" value="0">
+                                <input type="hidden" id="legacyDiscount" name="discount" value="0">
                                 <input type="hidden" id="billDiscountPct" name="discount_percent" value="0">
                             </div>
 
@@ -1388,16 +1393,9 @@
             });
 
             function normalizeDiscountInput() {
-                let totalInlineDiscount = 0;
-                $('#purchaseTableBody tr').each(function() {
-                    const rowDiscAmt = parseFloat($(this).find('.item-disc-amt').val()) || 0;
-                    totalInlineDiscount += rowDiscAmt;
-                });
-
-                let billDiscVal = parseFloat($('#billDiscount').val());
-                if (isNaN(billDiscVal) || billDiscVal < totalInlineDiscount) {
-                    $('#billDiscount').val(totalInlineDiscount.toFixed(2));
-                }
+                let orderDisc = parseFloat($('#billDiscount').val()) || 0;
+                if (orderDisc < 0) orderDisc = 0;
+                $('#billDiscount').val(orderDisc > 0 ? orderDisc.toFixed(2) : '0');
                 recalcAll();
             }
 
@@ -2044,37 +2042,34 @@
                 $('#tGstAmount').text(totalGstAmount.toFixed(2));
                 $('#totalGstInput').val(totalGstAmount.toFixed(2));
 
-                let additionalDiscount = parseFloat($('#discountInput').val()) || 0;
-                let billDiscVal = parseFloat($('#billDiscount').val());
-
-                if ($(document.activeElement).is('#billDiscount')) {
-                    if (!isNaN(billDiscVal)) {
-                        additionalDiscount = Math.max(0, billDiscVal - totalInlineDiscount);
-                    } else {
-                        additionalDiscount = 0;
-                    }
-                } else {
-                    billDiscVal = totalInlineDiscount + additionalDiscount;
-                    $('#billDiscount').val(billDiscVal.toFixed(2));
-                }
+                let orderDiscount = parseFloat($('#billDiscount').val()) || 0;
+                if (orderDiscount < 0) orderDiscount = 0;
                 
-                const pct = grossSubtotal > 0 ? (billDiscVal / grossSubtotal) * 100 : 0;
+                const pct = grossSubtotal > 0 ? (orderDiscount / grossSubtotal) * 100 : 0;
                 $('#billDiscountPct').val(pct.toFixed(2));
-                $('#discountInput').val(additionalDiscount.toFixed(2));
+                $('#discountInput').val(orderDiscount.toFixed(2));
+                $('#legacyDiscount').val((totalInlineDiscount + orderDiscount).toFixed(2));
 
                 const extraCost = parseFloat($('#extraCost').val()) || 0;
-                const net = Math.max(0, subtotal - additionalDiscount + extraCost);
+                const net = Math.max(0, subtotal - orderDiscount + extraCost);
 
                 $('#tPayable').text(net.toFixed(2));
                 $('#netAmountInput').val(net.toFixed(2));
                 $('#totalAmount').text(subtotal.toFixed(2));
 
                 const prevBal = parseFloat($('#tPrev').text()) || 0;
-                const totalPaid = parseFloat($('#totalPaid').text()) || 0;
+                let totalPaid = 0;
+                $('.payment-amount').each(function() {
+                    totalPaid += parseFloat($(this).val()) || 0;
+                });
                 const totalPayable = prevBal + net;
-                const balanceDue = totalPayable - totalPaid;
+                const balanceDue = Math.max(0, net - totalPaid);
                 
                 $('#tTotalPayable').text(totalPayable.toFixed(2));
+                $('#tBalanceDue').text(balanceDue.toFixed(2));
+                $('#cardBalanceDue').text(balanceDue.toFixed(2));
+                $('#tPaidSummary').text(totalPaid.toFixed(2));
+                $('#totalPaid').text(totalPaid.toFixed(2));
                 $('#tBalanceDue').text(balanceDue.toFixed(2));
                 $('#tPaidSummary').text(totalPaid.toFixed(2));
             }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\AccountHead;
 use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\VoucherDetail;
@@ -385,15 +386,22 @@ class BalanceService
 
         $openingBalance = $this->getVendorBalanceBeforeDate($vendorId, $startDate);
 
-        // Purchases in range (Increase payable - they go in Debit column = money we owe)
-        $purchases = DB::table('purchases')
+        // Purchases in range (Increase payable - they go in Credit column = money we owe)
+        $purchasesRaw = DB::table('purchases')
             ->where('vendor_id', $vendorId)
             ->whereIn('status_purchase', ['approved', 'Returned'])
             ->whereNull('deleted_at')
             ->whereBetween('purchase_date', [$startDate, $endDate])
-            ->select('id', 'invoice_no', 'purchase_order_no', 'net_amount', 'total_scheme_amount', 'purchase_date')
-            ->get()
-            ->map(fn($p) => [
+            ->select('id', 'invoice_no', 'purchase_order_no', 'net_amount', 'total_scheme_amount', 'order_discount', 'purchase_date')
+            ->get();
+
+        $purchases = [];
+        foreach ($purchasesRaw as $p) {
+            $schemeAmt = (float) ($p->total_scheme_amount ?? 0);
+            $orderDisc = (float) ($p->order_discount ?? 0);
+            $grossCredit = (float) $p->net_amount + $schemeAmt + $orderDisc;
+
+            $purchases[] = [
                 'source_type'       => 'Purchase',
                 'source_id'         => $p->id,
                 'date'              => $p->purchase_date,
@@ -401,9 +409,24 @@ class BalanceService
                 'vendor_invoice_no' => $p->purchase_order_no,
                 'description'       => 'Purchase Invoice #' . $p->invoice_no . ($p->purchase_order_no ? ' (Vendor Inv#: ' . $p->purchase_order_no . ')' : ''),
                 'debit'             => 0,
-                'credit'            => (float) $p->net_amount + (float) ($p->total_scheme_amount ?? 0), // Gross amount (before scheme discount)
+                'credit'            => $grossCredit,
                 'sort_date'         => $p->purchase_date,
-            ]);
+            ];
+
+            if ($orderDisc > 0) {
+                $purchases[] = [
+                    'source_type'       => 'PurchaseDiscount',
+                    'source_id'         => $p->id,
+                    'date'              => $p->purchase_date,
+                    'invoice_no'        => $p->invoice_no,
+                    'vendor_invoice_no' => null,
+                    'description'       => 'Purchase Discount Received (Inv #' . $p->invoice_no . ')',
+                    'debit'             => $orderDisc, // Dr = reduces what we owe
+                    'credit'            => 0,
+                    'sort_date'         => $p->purchase_date,
+                ];
+            }
+        }
 
         // Purchase Returns in range (Reduce payable)
         $returns = DB::table('purchase_returns')
@@ -888,6 +911,62 @@ class BalanceService
                 'account_code' => 'PURCHASE',
                 'type' => 'Debit', // Expense is Dr nature
                 'head_id' => null, // Or look for Expense head
+                'opening_balance' => 0,
+                'status' => 1,
+                'is_active' => 1,
+            ]);
+        }
+
+        return $account->id;
+    }
+
+    /**
+     * Get Purchase Discount Received account ID (Income)
+     * Auto-creates if missing.
+     */
+    public function getPurchaseDiscountReceivedId(): int
+    {
+        $account = Account::where('title', 'like', '%Purchase Discount%')
+            ->orWhere('title', 'like', '%Discount Received%')
+            ->orWhere('account_code', 'DISC_REC')
+            ->first();
+
+        if (! $account) {
+            \Log::info("BalanceService: 'Purchase Discount Received' missing, creating it.");
+            $incomeHead = AccountHead::where('type', 'Income')->orWhere('name', 'Income')->first();
+            $account = Account::create([
+                'title' => 'Purchase Discount Received',
+                'account_code' => 'DISC_REC',
+                'type' => 'Credit', // Income is Cr nature
+                'head_id' => $incomeHead?->id,
+                'opening_balance' => 0,
+                'status' => 1,
+                'is_active' => 1,
+            ]);
+        }
+
+        return $account->id;
+    }
+
+    /**
+     * Get Freight / Shipping In Expense account ID (Expense)
+     * Auto-creates if missing.
+     */
+    public function getFreightExpenseId(): int
+    {
+        $account = Account::where('title', 'like', '%Freight%')
+            ->orWhere('title', 'like', '%Shipping%')
+            ->orWhere('account_code', 'FREIGHT')
+            ->first();
+
+        if (! $account) {
+            \Log::info("BalanceService: 'Freight In Expense' missing, creating it.");
+            $expenseHead = AccountHead::where('type', 'Expense')->orWhere('name', 'Expense')->first();
+            $account = Account::create([
+                'title' => 'Freight In Expense',
+                'account_code' => 'FREIGHT',
+                'type' => 'Debit', // Expense is Dr nature
+                'head_id' => $expenseHead?->id,
                 'opening_balance' => 0,
                 'status' => 1,
                 'is_active' => 1,

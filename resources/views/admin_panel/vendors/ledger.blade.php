@@ -321,7 +321,17 @@
             </h3>
             <div class="vdetail-sub">Transaction history for <span class="fw-bold text-primary">{{ $vendor->name }}</span></div>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            @if(isset($allVendors) && count($allVendors) > 1)
+                <div class="d-flex align-items-center gap-1">
+                    <label class="small text-muted fw-bold mb-0 text-nowrap"><i class="fas fa-exchange-alt me-1"></i>Switch Vendor:</label>
+                    <select class="form-select form-select-sm" style="min-width: 180px; font-weight: 600;" onchange="window.location.href='{{ url('/vendor') }}/' + this.value + '/ledger?tab={{ $activeTab }}&start_date={{ request('start_date') }}&end_date={{ request('end_date') }}'">
+                        @foreach($allVendors as $v)
+                            <option value="{{ $v->id }}" {{ $v->id == $vendor->id ? 'selected' : '' }}>{{ $v->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
             @if ($activeTab !== 'main')
                 <button type="button" class="btn btn-success fw-bold px-3 py-2 btn-settle-action" style="border-radius: 10px;" data-bs-toggle="modal" data-bs-target="#settleIncentiveModal" data-toggle="modal" data-target="#settleIncentiveModal">
                     <i class="fas fa-hand-holding-usd me-1"></i> Receive / Settle Claim

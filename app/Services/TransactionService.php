@@ -277,30 +277,57 @@ class TransactionService
             $balanceService = app(\App\Services\BalanceService::class);
             $expenseAccountId = $balanceService->getPurchaseExpenseId();
             $apAccountId = $balanceService->getAccountsPayableId();
+            $purchaseDiscountId = $balanceService->getPurchaseDiscountReceivedId();
+            $freightAccountId = $balanceService->getFreightExpenseId();
 
+            $subtotal = (float) ($purchase->subtotal ?? 0);
+            $orderDiscount = (float) ($purchase->order_discount ?? 0);
+            $extraCost = (float) ($purchase->extra_cost ?? 0);
             $schemeAmount = (float) ($purchase->total_scheme_amount ?? 0);
-            $grossBillAmount = (float) $purchase->net_amount + $schemeAmount;
+            $netPayable = (float) $purchase->net_amount;
+
+            // Gross product cost (Do NOT reduce product cost price by order discount!)
+            $purchaseExpense = $subtotal > 0 ? $subtotal : max(0, $netPayable + $orderDiscount - $extraCost + $schemeAmount);
 
             $lines = [];
 
-            // 1. Debit Purchase Expense
+            // 1. Debit Purchase Expense (Full product cost price)
             $lines[] = [
                 'account_id' => $expenseAccountId,
-                'debit' => $grossBillAmount,
+                'debit' => $purchaseExpense,
                 'credit' => 0,
                 'narration' => "Purchase Invoice #{$purchase->invoice_no}",
             ];
 
-            // 2. Credit Accounts Payable (Vendor Liability)
+            // 2. Debit Freight / Shipping Expense if extra_cost > 0
+            if ($extraCost > 0) {
+                $lines[] = [
+                    'account_id' => $freightAccountId,
+                    'debit' => $extraCost,
+                    'credit' => 0,
+                    'narration' => "Freight / Shipping for Purchase #{$purchase->invoice_no}",
+                ];
+            }
+
+            // 3. Credit Purchase Discount Received (Vendor Discount Income) if order_discount > 0
+            if ($orderDiscount > 0) {
+                $lines[] = [
+                    'account_id' => $purchaseDiscountId,
+                    'debit' => 0,
+                    'credit' => $orderDiscount,
+                    'narration' => "Purchase Order Discount Received for Invoice #{$purchase->invoice_no}",
+                ];
+            }
+
+            // 4. Credit Accounts Payable (Vendor Liability - Reduced by Order Discount)
             $lines[] = [
                 'account_id' => $apAccountId,
                 'debit' => 0,
-                'credit' => $grossBillAmount,
+                'credit' => $netPayable + $schemeAmount,
                 'narration' => "Payable to Vendor " . ($purchase->vendor->name ?? ''),
             ];
 
-            // 3. Voucher Header
-            // Using TYPE_PAYMENT so it appears in 'all_Payment_vochers' listing as requested
+            // 5. Voucher Header
             $voucherData = [
                 'voucher_type' => \App\Models\VoucherMaster::TYPE_JOURNAL, 
                 'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
@@ -310,7 +337,7 @@ class TransactionService
                 'remarks' => "Purchase Voucher #{$purchase->invoice_no}",
             ];
 
-            // 4. Create Voucher
+            // 6. Create Voucher
             $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
 
             \Log::info("Purchase Voucher Created for Invoice #{$purchase->invoice_no}");

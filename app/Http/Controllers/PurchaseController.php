@@ -794,6 +794,7 @@ class PurchaseController extends Controller
                 'header_warehouse_id' => 'nullable',
                 'note' => 'nullable|string',
                 'discount' => 'nullable|numeric|min:0',
+                'order_discount' => 'nullable|numeric|min:0',
                 'scheme_discount' => 'nullable|numeric|min:0',
                 'additional_discount' => 'nullable|numeric|min:0',
                 'extra_cost' => 'nullable|numeric|min:0',
@@ -1068,26 +1069,29 @@ class PurchaseController extends Controller
             }
 
             // totals
-            $postedDiscount = (float) ($request->discount ?? 0);
             $orderDiscount = 0;
-            if ($request->has('discount_amt') && is_numeric($request->discount_amt)) {
+            if ($request->filled('order_discount') && is_numeric($request->order_discount)) {
+                $orderDiscount = max(0, (float) $request->order_discount);
+            } elseif ($request->filled('discount_amt') && is_numeric($request->discount_amt)) {
                 $orderDiscount = max(0, (float) $request->discount_amt);
-            } elseif ($postedDiscount > $totalItemDiscount) {
-                $orderDiscount = $postedDiscount - $totalItemDiscount;
+            } elseif ($request->filled('discount') && is_numeric($request->discount)) {
+                $postedDiscount = (float) $request->discount;
+                $orderDiscount = ($postedDiscount > $totalItemDiscount) ? ($postedDiscount - $totalItemDiscount) : $postedDiscount;
             }
 
             $overallSchemeDiscount = (float) ($request->scheme_discount ?? 0);
             $extraCost = (float) ($request->extra_cost ?? $request->freight ?? 0);
 
             // $subtotal is ALREADY net of all item discounts and inline scheme discounts.
-            // Only order-level additional discounts are subtracted from $subtotal:
+            // Order discount and extra cost apply at the order level:
             $netAmount = max(0, ($subtotal - $orderDiscount - $overallSchemeDiscount) + $extraCost);
 
             $purchase->update([
                 'subtotal' => $subtotal,
                 'total_exclusive_gst' => $totalExclusiveGst,
                 'total_gst' => $totalGst,
-                'discount' => $totalItemDiscount + $orderDiscount,
+                'discount' => $totalItemDiscount,
+                'order_discount' => $orderDiscount,
                 'additional_discount' => $overallSchemeDiscount + $orderDiscount,
                 'extra_cost' => $extraCost,
                 'net_amount' => $netAmount,
@@ -1592,6 +1596,7 @@ class PurchaseController extends Controller
             'warehouse_id' => 'nullable', // Note: can be array (from items) or scalar (from header)
             'note' => 'nullable|string',
             'discount' => 'nullable|numeric|min:0',
+            'order_discount' => 'nullable|numeric|min:0',
             'scheme_discount' => 'nullable|numeric|min:0',
             'additional_discount' => 'nullable|numeric|min:0',
             'extra_cost' => 'nullable|numeric|min:0',
@@ -1877,12 +1882,14 @@ class PurchaseController extends Controller
             }
 
             // Totals calculation
-            $postedDiscount = (float) ($request->discount ?? 0);
             $orderDiscount = 0;
-            if ($request->has('discount_amt') && is_numeric($request->discount_amt)) {
+            if ($request->filled('order_discount') && is_numeric($request->order_discount)) {
+                $orderDiscount = max(0, (float) $request->order_discount);
+            } elseif ($request->filled('discount_amt') && is_numeric($request->discount_amt)) {
                 $orderDiscount = max(0, (float) $request->discount_amt);
-            } elseif ($postedDiscount > $totalItemDiscountUpdate) {
-                $orderDiscount = $postedDiscount - $totalItemDiscountUpdate;
+            } elseif ($request->filled('discount') && is_numeric($request->discount)) {
+                $postedDiscount = (float) $request->discount;
+                $orderDiscount = ($postedDiscount > $totalItemDiscountUpdate) ? ($postedDiscount - $totalItemDiscountUpdate) : $postedDiscount;
             }
 
             $overallSchemeDiscount = (float) ($request->scheme_discount ?? 0);
@@ -1923,7 +1930,8 @@ class PurchaseController extends Controller
                 'subtotal' => $subtotal,
                 'total_exclusive_gst' => $totalExclusiveGst,
                 'total_gst' => $totalGst,
-                'discount' => $totalItemDiscountUpdate + $orderDiscount,
+                'discount' => $totalItemDiscountUpdate,
+                'order_discount' => $orderDiscount,
                 'additional_discount' => $overallSchemeDiscount + $orderDiscount,
                 'extra_cost' => $extraCost,
                 'net_amount' => $netAmount,
@@ -2071,100 +2079,38 @@ class PurchaseController extends Controller
 
             // Accounting & General Ledger Updates
             $balanceService = app(\App\Services\BalanceService::class);
-            $voucherService = app(\App\Services\VoucherService::class);
             $transactionService = app(\App\Services\TransactionService::class);
-            $expenseAccountId = $balanceService->getPurchaseExpenseId();
-            $apAccountId = $balanceService->getAccountsPayableId();
+            $journalService = app(\App\Services\JournalEntryService::class);
 
-            // 1. Purchase Voucher (Journal Voucher)
-            $purchaseVoucher = \App\Models\VoucherMaster::where(function ($q) use ($purchase, $oldInvoiceNo) {
+            // 1. Purchase Voucher (Journal Voucher) - Reverse & Recreate for clean accounting
+            $oldPurchaseVouchers = \App\Models\VoucherMaster::where(function ($q) use ($purchase, $oldInvoiceNo) {
                 $q->where('remarks', "Purchase Voucher #{$purchase->invoice_no}")
                   ->orWhere('remarks', "Purchase Voucher #{$oldInvoiceNo}");
-            })->first();
+            })->get();
 
-            if ($purchaseVoucher) {
-                $purchaseVoucher->remarks = "Purchase Voucher #{$purchase->invoice_no}";
-                $schemeClaim = (float)($purchase->total_scheme_amount ?? 0);
-                $vendorGrossPayable = $netAmount + $schemeClaim;
-                $purchaseVoucher->total_amount = $vendorGrossPayable;
-                $purchaseVoucher->date = $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d');
-                $purchaseVoucher->party_type = \App\Models\Vendor::class;
-                $purchaseVoucher->party_id = $purchase->vendor_id;
-                $purchaseVoucher->status = \App\Models\VoucherMaster::STATUS_DRAFT;
-                $purchaseVoucher->save();
-
-                // Clear old details and journal entries
-                $purchaseVoucher->journalEntries()->delete();
-                $purchaseVoucher->details()->delete();
-
-                // Recreate details
-                \App\Models\VoucherDetail::create([
-                    'voucher_master_id' => $purchaseVoucher->id,
-                    'account_id' => $expenseAccountId,
-                    'debit' => $vendorGrossPayable,
-                    'credit' => 0,
-                    'narration' => "Purchase Invoice #{$purchase->invoice_no}",
-                ]);
-                \App\Models\VoucherDetail::create([
-                    'voucher_master_id' => $purchaseVoucher->id,
-                    'account_id' => $apAccountId,
-                    'debit' => 0,
-                    'credit' => $vendorGrossPayable,
-                    'narration' => "Payable to Vendor " . ($purchase->vendor->name ?? ''),
-                ]);
-
-                $voucherService->postVoucher($purchaseVoucher);
-            } else {
-                $transactionService->createPurchaseVoucher($purchase);
+            foreach ($oldPurchaseVouchers as $pv) {
+                $journalService->reverseEntriesForSource($pv);
+                $pv->details()->delete();
+                $pv->delete();
             }
 
-            // 2. Payment Voucher (Payment Voucher)
-            $paymentVoucher = \App\Models\VoucherMaster::where(function ($q) use ($purchase, $oldInvoiceNo) {
+            // Create updated purchase voucher with order discount & freight properly booked
+            $transactionService->createPurchaseVoucher($purchase);
+
+            // 2. Payment Voucher - Reverse & Recreate to prevent duplicates & maintain balance integrity
+            $oldPaymentVouchers = \App\Models\VoucherMaster::where(function ($q) use ($purchase, $oldInvoiceNo) {
                 $q->where('remarks', "Auto-Payment for Purchase #{$purchase->invoice_no}")
                   ->orWhere('remarks', "Auto-Payment for Purchase #{$oldInvoiceNo}");
-            })->first();
+            })->get();
+
+            foreach ($oldPaymentVouchers as $payVoucher) {
+                $journalService->reverseEntriesForSource($payVoucher);
+                $payVoucher->details()->delete();
+                $payVoucher->delete();
+            }
 
             if (! empty($validPaymentAccounts)) {
-                if ($paymentVoucher) {
-                    $paymentVoucher->journalEntries()->delete();
-                    $paymentVoucher->details()->delete();
-                    $paymentVoucher->remarks = "Auto-Payment for Purchase #{$purchase->invoice_no}";
-                    $paymentVoucher->total_amount = $newPaidAmount;
-                    $paymentVoucher->date = $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d');
-                    $paymentVoucher->party_type = \App\Models\Vendor::class;
-                    $paymentVoucher->party_id = $purchase->vendor_id;
-                    $paymentVoucher->status = \App\Models\VoucherMaster::STATUS_DRAFT;
-                    $paymentVoucher->save();
-
-                    foreach ($validPaymentAccounts as $pIdx => $pAccId) {
-                        $pAmt = (float) $validPaymentAmounts[$pIdx];
-                        \App\Models\VoucherDetail::create([
-                            'voucher_master_id' => $paymentVoucher->id,
-                            'account_id' => $pAccId,
-                            'debit' => 0,
-                            'credit' => $pAmt,
-                            'narration' => "Payment for Purchase #{$purchase->invoice_no}",
-                        ]);
-                    }
-
-                    \App\Models\VoucherDetail::create([
-                        'voucher_master_id' => $paymentVoucher->id,
-                        'account_id' => $apAccountId,
-                        'debit' => $newPaidAmount,
-                        'credit' => 0,
-                        'narration' => "Payment to Vendor " . ($purchase->vendor->name ?? ''),
-                    ]);
-
-                    $voucherService->postVoucher($paymentVoucher);
-                } else {
-                    $transactionService->createPaymentForPurchase($purchase, $validPaymentAccounts, $validPaymentAmounts);
-                }
-            } else {
-                if ($paymentVoucher) {
-                    $paymentVoucher->journalEntries()->delete();
-                    $paymentVoucher->details()->delete();
-                    $paymentVoucher->delete();
-                }
+                $transactionService->createPaymentForPurchase($purchase, $validPaymentAccounts, $validPaymentAmounts);
             }
 
             // 3. Synchronize Vendor Ledger closing balance

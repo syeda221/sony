@@ -867,9 +867,22 @@
                         </tr>
                         @endif
                         @php
+                            $orderDiscVal = (float) ($purchase->order_discount ?? 0);
                             $inlineSchemeSum = (float) $purchase->items->sum('scheme_discount');
-                            $extraOrderScheme = max(0, (float)($purchase->additional_discount ?? 0) - $inlineSchemeSum);
+                            $extraOrderScheme = max(0, (float)($purchase->additional_discount ?? 0) - $inlineSchemeSum - $orderDiscVal);
                         @endphp
+                        @if ($orderDiscVal > 0)
+                            <tr>
+                                <td>Order Discount</td>
+                                <td class="text-end text-danger font-monospace">
+                                    @php
+                                        $ordDiscPercent = $purchase->subtotal > 0 ? ($orderDiscVal / $purchase->subtotal) * 100 : 0;
+                                    @endphp
+                                    <span style="font-size: 10px;" class="me-1">({{ number_format($ordDiscPercent, 1) }}%)</span>
+                                    -{{ number_format($orderDiscVal, 2) }}
+                                </td>
+                            </tr>
+                        @endif
                         @if ($extraOrderScheme > 0)
                             <tr>
                                 <td>Scheme Discount</td>
