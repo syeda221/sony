@@ -347,6 +347,11 @@
                                                 <i class="fas fa-eye"></i>
                                             </button>
 
+                                            <!-- Customer Ledger Button -->
+                                            <a href="{{ route('report.customer.ledger') }}?customer_id={{ $customer->id }}" class="btn btn-sm btn-outline-success" title="View Customer Ledger">
+                                                <i class="fas fa-book-open"></i>
+                                            </a>
+
                                             @include('admin_panel.partials.action_buttons', [
                                                 'editRoute' => route('customers.edit', $customer->id),
                                                 'deleteRoute' => route('customers.destroy', $customer->id),

@@ -442,7 +442,7 @@
                         <select name="customer_id" id="customer_id_desk" class="form-select form-select-sm select2 customerSelect">
                             <option value="all" data-zone="">-- All Customers --</option>
                             @foreach ($customers as $c)
-                                <option value="{{ $c->id }}" data-zone="{{ $c->zone }}" data-province="{{ $c->province ?? '' }}" data-city="{{ $c->city ?? '' }}" data-area="{{ $c->area ?? '' }}">{{ $c->customer_name }}</option>
+                                <option value="{{ $c->id }}" data-zone="{{ $c->zone }}" data-province="{{ $c->province ?? '' }}" data-city="{{ $c->city ?? '' }}" data-area="{{ $c->area ?? '' }}" {{ (string)request('customer_id') === (string)$c->id ? 'selected' : '' }}>{{ $c->customer_name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -517,7 +517,7 @@
                         <select name="customer_id" class="form-select form-select-sm select2 customerSelect">
                             <option value="all" data-zone="">-- All Customers --</option>
                             @foreach ($customers as $c)
-                                <option value="{{ $c->id }}" data-zone="{{ $c->zone }}" data-province="{{ $c->province ?? '' }}" data-city="{{ $c->city ?? '' }}" data-area="{{ $c->area ?? '' }}">{{ $c->customer_name }}</option>
+                                <option value="{{ $c->id }}" data-zone="{{ $c->zone }}" data-province="{{ $c->province ?? '' }}" data-city="{{ $c->city ?? '' }}" data-area="{{ $c->area ?? '' }}" {{ (string)request('customer_id') === (string)$c->id ? 'selected' : '' }}>{{ $c->customer_name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -744,6 +744,16 @@
 
             let allCustomers = $('.customerSelect option').clone();
 
+            // Pre-select customer if passed via URL parameter (e.g. from Customers table action)
+            let urlParams = new URLSearchParams(window.location.search);
+            let qCid = urlParams.get('customer_id');
+            if (qCid) {
+                $('.customerSelect').val(qCid);
+                if ($('.customerSelect').hasClass('select2-hidden-accessible')) {
+                    $('.customerSelect').trigger('change.select2');
+                }
+            }
+
             // Sync Inputs between Desktop & Mobile
             $('.startDateInput').on('change', function() { $('.startDateInput').val($(this).val()); });
             $('.endDateInput').on('change', function() { $('.endDateInput').val($(this).val()); });
@@ -763,7 +773,13 @@
                 });
                 $('.customerSelect').val('all').trigger('change.select2');
             });
-            $('.customerSelect').on('change', function() { $('.customerSelect').val($(this).val()); });
+            $('.customerSelect').on('change', function() {
+                let val = $(this).val();
+                $('.customerSelect').val(val);
+                if ($('.customerSelect').hasClass('select2-hidden-accessible')) {
+                    $('.customerSelect').trigger('change.select2');
+                }
+            });
             $('.quickFilterSelect').on('change', function() {
                 let val = $(this).val();
                 $('.quickFilterSelect').val(val);
