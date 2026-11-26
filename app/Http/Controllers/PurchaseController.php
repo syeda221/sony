@@ -1023,7 +1023,7 @@ class PurchaseController extends Controller
 
                 $itemWh = !empty($rowWhIds[$i]) ? (int)$rowWhIds[$i] : $warehouseId;
 
-                PurchaseItem::create([
+                $purchaseItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id,
                     'warehouse_id' => $itemWh,
                     'product_id' => $pid,
@@ -1852,7 +1852,7 @@ class PurchaseController extends Controller
 
                 $itemWh = !empty($rowWhIds[$i]) ? (int)$rowWhIds[$i] : $warehouseId;
 
-                PurchaseItem::create([
+                $purchaseItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id,
                     'warehouse_id' => $itemWh,
                     'product_id' => $pid,
