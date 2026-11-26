@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 use App\Services\StockEntryService;
+use App\Services\WarehouseStockSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -245,5 +246,32 @@ class WarehouseStockController extends Controller
             'total_pieces' => $avail,
             'quantity' => $stock ? $stock->quantity : 0,
         ]);
+    }
+
+    public function syncAll(Request $request, WarehouseStockSyncService $syncService)
+    {
+        try {
+            $stats = $syncService->syncAll();
+            $msg = sprintf(
+                'Stock synced! Fixed Boxes->Pcs: %d, Serial Stock Synced: %d, Serial Warehouses Realigned: %d, Batch Stock Synced: %d, Draft Serials Cleaned: %d.',
+                $stats['fixed_box_to_pieces'],
+                $stats['synced_serial_rows'],
+                $stats['reassigned_serials'],
+                $stats['synced_batch_rows'],
+                $stats['cleaned_draft_serials']
+            );
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => true, 'message' => $msg, 'stats' => $stats]);
+            }
+
+            return redirect()->route('warehouse_stocks.index')->with('success', $msg);
+        } catch (\Exception $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            }
+
+            return redirect()->route('warehouse_stocks.index')->with('error', 'Sync failed: ' . $e->getMessage());
+        }
     }
 }

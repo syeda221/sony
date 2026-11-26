@@ -450,10 +450,9 @@ class OpeningStockController extends Controller
 
         $whStock->total_pieces = $newStockPieces;
         if ($ppb > 1 && in_array($product->size_mode, ['by_cartons', 'by_size', 'by_bandal'])) {
-            $whStock->boxes_quantity = floor($newStockPieces / $ppb);
-            $whStock->quantity       = $whStock->boxes_quantity;
+            $whStock->quantity = (int) floor($newStockPieces / $ppb);
         } else {
-            $whStock->quantity       = $newStockPieces;
+            $whStock->quantity = (int) $newStockPieces;
         }
         $whStock->remarks = "Opening Stock ({$trackingType})";
         $whStock->save();

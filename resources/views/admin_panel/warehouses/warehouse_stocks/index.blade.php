@@ -108,6 +108,14 @@
                     <a href="{{ route('warehouse.working_report') }}" class="btn btn-outline-info rounded-pill px-3 fw-bold">
                         <i class="fas fa-chart-line me-1"></i> Working Report
                     </a>
+                    @can('warehouse.stock.edit')
+                        <form action="{{ route('warehouse_stock.sync-all') }}" method="POST" class="d-inline" onsubmit="return confirm('Reconcile warehouse stock boxes, pieces, serials, and batches across all warehouses?');">
+                            @csrf
+                            <button type="submit" class="btn btn-outline-warning text-dark rounded-pill px-3 fw-bold">
+                                <i class="fas fa-sync-alt me-1"></i> Sync Stock
+                            </button>
+                        </form>
+                    @endcan
                     @can('warehouse.stock.create')
                         <button onclick="openAddModal()" class="btn btn-success shadow-sm rounded-pill px-4 fw-bold">
                             <i class="fas fa-plus me-1"></i> Add Stock
@@ -116,6 +124,18 @@
                 </div>
             </div>
             <div class="card-body">
+                @if (session('success'))
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        {{ session('success') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                @endif
+                @if (session('error'))
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ session('error') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                @endif
                 {{-- Quick Filter --}}
                 <form method="GET" action="{{ route('warehouse_stocks.index') }}" class="mb-3">
                     <div class="row g-2 align-items-end">

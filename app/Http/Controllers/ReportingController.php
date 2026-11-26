@@ -227,9 +227,7 @@ class ReportingController extends Controller
                 }
 
                 // Determine warehouse-specific closing stock accurately
-                $whPieces = ($warehouseId && $warehouseId !== 'all')
-                    ? (float) $product->warehouseStocks->where('warehouse_id', $warehouseId)->sum('total_pieces')
-                    : (float) $product->warehouseStocks->sum('total_pieces');
+                $whPieces = $this->getWarehouseStockPieces($product->warehouseStocks, $product, $warehouseId);
 
                 $vBatchStock = null;
                 if ($product->tracking_type === 'batch') {
@@ -452,6 +450,28 @@ class ReportingController extends Controller
         ]);
     }
 
+    /**
+     * Compute warehouse pieces from warehouseStocks collection, falling back to quantity * ppb when total_pieces is 0.
+     */
+    private function getWarehouseStockPieces($warehouseStocks, $product, $warehouseId = null): float
+    {
+        $ppb = ($product && ($product->pieces_per_box ?? 0) > 0) ? (float) $product->pieces_per_box : 1.0;
+        $filtered = ($warehouseId && $warehouseId !== 'all')
+            ? $warehouseStocks->where('warehouse_id', $warehouseId)
+            : $warehouseStocks;
+
+        $total = 0.0;
+        foreach ($filtered as $ws) {
+            $pcs = (float) ($ws->total_pieces ?? 0);
+            if ($pcs == 0.0 && (float) ($ws->quantity ?? 0) > 0) {
+                $pcs = (float) $ws->quantity * $ppb;
+            }
+            $total += $pcs;
+        }
+
+        return $total;
+    }
+
     public function item_stock_report()
     {
         $user = auth()->user();
@@ -537,11 +557,7 @@ class ReportingController extends Controller
             if (count($parsedVariants) > 0) {
                 if ($product->size_mode === 'by_kg') {
                     // Fetch parent level weight stock and transactions
-                    if ($warehouseId && $warehouseId !== 'all') {
-                        $parentClosing = (float) $product->warehouseStocks->where('warehouse_id', $warehouseId)->sum('total_pieces');
-                    } else {
-                        $parentClosing = (float) $product->warehouseStocks->sum('total_pieces');
-                    }
+                    $parentClosing = $this->getWarehouseStockPieces($product->warehouseStocks, $product, $warehouseId);
 
                     [$parentPurchased, $parentPurchaseAmount] = $this->getPurchasedQtyAndNetAmount($product->id, ['from' => $dateFrom, 'to' => $dateTo], $warehouseId);
 
@@ -797,9 +813,7 @@ class ReportingController extends Controller
                         }
 
                         // Determine warehouse-specific closing stock accurately
-                        $whPieces = ($warehouseId && $warehouseId !== 'all')
-                            ? (float) $product->warehouseStocks->where('warehouse_id', $warehouseId)->sum('total_pieces')
-                            : (float) $product->warehouseStocks->sum('total_pieces');
+                        $whPieces = $this->getWarehouseStockPieces($product->warehouseStocks, $product, $warehouseId);
 
                         $vBatchStock = null;
                         if ($product->tracking_type === 'batch') {
@@ -984,10 +998,19 @@ class ReportingController extends Controller
                     continue;
                 }
 
-                if ($warehouseId && $warehouseId !== 'all') {
-                    $balance = (float) $product->warehouseStocks->where('warehouse_id', $warehouseId)->sum('total_pieces');
-                } else {
-                    $balance = (float) $product->warehouseStocks->sum('total_pieces');
+                $balance = $this->getWarehouseStockPieces($product->warehouseStocks, $product, $warehouseId);
+                if ($product->tracking_type === 'serial') {
+                    $sQuery = \App\Models\ProductSerial::where('product_id', $product->id)->where('status', 'available');
+                    if ($warehouseId && $warehouseId !== 'all') {
+                        $sQuery->where('warehouse_id', $warehouseId);
+                    }
+                    $balance = max($balance, (float) $sQuery->count());
+                } elseif ($product->tracking_type === 'batch') {
+                    $bQuery = \App\Models\ProductBatch::where('product_id', $product->id)->where('qty', '>', 0);
+                    if ($warehouseId && $warehouseId !== 'all') {
+                        $bQuery->where('warehouse_id', $warehouseId);
+                    }
+                    $balance = max($balance, (float) $bQuery->sum('qty'));
                 }
 
                 [$purchased, $purchaseAmount] = $this->getPurchasedQtyAndNetAmount($product->id, ['from' => $dateFrom, 'to' => $dateTo], $warehouseId);
@@ -1534,7 +1557,10 @@ class ReportingController extends Controller
                         )
                         ->get()
                         ->map(function ($ws) use ($isCartonMode, $ppb, $ctnLbl) {
-                            $totalPieces = (float) ($ws->total_pieces ?? $ws->quantity ?? 0);
+                            $totalPieces = (float) ($ws->total_pieces ?? 0);
+                            if ($totalPieces == 0.0 && (float) ($ws->quantity ?? 0) > 0) {
+                                $totalPieces = (float) $ws->quantity * $ppb;
+                            }
                             $boxesQty   = (float) ($ws->boxes_quantity ?? $ws->quantity ?? 0);
                             if ($isCartonMode) {
                                 $cartons = (int) floor($totalPieces / $ppb);
@@ -1553,10 +1579,7 @@ class ReportingController extends Controller
                             ];
                         });
 
-                    $totalStock = (float) DB::table('warehouse_stocks')
-                        ->where('product_id', $productId)
-                        ->selectRaw('COALESCE(SUM(COALESCE(total_pieces, quantity, 0)), 0) as total')
-                        ->value('total');
+                    $totalStock = (float) collect($warehouseStocks)->sum('total_pieces');
                 } catch (\Exception $e) {
                     \Illuminate\Support\Facades\Log::error("Error fetching warehouse stocks: " . $e->getMessage());
                 }

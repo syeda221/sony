@@ -481,6 +481,10 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:warehouse.stock.view')
         ->name('warehouse_stock.edit-data');
 
+    Route::post('/warehouse-stock/sync-all', [WarehouseStockController::class, 'syncAll'])
+        ->middleware('permission:warehouse.stock.edit')
+        ->name('warehouse_stock.sync-all');
+
     Route::resource('stock_transfers', StockTransferController::class)->middleware(['permission:stock.transfer.view']);
     
     // Stock Adjustments

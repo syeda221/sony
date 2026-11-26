@@ -257,8 +257,15 @@ class InwardgatepassController extends Controller
                     ->first();
 
                 if ($stock) {
-                    $newQty = max(0, $stock->quantity - $item->qty);
-                    $stock->quantity = $newQty;
+                    $prod = Product::find($item->product_id);
+                    $ppb = ($prod && $prod->pieces_per_box > 0) ? (float) $prod->pieces_per_box : 1.0;
+                    $currentPieces = (float) $stock->total_pieces;
+                    if ($currentPieces == 0.0 && (float) $stock->quantity > 0) {
+                        $currentPieces = (float) $stock->quantity * $ppb;
+                    }
+                    $newPieces = max(0.0, $currentPieces - (float) $item->qty);
+                    $stock->total_pieces = $newPieces;
+                    $stock->quantity = (int) floor($newPieces / $ppb);
                     $stock->save();
                 }
             }
@@ -293,20 +300,30 @@ class InwardgatepassController extends Controller
     // --- small helper (same as ProductController) ---
     private function upsertStocks(int $productId, float $qtyDelta, int $branchId, int $warehouseId): void
     {
+        $product = Product::find($productId);
+        $ppb = ($product && $product->pieces_per_box > 0) ? (float) $product->pieces_per_box : 1.0;
+
         $stock = \App\Models\WarehouseStock::where('warehouse_id', $warehouseId)
             ->where('product_id', $productId)
             ->lockForUpdate()
             ->first();
 
         if ($stock) {
-            $stock->quantity += $qtyDelta;
+            $currentPieces = (float) $stock->total_pieces;
+            if ($currentPieces == 0.0 && (float) $stock->quantity > 0) {
+                $currentPieces = (float) $stock->quantity * $ppb;
+            }
+            $newPieces = max(0.0, $currentPieces + $qtyDelta);
+            $stock->total_pieces = $newPieces;
+            $stock->quantity = (int) floor($newPieces / $ppb);
             $stock->save();
         } else {
+            $newPieces = max(0.0, $qtyDelta);
             \App\Models\WarehouseStock::create([
                 'warehouse_id' => $warehouseId,
                 'product_id' => $productId,
-                'quantity' => $qtyDelta,
-                'price' => 0,
+                'total_pieces' => $newPieces,
+                'quantity' => (int) floor($newPieces / $ppb),
             ]);
         }
     }

@@ -78,20 +78,30 @@ class ProductController extends Controller
             $warehouseId = $firstWh ? $firstWh->id : (\App\Models\Warehouse::create(['warehouse_name' => 'Main Warehouse', 'location' => 'Main'])->id);
         }
 
+        $product = Product::find($productId);
+        $ppb = ($product && $product->pieces_per_box > 0) ? (float) $product->pieces_per_box : 1.0;
+
         $stock = \App\Models\WarehouseStock::where('warehouse_id', $warehouseId)
             ->where('product_id', $productId)
             ->lockForUpdate()
             ->first();
 
         if ($stock) {
-            $stock->quantity += $qtyDelta;
+            $currentPieces = (float) $stock->total_pieces;
+            if ($currentPieces == 0.0 && (float) $stock->quantity > 0) {
+                $currentPieces = (float) $stock->quantity * $ppb;
+            }
+            $newPieces = max(0.0, $currentPieces + $qtyDelta);
+            $stock->total_pieces = $newPieces;
+            $stock->quantity = (int) floor($newPieces / $ppb);
             $stock->save();
         } else {
+            $newPieces = max(0.0, $qtyDelta);
             \App\Models\WarehouseStock::create([
                 'warehouse_id' => $warehouseId,
                 'product_id' => $productId,
-                'quantity' => $qtyDelta,
-                'price' => 0,
+                'total_pieces' => $newPieces,
+                'quantity' => (int) floor($newPieces / $ppb),
             ]);
         }
     }
@@ -914,12 +924,29 @@ class ProductController extends Controller
                 ]);
             }
 
+            $initialSerialsList = [];
+            if ($product->tracking_type === 'serial' && !empty($request->initial_serials)) {
+                $serialsRaw = is_array($request->initial_serials) ? $request->initial_serials : preg_split('/[\r\n,]+/', (string)$request->initial_serials);
+                foreach ($serialsRaw as $sNum) {
+                    $sNum = trim($sNum);
+                    if ($sNum !== '') {
+                        $initialSerialsList[] = $sNum;
+                    }
+                }
+                $initialSerialsList = array_values(array_unique($initialSerialsList));
+                if ($totalStockQty <= 0 && count($initialSerialsList) > 0) {
+                    $totalStockQty = count($initialSerialsList);
+                }
+            }
+
+            $ppb = $piecesPerBox > 0 ? (float) $piecesPerBox : 1.0;
+
             // Create Warehouse Stock
             WarehouseStock::create([
                 'warehouse_id' => $targetWh->id,
                 'product_id' => $product->id,
-                'quantity' => 0,
-                'total_pieces' => 0,
+                'quantity' => (int) floor(max(0, $totalStockQty) / $ppb),
+                'total_pieces' => max(0, $totalStockQty),
                 'remarks' => 'Product Created',
             ]);
 
@@ -949,20 +976,16 @@ class ProductController extends Controller
                 }
 
                 // Create initial serials if serial product
-                if ($product->tracking_type === 'serial' && !empty($request->initial_serials)) {
-                    $serialsRaw = is_array($request->initial_serials) ? $request->initial_serials : preg_split('/[\r\n,]+/', (string)$request->initial_serials);
-                    foreach ($serialsRaw as $sNum) {
-                        $sNum = trim($sNum);
-                        if ($sNum !== '') {
-                            \App\Models\ProductSerial::create([
-                                'product_id' => $product->id,
-                                'warehouse_id' => $targetWh->id,
-                                'serial_number' => $sNum,
-                                'status' => 'available',
-                                'cost_price' => $product->purchase_price_per_piece ?? 0,
-                                'remarks' => 'Opening Stock IMEI',
-                            ]);
-                        }
+                if ($product->tracking_type === 'serial' && count($initialSerialsList) > 0) {
+                    foreach ($initialSerialsList as $sNum) {
+                        \App\Models\ProductSerial::create([
+                            'product_id' => $product->id,
+                            'warehouse_id' => $targetWh->id,
+                            'serial_number' => $sNum,
+                            'status' => 'available',
+                            'cost_price' => $product->purchase_price_per_piece ?? 0,
+                            'remarks' => 'Opening Stock IMEI',
+                        ]);
                     }
                 }
             }

@@ -57,19 +57,24 @@ class PurchaseController extends Controller
 
         if ($stock) {
             // ✅ Add new pieces directly to existing balance to prevent precision/sync loss
-            $stock->total_pieces += $qtyPiecesDelta;
+            $currentPieces = (float) $stock->total_pieces;
+            if ($currentPieces == 0.0 && (float) $stock->quantity > 0) {
+                $currentPieces = (float) $stock->quantity * $ppb;
+            }
+            $newPieces = max(0.0, $currentPieces + $qtyPiecesDelta);
+            $stock->total_pieces = $newPieces;
             
             // Recalculate Boxes for display only
-            $stock->quantity = $stock->total_pieces / $ppb;
+            $stock->quantity = (int) floor($newPieces / $ppb);
             
             $stock->save();
         } else {
+            $newPieces = max(0.0, $qtyPiecesDelta);
             \App\Models\WarehouseStock::create([
                 'warehouse_id' => $warehouseId,
                 'product_id' => $productId,
-                'total_pieces' => $qtyPiecesDelta,
-                'quantity' => $qtyPiecesDelta / $ppb, // Initial Box Qty
-                'price' => 0, // Should be fetched from Product or Purchase Item? 
+                'total_pieces' => $newPieces,
+                'quantity' => (int) floor($newPieces / $ppb), // Initial Box Qty
             ]);
         }
     }
@@ -1081,17 +1086,19 @@ class PurchaseController extends Controller
                         $purchaseItem->update(['serials' => json_encode(array_values($finalSerials))]);
                     }
 
-                    foreach ($finalSerials as $sNum) {
-                        $sNum = trim($sNum);
-                        if ($sNum !== '') {
-                            \App\Models\ProductSerial::updateOrCreate([
-                                'product_id' => $pid,
-                                'serial_number' => $sNum,
-                            ], [
-                                'warehouse_id' => $itemWh,
-                                'status' => 'available',
-                                'cost_price' => $effectiveSerialCost,
-                            ]);
+                    if ($purchase->status_purchase !== 'draft') {
+                        foreach ($finalSerials as $sNum) {
+                            $sNum = trim($sNum);
+                            if ($sNum !== '') {
+                                \App\Models\ProductSerial::updateOrCreate([
+                                    'product_id' => $pid,
+                                    'serial_number' => $sNum,
+                                ], [
+                                    'warehouse_id' => $itemWh,
+                                    'status' => 'available',
+                                    'cost_price' => $effectiveSerialCost,
+                                ]);
+                            }
                         }
                     }
                 }
@@ -1910,17 +1917,19 @@ class PurchaseController extends Controller
                         $purchaseItem->update(['serials' => json_encode(array_values($finalSerials))]);
                     }
 
-                    foreach ($finalSerials as $sNum) {
-                        $sNum = trim($sNum);
-                        if ($sNum !== '') {
-                            \App\Models\ProductSerial::updateOrCreate([
-                                'product_id' => $pid,
-                                'serial_number' => $sNum,
-                            ], [
-                                'warehouse_id' => $itemWh,
-                                'status' => 'available',
-                                'cost_price' => $effectiveSerialCost,
-                            ]);
+                    if ($purchase->status_purchase !== 'draft') {
+                        foreach ($finalSerials as $sNum) {
+                            $sNum = trim($sNum);
+                            if ($sNum !== '') {
+                                \App\Models\ProductSerial::updateOrCreate([
+                                    'product_id' => $pid,
+                                    'serial_number' => $sNum,
+                                ], [
+                                    'warehouse_id' => $itemWh,
+                                    'status' => 'available',
+                                    'cost_price' => $effectiveSerialCost,
+                                ]);
+                            }
                         }
                     }
                 }

@@ -378,11 +378,10 @@ class StockAdjustmentController extends Controller
         // Update WarehouseStock
         $warehouseStock->total_pieces = max(0, $oldStock + $deltaQty);
         $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
-        if ($ppb > 1 && in_array($product->size_mode, ['by_cartons', 'by_size'])) {
-            $warehouseStock->boxes_quantity = floor($warehouseStock->total_pieces / $ppb);
-            $warehouseStock->quantity       = $warehouseStock->boxes_quantity;
+        if ($ppb > 1 && in_array($product->size_mode, ['by_cartons', 'by_size', 'by_bandal'])) {
+            $warehouseStock->quantity = (int) floor($warehouseStock->total_pieces / $ppb);
         } else {
-            $warehouseStock->quantity       = $warehouseStock->total_pieces;
+            $warehouseStock->quantity = (int) $warehouseStock->total_pieces;
         }
         $warehouseStock->remarks = 'Adjusted via Stock Adjustment module';
         $warehouseStock->save();

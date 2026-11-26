@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductBatch;
+use App\Models\ProductSerial;
 use App\Models\StockTransfer;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
@@ -93,7 +95,7 @@ class StockTransferController extends Controller
                     // Reduce stock from source warehouse
                     $newSourcePieces = max(0.0, $available - $totalQty);
                     $sourceStock->total_pieces = $newSourcePieces;
-                    $sourceStock->quantity = round($newSourcePieces / $ppb, 2);
+                    $sourceStock->quantity = (int) floor($newSourcePieces / $ppb);
                     $sourceStock->save();
 
                     // Setup and add stock to destination warehouse if not transferring to shop
@@ -118,8 +120,61 @@ class StockTransferController extends Controller
 
                         $newDestPieces = $destPieces + $totalQty;
                         $destStock->total_pieces = $newDestPieces;
-                        $destStock->quantity = round($newDestPieces / $ppb, 2);
+                        $destStock->quantity = (int) floor($newDestPieces / $ppb);
                         $destStock->save();
+
+                        // Move available serials (if any) from source warehouse to destination warehouse
+                        $serialMoveCount = (int) round($totalQty);
+                        if ($serialMoveCount > 0) {
+                            $serialIds = ProductSerial::where('product_id', $productId)
+                                ->where('warehouse_id', $fromWarehouse)
+                                ->where('status', 'available')
+                                ->orderBy('id', 'asc')
+                                ->limit($serialMoveCount)
+                                ->pluck('id');
+
+                            if ($serialIds->isNotEmpty()) {
+                                ProductSerial::whereIn('id', $serialIds)->update(['warehouse_id' => $toWarehouse]);
+                            }
+                        }
+
+                        // Move batch quantities (if any) FIFO from source warehouse to destination warehouse
+                        $remainingBatchQty = (float) $totalQty;
+                        $sourceBatches = ProductBatch::where('product_id', $productId)
+                            ->where('warehouse_id', $fromWarehouse)
+                            ->where('qty', '>', 0)
+                            ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC, id ASC')
+                            ->lockForUpdate()
+                            ->get();
+
+                        foreach ($sourceBatches as $sBatch) {
+                            if ($remainingBatchQty <= 0) {
+                                break;
+                            }
+                            $take = min((float) $sBatch->qty, $remainingBatchQty);
+                            $sBatch->qty = max(0, (float) $sBatch->qty - $take);
+                            $sBatch->save();
+
+                            $destBatch = ProductBatch::firstOrCreate(
+                                [
+                                    'product_id' => $productId,
+                                    'warehouse_id' => $toWarehouse,
+                                    'batch_no' => $sBatch->batch_no,
+                                ],
+                                [
+                                    'variant_key' => $sBatch->variant_key,
+                                    'mfg_date' => $sBatch->mfg_date,
+                                    'expiry_date' => $sBatch->expiry_date,
+                                    'qty' => 0,
+                                    'cost_price' => $sBatch->cost_price,
+                                    'remarks' => $sBatch->remarks,
+                                ]
+                            );
+                            $destBatch->qty = (float) $destBatch->qty + $take;
+                            $destBatch->save();
+
+                            $remainingBatchQty -= $take;
+                        }
                     }
 
                     // Record Transfer
