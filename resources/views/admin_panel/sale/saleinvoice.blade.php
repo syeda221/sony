@@ -1280,9 +1280,6 @@
                 @endif
                 <div class="company-brand">{{ $companyName }}</div>
                 <div class="company-meta">
-                    @if(!empty($companyAddress))
-                        <div>{{ $companyAddress }}</div>
-                    @endif
                     @php
                         $compHasTax = $showCompTax && (!empty($companyNtn) || !empty($companyStrn));
                         $compHasContact = !empty($companyPhone) || !empty($companyEmail);
@@ -1488,6 +1485,14 @@
                                 <td class="lbl">Sales Reference</td>
                                 <td class="col">:</td>
                                 <td class="val">{{ $salesOfficerName ?: $sale->reference }}</td>
+                            </tr>
+                            @endif
+
+                            @if(!empty($companyAddress))
+                            <tr>
+                                <td class="lbl">Address</td>
+                                <td class="col">:</td>
+                                <td class="val">{{ $companyAddress }}</td>
                             </tr>
                             @endif
                         </table>
