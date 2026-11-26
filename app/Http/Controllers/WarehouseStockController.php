@@ -23,13 +23,22 @@ class WarehouseStockController extends Controller
         $products = WarehouseStock::with('product')
             ->where('warehouse_id', $warehouseId)
             ->get()
+            ->filter(fn ($row) => $row->product !== null)
             ->map(function ($row) {
+                $ppb = ($row->product && $row->product->pieces_per_box > 0) ? (float) $row->product->pieces_per_box : 1.0;
+                $avail = (float) $row->total_pieces;
+                if ($avail <= 0 && (float) $row->quantity > 0) {
+                    $avail = (float) $row->quantity * $ppb;
+                }
+
                 return [
                     'id' => $row->product->id,
                     'name' => $row->product->item_name,
-                    'qty' => $row->quantity,
+                    'qty' => $avail,
+                    'boxes' => $row->quantity,
                 ];
-            });
+            })
+            ->values();
 
         return response()->json($products);
     }
@@ -224,8 +233,17 @@ class WarehouseStockController extends Controller
             ->where('product_id', $request->product_id)
             ->first();
 
+        $product = Product::find($request->product_id);
+        $ppb = ($product && $product->pieces_per_box > 0) ? (float) $product->pieces_per_box : 1.0;
+
+        $avail = $stock ? (float) $stock->total_pieces : 0.0;
+        if ($avail <= 0 && $stock && (float) $stock->quantity > 0) {
+            $avail = (float) $stock->quantity * $ppb;
+        }
+
         return response()->json([
-            'total_pieces' => $stock ? $stock->total_pieces : 0,
+            'total_pieces' => $avail,
+            'quantity' => $stock ? $stock->quantity : 0,
         ]);
     }
 }

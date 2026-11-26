@@ -62,7 +62,9 @@ class WarehouseController extends Controller
         }
 
         $warehouses = Warehouse::with('user')
-            ->withCount('stocks')
+            ->withCount(['stocks' => function ($q) {
+                $q->where('total_pieces', '>', 0);
+            }])
             ->withSum('stocks', 'total_pieces')
             ->orderBy('id', 'asc')
             ->get();

@@ -43,11 +43,16 @@ class StockEntryService
             }
 
             // 3. Update Stock
-            $previousPieces = $stock->total_pieces ?? 0;
+            $previousPieces = (float) ($stock->total_pieces ?? 0);
             $newPieces = $previousPieces + $totalPieces;
 
-            $previousBox = $stock->quantity ?? 0;
-            $newBox = $previousBox + $totalBox;
+            $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
+            if ($totalBox > 0) {
+                $previousBox = (float) ($stock->quantity ?? 0);
+                $newBox = $previousBox + $totalBox;
+            } else {
+                $newBox = round($newPieces / $ppb, 2);
+            }
 
             $stock->total_pieces = $newPieces;
             $stock->quantity = $newBox;
