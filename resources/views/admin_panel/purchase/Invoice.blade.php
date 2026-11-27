@@ -500,7 +500,7 @@
                         <th class="text-center" style="width: 8%">Code</th>
                         <th class="text-start" style="width: 28%">Description</th>
                         <th class="text-center" style="width: 9%">Brand</th>
-                        <th class="text-center" style="width: 11%">Sub Category</th>
+                        <th class="text-center" style="width: 11%">Category</th>
                         <th class="text-center" style="width: 10%">Qty</th>
                         <th class="text-center" style="width: 7%">UOM</th>
                         <th class="text-end" style="width: 8%">Price</th>
@@ -651,7 +651,7 @@
                             </td>
 
                             <td class="text-center" style="vertical-align: middle;">
-                                {{ $item->product->category_relation->name ?? ($item->product->sub_category_relation->name ?? '—') }}
+                                {{ $item->product->sub_category_relation->name ?? '—' }}
                             </td>
 
                             <td class="text-center" style="vertical-align: middle;">
