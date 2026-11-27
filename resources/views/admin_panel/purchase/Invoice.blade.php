@@ -497,14 +497,17 @@
             <table class="invoice-table">
                 <thead>
                     <tr>
-                        <th class="text-center" style="width: 10%">Code</th>
-                        <th class="text-start" style="width: 30%">Description</th>
-                        <th class="text-center" style="width: 11%">Qty</th>
-                        <th class="text-center" style="width: 9%">UOM</th>
-                        <th class="text-end" style="width: 10%">Price</th>
-                        <th class="text-end" style="width: 9%">Disc</th>
-                        <th class="text-end" style="width: 9%">Scheme Amt</th>
-                        <th class="text-end" style="width: 12%">Total</th>
+                        <th class="text-center" style="width: 8%">Code</th>
+                        <th class="text-start" style="width: 22%">Description</th>
+                        <th class="text-center" style="width: 8%">Brand</th>
+                        <th class="text-center" style="width: 9%">Category</th>
+                        <th class="text-center" style="width: 9%">Sub Category</th>
+                        <th class="text-center" style="width: 10%">Qty</th>
+                        <th class="text-center" style="width: 7%">UOM</th>
+                        <th class="text-end" style="width: 8%">Price</th>
+                        <th class="text-end" style="width: 6%">Disc</th>
+                        <th class="text-end" style="width: 6%">Scheme Amt</th>
+                        <th class="text-end" style="width: 7%">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -645,6 +648,18 @@
                             </td>
 
                             <td class="text-center" style="vertical-align: middle;">
+                                {{ $item->product->brand->name ?? '—' }}
+                            </td>
+
+                            <td class="text-center" style="vertical-align: middle;">
+                                {{ $item->product->category_relation->name ?? '—' }}
+                            </td>
+
+                            <td class="text-center" style="vertical-align: middle;">
+                                {{ $item->product->sub_category_relation->name ?? '—' }}
+                            </td>
+
+                            <td class="text-center" style="vertical-align: middle;">
                                 <div style="font-weight: bold; color: #0f172a;">
                                     {{ $qtyDisplay }}
                                 </div>
@@ -690,7 +705,7 @@
                 </tbody>
                 <tfoot>
                     <tr style="background-color: #f8fafc; font-weight: 800; border-top: 2px solid var(--border-color);">
-                        <td colspan="2" class="text-end text-uppercase" style="font-size: 11px; padding: 10px 8px;">Total Quantity:</td>
+                        <td colspan="5" class="text-end text-uppercase" style="font-size: 11px; padding: 10px 8px;">Total Quantity:</td>
                         <td class="text-center" style="font-size: 12px; color: var(--primary-color); padding: 10px 6px;">
                             {{ $cartonPcsShort }}
                         </td>

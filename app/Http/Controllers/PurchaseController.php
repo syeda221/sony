@@ -2423,7 +2423,7 @@ class PurchaseController extends Controller
 
     public function Invoice($id)
     {
-        $purchase = Purchase::with(['items.product', 'vendor', 'warehouse'])->findOrFail($id);
+        $purchase = Purchase::with(['items.product.category_relation', 'items.product.sub_category_relation', 'items.product.brand', 'vendor', 'warehouse'])->findOrFail($id);
         
         $balanceService = app(\App\Services\BalanceService::class);
         $vendor_balance = $balanceService->getVendorBalance($purchase->vendor_id);
