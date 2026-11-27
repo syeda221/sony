@@ -306,34 +306,37 @@
         /* Main Invoice Items Table - Executive Accounting Table */
         .invoice-table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             margin-top: 6px;
-            font-size: 10px;
+            font-size: 9.5px;
         }
 
         .invoice-table th {
             background-color: var(--slate-50) !important;
             color: var(--slate-700) !important;
             font-weight: 700;
-            font-size: 9.5px;
+            font-size: 8.5px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 5px 4px;
+            letter-spacing: 0.3px;
+            padding: 4px 2px;
             border: 1px solid var(--slate-200);
             border-top: 1.5px solid var(--slate-300);
             border-bottom: 2px solid var(--primary-navy);
             text-align: center;
             vertical-align: middle;
-            line-height: 1.25;
+            line-height: 1.15;
+            word-wrap: break-word;
         }
 
         .invoice-table td {
             border: 1px solid var(--slate-200);
-            padding: 4.5px 4px;
+            padding: 4px 2px;
             vertical-align: middle;
-            font-size: 10px;
+            font-size: 9px;
             color: var(--slate-800);
-            line-height: 1.25;
+            line-height: 1.2;
+            word-wrap: break-word;
         }
 
         .invoice-table tbody tr:nth-of-type(even) {
@@ -1524,41 +1527,39 @@
                 <tr>
                     @if($showTaxColumns)
                         <th style="width: 4%;" class="text-center">S.No</th>
-                        <th class="text-start">Description of Product</th>
+                        <th style="width: 18%;" class="text-start">Description</th>
                         @if($showBatchCol)
-                            <th style="width: 10%;" class="text-center">Batch / Sr. No</th>
+                            <th style="width: 7%;" class="text-center">Batch/SR</th>
                         @endif
                         <th style="width: 8%;" class="text-center">Warehouse</th>
-                        <th style="width: 6%;" class="text-center">Color</th>
-                        <th style="width: 6%;" class="text-center">Model</th>
-                        <th style="width: 7%;" class="text-center">Category</th>
-                        <th style="width: 5%;" class="text-center">Quantity</th>
-                        <th style="width: 7%;" class="text-end">Rate</th>
-                        <th style="width: 8%;" class="text-end">Gross Amount</th>
+                        <th style="width: 7%;" class="text-center">Brand</th>
+                        <th style="width: 9%;" class="text-center">Category</th>
+                        <th style="width: 5%;" class="text-center">Qty</th>
+                        <th style="width: 6%;" class="text-end">Rate</th>
+                        <th style="width: 7%;" class="text-end">Gross</th>
                         @if($showDiscCol)
                             <th style="width: 5%;" class="text-end">Disc %</th>
                         @endif
-                        <th style="width: 8%;" class="text-end">Exclusive GST</th>
-                        <th style="width: 6%;" class="text-end">Sales Tax</th>
-                        <th style="width: 6%;" class="text-end">Further Tax {{ ((float)($sale->total_further_tax ?? 0) > 0) ? '@3%' : '(0%)' }}</th>
-                        <th style="width: 8%;" class="text-end">Net Amount</th>
+                        <th style="width: 7%;" class="text-end">Excl. GST</th>
+                        <th style="width: 5%;" class="text-end">Tax</th>
+                        <th style="width: 5%;" class="text-end">Further</th>
+                        <th style="width: 7%;" class="text-end">Net</th>
                     @else
                         <th style="width: 5%;" class="text-center">S.No</th>
-                        <th class="text-start">Description of Product</th>
+                        <th style="width: 25%;" class="text-start">Description</th>
                         @if($showBatchCol)
-                            <th style="width: 11%;" class="text-center">Batch / Sr. No</th>
+                            <th style="width: 10%;" class="text-center">Batch/SR</th>
                         @endif
-                        <th style="width: 9%;" class="text-center">Warehouse</th>
-                        <th style="width: 7%;" class="text-center">Color</th>
-                        <th style="width: 7%;" class="text-center">Model</th>
-                        <th style="width: 8%;" class="text-center">Category</th>
-                        <th style="width: 6%;" class="text-center">Quantity</th>
-                        <th style="width: 10%;" class="text-end">Rate</th>
-                        <th style="width: 12%;" class="text-end">Gross Amount</th>
+                        <th style="width: 10%;" class="text-center">Warehouse</th>
+                        <th style="width: 10%;" class="text-center">Brand</th>
+                        <th style="width: 12%;" class="text-center">Category</th>
+                        <th style="width: 6%;" class="text-center">Qty</th>
+                        <th style="width: 7%;" class="text-end">Rate</th>
+                        <th style="width: 8%;" class="text-end">Gross</th>
                         @if($showDiscCol)
                             <th style="width: 5%;" class="text-end">Disc %</th>
                         @endif
-                        <th style="width: 8%;" class="text-end">Net Amount</th>
+                        <th style="width: 7%;" class="text-end">Net</th>
                     @endif
                 </tr>
             </thead>
@@ -1687,15 +1688,8 @@
                             @endif
                         </td>
 
-                        @php
-                            $displayColor = (!empty($item['color_val']) && $item['color_val'] !== '-') ? $item['color_val'] : '-';
-                            $displayModel = (!empty($item['size_val']) && $item['size_val'] !== '-')
-                                ? $item['size_val']
-                                : ((!empty($item['model']) && !is_array(json_decode($item['model'], true))) ? $item['model'] : '-');
-                        @endphp
-                        <td class="text-center">{{ $displayColor }}</td>
-                        <td class="text-center">{{ $displayModel }}</td>
-                        <td class="text-center">{{ !empty($item['sub_category']) ? $item['sub_category'] : '-' }}</td>
+                        <td class="text-center">{{ !empty($item['brand']) ? $item['brand'] : '-' }}</td>
+                        <td class="text-center">{{ !empty($item['sub_category']) ? $item['sub_category'] : (!empty($item['category']) ? $item['category'] : '-') }}</td>
 
                         <td class="text-center fw-bold">
                             {{ $itemQty == (int)$itemQty ? (int)$itemQty : number_format($itemQty, 2) }}
@@ -1738,7 +1732,7 @@
 
             <tfoot>
                 <tr>
-                    <td colspan="{{ $showBatchCol ? 7 : 6 }}" class="text-end fw-bold">
+                    <td colspan="{{ $showBatchCol ? 6 : 5 }}" class="text-end fw-bold">
                         TOTAL:
                     </td>
 
