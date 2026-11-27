@@ -498,10 +498,9 @@
                 <thead>
                     <tr>
                         <th class="text-center" style="width: 8%">Code</th>
-                        <th class="text-start" style="width: 22%">Description</th>
-                        <th class="text-center" style="width: 8%">Brand</th>
-                        <th class="text-center" style="width: 9%">Category</th>
-                        <th class="text-center" style="width: 9%">Sub Category</th>
+                        <th class="text-start" style="width: 28%">Description</th>
+                        <th class="text-center" style="width: 9%">Brand</th>
+                        <th class="text-center" style="width: 11%">Sub Category</th>
                         <th class="text-center" style="width: 10%">Qty</th>
                         <th class="text-center" style="width: 7%">UOM</th>
                         <th class="text-end" style="width: 8%">Price</th>
@@ -652,11 +651,7 @@
                             </td>
 
                             <td class="text-center" style="vertical-align: middle;">
-                                {{ $item->product->category_relation->name ?? '—' }}
-                            </td>
-
-                            <td class="text-center" style="vertical-align: middle;">
-                                {{ $item->product->sub_category_relation->name ?? '—' }}
+                                {{ $item->product->category_relation->name ?? ($item->product->sub_category_relation->name ?? '—') }}
                             </td>
 
                             <td class="text-center" style="vertical-align: middle;">
@@ -705,7 +700,7 @@
                 </tbody>
                 <tfoot>
                     <tr style="background-color: #f8fafc; font-weight: 800; border-top: 2px solid var(--border-color);">
-                        <td colspan="5" class="text-end text-uppercase" style="font-size: 11px; padding: 10px 8px;">Total Quantity:</td>
+                        <td colspan="4" class="text-end text-uppercase" style="font-size: 11px; padding: 10px 8px;">Total Quantity:</td>
                         <td class="text-center" style="font-size: 12px; color: var(--primary-color); padding: 10px 6px;">
                             {{ $cartonPcsShort }}
                         </td>
