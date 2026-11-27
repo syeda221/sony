@@ -168,7 +168,7 @@
             try { $el.select2('destroy'); } catch(e) {}
         }
         $el.select2({
-            placeholder: 'Search Product (Name / SKU / Barcode)',
+            placeholder: 'Search Product (Name / SKU / Barcode / Color / Model)',
             allowClear: true,
             width: '100%',
             dropdownParent: $(document.body),
@@ -2465,8 +2465,8 @@
             currentAvailableSerials = serials || [];
             currentSerialStockInfo = stockInfo || {};
 
-            const totalStock = parseFloat(stockInfo.total_stock || 0);
             const serialCount = (serials || []).length;
+            const totalStock = Math.max(parseFloat(stockInfo.total_stock || 0), serialCount);
             const nonSerialStock = Math.max(0, parseFloat(stockInfo.non_serial_stock !== undefined ? stockInfo.non_serial_stock : (totalStock - serialCount)));
 
             $('#modalTotalStockCount').text(totalStock);

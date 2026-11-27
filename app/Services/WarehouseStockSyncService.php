@@ -13,6 +13,88 @@ use Illuminate\Support\Facades\Schema;
 class WarehouseStockSyncService
 {
     /**
+     * Quickly check if any warehouse_stocks row is out of sync with serials/batches/boxes,
+     * and run syncAll() only when a mismatch is detected.
+     */
+    public function syncIfNeeded(): bool
+    {
+        $needsSync = false;
+
+        // 1. Check if any row has quantity > 0 with total_pieces == 0
+        if (WarehouseStock::where('total_pieces', '<=', 0)->where('quantity', '>', 0)->exists()) {
+            $needsSync = true;
+        }
+
+        // 2. Check serial products mismatch
+        if (! $needsSync && Schema::hasTable('product_serials')) {
+            $serialProductIds = Product::where('tracking_type', 'serial')->pluck('id')->toArray();
+            if (! empty($serialProductIds)) {
+                $serialCounts = ProductSerial::whereIn('product_id', $serialProductIds)
+                    ->where('status', 'available')
+                    ->selectRaw('product_id, warehouse_id, COUNT(*) as cnt')
+                    ->groupBy('product_id', 'warehouse_id')
+                    ->get();
+
+                $wsMap = WarehouseStock::whereIn('product_id', $serialProductIds)
+                    ->get()
+                    ->keyBy(fn ($ws) => $ws->product_id . '_' . $ws->warehouse_id);
+
+                foreach ($serialCounts as $sc) {
+                    $key = $sc->product_id . '_' . $sc->warehouse_id;
+                    $wsPieces = isset($wsMap[$key]) ? (float) $wsMap[$key]->total_pieces : -1.0;
+                    if (abs($wsPieces - (float) $sc->cnt) > 0.0001) {
+                        $needsSync = true;
+                        break;
+                    }
+                }
+
+                if (! $needsSync) {
+                    $scMap = $serialCounts->keyBy(fn ($sc) => $sc->product_id . '_' . $sc->warehouse_id);
+                    foreach ($wsMap as $key => $ws) {
+                        $scCnt = isset($scMap[$key]) ? (float) $scMap[$key]->cnt : 0.0;
+                        if (abs((float) $ws->total_pieces - $scCnt) > 0.0001) {
+                            $needsSync = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Check batch products mismatch
+        if (! $needsSync && Schema::hasTable('product_batches')) {
+            $batchProductIds = Product::where('tracking_type', 'batch')->pluck('id')->toArray();
+            if (! empty($batchProductIds)) {
+                $batchSums = ProductBatch::whereIn('product_id', $batchProductIds)
+                    ->where('qty', '>', 0)
+                    ->selectRaw('product_id, warehouse_id, SUM(qty) as total_qty')
+                    ->groupBy('product_id', 'warehouse_id')
+                    ->get();
+
+                $wsMap = WarehouseStock::whereIn('product_id', $batchProductIds)
+                    ->get()
+                    ->keyBy(fn ($ws) => $ws->product_id . '_' . $ws->warehouse_id);
+
+                foreach ($batchSums as $bs) {
+                    $key = $bs->product_id . '_' . $bs->warehouse_id;
+                    $wsPieces = isset($wsMap[$key]) ? (float) $wsMap[$key]->total_pieces : -1.0;
+                    if (abs($wsPieces - (float) $bs->total_qty) > 0.0001) {
+                        $needsSync = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ($needsSync) {
+            $this->syncAll();
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Reconcile warehouse_stocks (total_pieces & boxes quantity) with serials, batches, and movements.
      *
      * @return array<string, int>

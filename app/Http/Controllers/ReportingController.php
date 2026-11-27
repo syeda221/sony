@@ -494,14 +494,8 @@ class ReportingController extends Controller
     // AJAX endpoint to fetch report rows
     public function fetchItemStock(Request $request)
     {
-        // Auto-heal if serials or batches exist with 0 total warehouse stock
-        if (WarehouseStock::sum('total_pieces') <= 0) {
-            $hasActiveSerials = \Illuminate\Support\Facades\Schema::hasTable('product_serials') && \App\Models\ProductSerial::where('status', 'available')->exists();
-            $hasActiveBatches = \Illuminate\Support\Facades\Schema::hasTable('product_batches') && \App\Models\ProductBatch::where('qty', '>', 0)->exists();
-            if ($hasActiveSerials || $hasActiveBatches) {
-                app(\App\Services\WarehouseStockSyncService::class)->syncAll();
-            }
-        }
+        // Auto-heal any warehouse stock mismatch against serials/batches
+        app(\App\Services\WarehouseStockSyncService::class)->syncIfNeeded();
 
         $productId   = $request->product_id;
         $variantKey  = $request->variant_key;

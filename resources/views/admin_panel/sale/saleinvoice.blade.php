@@ -1471,6 +1471,8 @@
 
                             @php
                                 $whNames = collect($saleItems)->pluck('warehouse_name')->filter()->unique()->values();
+                                $whAddresses = collect($saleItems)->pluck('warehouse_address')->filter()->unique()->values();
+                                $shipperAddress = $whAddresses->isNotEmpty() ? $whAddresses->implode(' | ') : $companyAddress;
                             @endphp
                             @if($whNames->isNotEmpty())
                             <tr>
@@ -1488,11 +1490,11 @@
                             </tr>
                             @endif
 
-                            @if(!empty($companyAddress))
+                            @if(!empty($shipperAddress))
                             <tr>
                                 <td class="lbl">Address</td>
                                 <td class="col">:</td>
-                                <td class="val">{{ $companyAddress }}</td>
+                                <td class="val">{{ $shipperAddress }}</td>
                             </tr>
                             @endif
                         </table>
@@ -1526,25 +1528,29 @@
                         @if($showBatchCol)
                             <th style="width: 10%;" class="text-center">Batch / Sr. No</th>
                         @endif
-                        <th style="width: 9%;" class="text-center">Warehouse</th>
-                        <th style="width: 6%;" class="text-center">Quantity</th>
-                        <th style="width: 8%;" class="text-end">Rate</th>
-                        <th style="width: 9%;" class="text-end">Gross Amount</th>
+                        <th style="width: 8%;" class="text-center">Warehouse</th>
+                        <th style="width: 6%;" class="text-center">Color</th>
+                        <th style="width: 7%;" class="text-center">Model</th>
+                        <th style="width: 5%;" class="text-center">Quantity</th>
+                        <th style="width: 7%;" class="text-end">Rate</th>
+                        <th style="width: 8%;" class="text-end">Gross Amount</th>
                         @if($showDiscCol)
                             <th style="width: 5%;" class="text-end">Disc %</th>
                         @endif
-                        <th style="width: 9%;" class="text-end">Exclusive GST</th>
-                        <th style="width: 7%;" class="text-end">Sales Tax</th>
+                        <th style="width: 8%;" class="text-end">Exclusive GST</th>
+                        <th style="width: 6%;" class="text-end">Sales Tax</th>
                         <th style="width: 7%;" class="text-end">Further Tax {{ ((float)($sale->total_further_tax ?? 0) > 0) ? '@3%' : '(0%)' }}</th>
                         <th style="width: 8%;" class="text-end">Net Amount</th>
                     @else
                         <th style="width: 5%;" class="text-center">S.No</th>
                         <th class="text-start">Description of Product</th>
                         @if($showBatchCol)
-                            <th style="width: 12%;" class="text-center">Batch / Sr. No</th>
+                            <th style="width: 11%;" class="text-center">Batch / Sr. No</th>
                         @endif
-                        <th style="width: 10%;" class="text-center">Warehouse</th>
-                        <th style="width: 8%;" class="text-center">Quantity</th>
+                        <th style="width: 9%;" class="text-center">Warehouse</th>
+                        <th style="width: 7%;" class="text-center">Color</th>
+                        <th style="width: 8%;" class="text-center">Model</th>
+                        <th style="width: 7%;" class="text-center">Quantity</th>
                         <th style="width: 10%;" class="text-end">Rate</th>
                         <th style="width: 12%;" class="text-end">Gross Amount</th>
                         @if($showDiscCol)
@@ -1679,6 +1685,15 @@
                             @endif
                         </td>
 
+                        @php
+                            $displayColor = (!empty($item['color_val']) && $item['color_val'] !== '-') ? $item['color_val'] : '-';
+                            $displayModel = (!empty($item['size_val']) && $item['size_val'] !== '-')
+                                ? $item['size_val']
+                                : ((!empty($item['model']) && !is_array(json_decode($item['model'], true))) ? $item['model'] : '-');
+                        @endphp
+                        <td class="text-center">{{ $displayColor }}</td>
+                        <td class="text-center">{{ $displayModel }}</td>
+
                         <td class="text-center fw-bold">
                             {{ $itemQty == (int)$itemQty ? (int)$itemQty : number_format($itemQty, 2) }}
                         </td>
@@ -1720,7 +1735,7 @@
 
             <tfoot>
                 <tr>
-                    <td colspan="{{ $showBatchCol ? 4 : 3 }}" class="text-end fw-bold">
+                    <td colspan="{{ $showBatchCol ? 6 : 5 }}" class="text-end fw-bold">
                         TOTAL:
                     </td>
 

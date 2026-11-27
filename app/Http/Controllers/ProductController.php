@@ -113,7 +113,7 @@ class ProductController extends Controller
         $warehouseId = $request->get('warehouse_id') ?: $request->get('header_warehouse_id');
 
         $query = Product::query()
-            ->select('id', 'item_name', 'tracking_type', 'item_code', 'barcode_path', 'size_mode', 'unit_id', 'height', 'width', 'pieces_per_box', 'purchase_price_per_box', 'purchase_price_per_m2', 'purchase_price_per_piece', 'pieces_per_m2', 'purchase_discount_percent', 'sale_discount_percent', 'color', 'sale_price_per_piece')
+            ->select('id', 'item_name', 'tracking_type', 'item_code', 'barcode_path', 'size_mode', 'unit_id', 'height', 'width', 'pieces_per_box', 'purchase_price_per_box', 'purchase_price_per_m2', 'purchase_price_per_piece', 'pieces_per_m2', 'purchase_discount_percent', 'sale_discount_percent', 'color', 'model', 'sale_price_per_piece')
             ->with(['unit'])
             ->with(['warehouseStocks' => function ($q) use ($warehouseId) {
                 if ($warehouseId && $warehouseId !== 'all') {
@@ -124,7 +124,9 @@ class ProductController extends Controller
             ->where(function ($q) use ($term) {
                 $q->where('item_name', 'like', "%{$term}%")
                     ->orWhere('item_code', 'like', "%{$term}%")
-                    ->orWhere('barcode_path', 'like', "%{$term}%");
+                    ->orWhere('barcode_path', 'like', "%{$term}%")
+                    ->orWhere('color', 'like', "%{$term}%")
+                    ->orWhere('model', 'like', "%{$term}%");
             });
 
         $products = $query->paginate(10); // Lazy loading (10 per request)

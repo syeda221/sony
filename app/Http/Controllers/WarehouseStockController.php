@@ -69,14 +69,8 @@ class WarehouseStockController extends Controller
 
     public function index(Request $request)
     {
-        // Auto-heal if serials or batches exist with 0 total warehouse stock
-        if (WarehouseStock::sum('total_pieces') <= 0) {
-            $hasActiveSerials = Schema::hasTable('product_serials') && ProductSerial::where('status', 'available')->exists();
-            $hasActiveBatches = Schema::hasTable('product_batches') && ProductBatch::where('qty', '>', 0)->exists();
-            if ($hasActiveSerials || $hasActiveBatches) {
-                app(WarehouseStockSyncService::class)->syncAll();
-            }
-        }
+        // Auto-heal any warehouse stock mismatch against serials/batches
+        app(WarehouseStockSyncService::class)->syncIfNeeded();
 
         $warehouses = Warehouse::orderBy('warehouse_name')->get();
         $query = WarehouseStock::with('warehouse', 'product');

@@ -178,7 +178,9 @@ class SaleController extends Controller
         ->where(function ($query) use ($q) {
             $query->where('products.item_name', 'like', "%{$q}%")
                 ->orWhere('products.item_code', 'like', "%{$q}%")
-                ->orWhere('products.barcode_path', 'like', "%{$q}%");
+                ->orWhere('products.barcode_path', 'like', "%{$q}%")
+                ->orWhere('products.color', 'like', "%{$q}%")
+                ->orWhere('products.model', 'like', "%{$q}%");
         })
         ->limit(50)
         ->get()
@@ -2447,6 +2449,34 @@ class SaleController extends Controller
             }
 
             if ($type === 'out') {
+                // Ensure stock row is synced with serials/batches/boxes before validating
+                $ppb = (float) ($item->product->pieces_per_box ?? 1);
+                if ($ppb <= 0) $ppb = 1.0;
+
+                if ((float) $stock->total_pieces <= 0 && (float) $stock->quantity > 0) {
+                    $stock->total_pieces = round((float) $stock->quantity * $ppb, 4);
+                }
+
+                if ($item->product && $item->product->tracking_type === 'serial') {
+                    $serialCount = (float) \App\Models\ProductSerial::where('product_id', $item->product_id)
+                        ->where('warehouse_id', $targetWhId)
+                        ->where('status', 'available')
+                        ->count();
+                    if ($serialCount > (float) $stock->total_pieces) {
+                        $stock->total_pieces = $serialCount;
+                        $stock->quantity = (int) floor($serialCount / $ppb);
+                    }
+                } elseif ($item->product && $item->product->tracking_type === 'batch') {
+                    $batchSum = (float) \App\Models\ProductBatch::where('product_id', $item->product_id)
+                        ->where('warehouse_id', $targetWhId)
+                        ->where('qty', '>', 0)
+                        ->sum('qty');
+                    if ($batchSum > (float) $stock->total_pieces) {
+                        $stock->total_pieces = $batchSum;
+                        $stock->quantity = (int) floor($batchSum / $ppb);
+                    }
+                }
+
                 // Deduct — use warehouse-specific stock directly (total_pieces in this warehouse)
                 $available = (float) $stock->total_pieces;
                 if ($available < $qtyPieces) {
@@ -2456,8 +2486,7 @@ class SaleController extends Controller
                 }
                 $stock->total_pieces -= $qtyPieces;
                 // Update approx boxes for display
-                $ppb = $item->product->pieces_per_box ?? 1;
-                $stock->quantity = round($stock->total_pieces / ($ppb > 0 ? $ppb : 1), 2);
+                $stock->quantity = round($stock->total_pieces / $ppb, 2);
                 $stock->save();
 
                 // Movement
@@ -2889,15 +2918,14 @@ class SaleController extends Controller
 
             $variantUnit = $variant['unit'] ?? ($liveVariant['unit'] ?? ($item->product->unit->name ?? ''));
 
-            $warehouseName = $item->warehouse ? ($item->warehouse->warehouse_name ?? $item->warehouse->name) : null;
-            if (!$warehouseName && !empty($item->warehouse_id)) {
-                $wh = \App\Models\Warehouse::find($item->warehouse_id);
-                $warehouseName = $wh ? ($wh->warehouse_name ?? $wh->name) : null;
-            }
+            $whModel = $item->warehouse ?: (!empty($item->warehouse_id) ? \App\Models\Warehouse::find($item->warehouse_id) : null);
+            $warehouseName = $whModel ? ($whModel->warehouse_name ?? $whModel->name) : null;
+            $warehouseAddress = $whModel ? ($whModel->location ?? null) : null;
 
             return [
                 'warehouse_id' => $item->warehouse_id,
                 'warehouse_name' => $warehouseName,
+                'warehouse_address' => $warehouseAddress,
                 'is_manual' => $item->is_manual,
                 'product_id' => $item->product_id,
                 'item_name' => $item->is_manual ? ($item->product_name ?? 'Manual Product') . ' (Manual)' : ($item->product_name ?? $item->product->item_name ?? 'Item'),
@@ -2913,9 +2941,9 @@ class SaleController extends Controller
                 'discount_percent' => (float) $item->discount_percent,
                 'discount_amount' => (float) $item->discount_amount,
                 'total' => (float) $item->total,
-                'variant_name' => $variant['name'] ?? '',
-                'color_val' => $variant['color'] ?? '',
-                'size_val' => $variant['size'] ?? '',
+                'variant_name' => $variant['name'] ?? ($liveVariant['name'] ?? ''),
+                'color_val' => $variant['color'] ?? ($liveVariant['color'] ?? ''),
+                'size_val' => $variant['size'] ?? ($liveVariant['size'] ?? ''),
                 'variant_unit' => $variantUnit,
                 'weight_per_piece' => $variant['weight_per_piece'] ?? $item->product->weight_per_piece ?? 0,
                 'color' => is_array($variant) ? $variant : [$item->color], // for legacy compatibility
@@ -3484,6 +3512,8 @@ class SaleController extends Controller
             $availableSerialsCountQuery->where('warehouse_id', $warehouseId);
         }
         $serialStockCount = (float) $availableSerialsCountQuery->count();
+
+        $totalStock = max($totalStock, $serialStockCount);
 
         // Non-serial stock = max(0, Total Pieces - Available Serials)
         $nonSerialStock = max(0, $totalStock - $serialStockCount);
