@@ -1527,13 +1527,11 @@
                 <tr>
                     @if($showTaxColumns)
                         <th style="width: 4%;" class="text-center">S.No</th>
-                        <th style="width: 18%;" class="text-start">Description</th>
-                        @if($showBatchCol)
-                            <th style="width: 7%;" class="text-center">Batch/SR</th>
-                        @endif
+                        <th style="width: 17%;" class="text-start">Description</th>
+                        <th style="width: 8%;" class="text-center">Batch / Sr. No</th>
                         <th style="width: 8%;" class="text-center">Warehouse</th>
                         <th style="width: 7%;" class="text-center">Brand</th>
-                        <th style="width: 9%;" class="text-center">Category</th>
+                        <th style="width: 8%;" class="text-center">Category</th>
                         <th style="width: 5%;" class="text-center">Qty</th>
                         <th style="width: 6%;" class="text-end">Rate</th>
                         <th style="width: 7%;" class="text-end">Gross</th>
@@ -1543,23 +1541,21 @@
                         <th style="width: 7%;" class="text-end">Excl. GST</th>
                         <th style="width: 5%;" class="text-end">Tax</th>
                         <th style="width: 5%;" class="text-end">Further</th>
-                        <th style="width: 7%;" class="text-end">Net</th>
+                        <th style="width: 8%;" class="text-end">Net</th>
                     @else
-                        <th style="width: 5%;" class="text-center">S.No</th>
-                        <th style="width: 25%;" class="text-start">Description</th>
-                        @if($showBatchCol)
-                            <th style="width: 10%;" class="text-center">Batch/SR</th>
-                        @endif
+                        <th style="width: 4%;" class="text-center">S.No</th>
+                        <th style="width: 24%;" class="text-start">Description</th>
+                        <th style="width: 11%;" class="text-center">Batch / Sr. No</th>
                         <th style="width: 10%;" class="text-center">Warehouse</th>
-                        <th style="width: 10%;" class="text-center">Brand</th>
-                        <th style="width: 12%;" class="text-center">Category</th>
-                        <th style="width: 6%;" class="text-center">Qty</th>
-                        <th style="width: 7%;" class="text-end">Rate</th>
-                        <th style="width: 8%;" class="text-end">Gross</th>
+                        <th style="width: 9%;" class="text-center">Brand</th>
+                        <th style="width: 11%;" class="text-center">Category</th>
+                        <th style="width: 5%;" class="text-center">Qty</th>
+                        <th style="width: 8%;" class="text-end">Rate</th>
+                        <th style="width: 9%;" class="text-end">Gross</th>
                         @if($showDiscCol)
-                            <th style="width: 5%;" class="text-end">Disc %</th>
+                            <th style="width: 4%;" class="text-end">Disc %</th>
                         @endif
-                        <th style="width: 7%;" class="text-end">Net</th>
+                        <th style="width: 8%;" class="text-end">Net</th>
                     @endif
                 </tr>
             </thead>
@@ -1668,7 +1664,6 @@
                             @endif
                         </td>
 
-                        @if($showBatchCol)
                         <td class="text-center">
                             @if(!empty($batchNo))
                                 <span class="badge bg-light text-dark border">{{ $batchNo }}</span>
@@ -1678,7 +1673,6 @@
                                 <span class="text-muted">-</span>
                             @endif
                         </td>
-                        @endif
 
                         <td class="text-center">
                             @if(!empty($item['warehouse_name']))
@@ -1732,7 +1726,7 @@
 
             <tfoot>
                 <tr>
-                    <td colspan="{{ $showBatchCol ? 6 : 5 }}" class="text-end fw-bold">
+                    <td colspan="6" class="text-end fw-bold">
                         TOTAL:
                     </td>
 
