@@ -210,7 +210,9 @@ class SaleController extends Controller
             $product->wh_stock = $stockVal;
             $product->wh_box_qty = (int) floor($stockVal / $ppb);
             return $product;
-        });
+        })
+        ->filter(fn ($p) => (float) ($p->wh_stock ?? 0) > 0)
+        ->values();
 
         return response()->json($products);
     }
@@ -944,7 +946,7 @@ class SaleController extends Controller
 
     public function saleinvoice($id)
     {
-        $sale = Sale::with(['customer_relation.salesOfficer', 'installmentPlan.installments', 'installmentPlan.advanceAccount', 'items.warehouse'])->findOrFail($id);
+        $sale = Sale::with(['customer_relation.salesOfficer', 'installmentPlan.installments', 'installmentPlan.advanceAccount', 'items.warehouse', 'items.product.sub_category_relation', 'items.product.category_relation'])->findOrFail($id);
         $items = $this->_getSaleItems($sale);
         $isEstimate = request()->query('type') === 'estimate';
 
@@ -2501,7 +2503,7 @@ class SaleController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                // Deduct Batch quantity if specified
+                // Deduct Batch quantity if specified, or FIFO from warehouse batches
                 if (!empty($item->batch_id)) {
                     \App\Models\ProductBatch::where('id', $item->batch_id)->decrement('qty', $qtyPieces);
                 } elseif (!empty($item->batch_no)) {
@@ -2509,15 +2511,44 @@ class SaleController extends Controller
                         ->where('warehouse_id', $targetWhId)
                         ->where('batch_no', $item->batch_no)
                         ->decrement('qty', $qtyPieces);
+                } elseif ($item->product && $item->product->tracking_type === 'batch' && $qtyPieces > 0) {
+                    $remBatchQty = $qtyPieces;
+                    $availBatches = \App\Models\ProductBatch::where('product_id', $item->product_id)
+                        ->where('warehouse_id', $targetWhId)
+                        ->where('qty', '>', 0)
+                        ->orderBy('exp_date', 'asc')
+                        ->orderBy('id', 'asc')
+                        ->get();
+                    foreach ($availBatches as $ab) {
+                        if ($remBatchQty <= 0) break;
+                        $take = min((float) $ab->qty, $remBatchQty);
+                        $ab->decrement('qty', $take);
+                        $remBatchQty -= $take;
+                    }
                 }
 
-                // Update Serials status to 'sold' if specified
+                // Update Serials status to 'sold' if specified, or FIFO from warehouse serials
+                $serialList = [];
                 if (!empty($item->serials)) {
-                    $serialList = is_array($item->serials) ? $item->serials : json_decode($item->serials, true);
-                    if (is_array($serialList) && count($serialList) > 0) {
-                        \App\Models\ProductSerial::where('product_id', $item->product_id)
-                            ->whereIn('serial_number', $serialList)
-                            ->update(['status' => 'sold']);
+                    $decoded = is_array($item->serials) ? $item->serials : json_decode($item->serials, true);
+                    if (is_array($decoded)) {
+                        $serialList = array_filter($decoded);
+                    }
+                }
+                if (count($serialList) > 0) {
+                    \App\Models\ProductSerial::where('product_id', $item->product_id)
+                        ->whereIn('serial_number', $serialList)
+                        ->update(['status' => 'sold']);
+                } elseif ($item->product && $item->product->tracking_type === 'serial' && $qtyPieces > 0) {
+                    $needCount = (int) ceil($qtyPieces);
+                    $availSerialIds = \App\Models\ProductSerial::where('product_id', $item->product_id)
+                        ->where('warehouse_id', $targetWhId)
+                        ->where('status', 'available')
+                        ->orderBy('id', 'asc')
+                        ->limit($needCount)
+                        ->pluck('id');
+                    if ($availSerialIds->isNotEmpty()) {
+                        \App\Models\ProductSerial::whereIn('id', $availSerialIds)->update(['status' => 'sold']);
                     }
                 }
             } elseif ($type === 'in' || $type === 'return') {
@@ -2931,6 +2962,8 @@ class SaleController extends Controller
                 'item_name' => $item->is_manual ? ($item->product_name ?? 'Manual Product') . ' (Manual)' : ($item->product_name ?? $item->product->item_name ?? 'Item'),
                 'item_code' => $item->product->item_code ?? '',
                 'brand' => $item->product->brand->name ?? '',
+                'sub_category' => $item->product->sub_category_relation->name ?? '',
+                'category' => $item->product->category_relation->name ?? '',
                 'unit' => $item->product->unit->name ?? '', // Access name if relation exists
                 'qty' => (int) $item->total_pieces, // Use Pieces for Return Logic (Matches Price-Per-Piece)
                 'qty_box' => (float) $item->qty, // Store Box Count separately

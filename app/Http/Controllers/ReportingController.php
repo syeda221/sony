@@ -1158,6 +1158,10 @@ class ReportingController extends Controller
             }
         }
 
+        if ($warehouseId && $warehouseId !== 'all' && $reportMode === 'summary') {
+            $rows = array_values(array_filter($rows, fn ($r) => (float) ($r['balance'] ?? 0) > 0));
+        }
+
         return response()->json([
             'data'                  => $rows,
             'grand_total'           => $grandTotalValue,

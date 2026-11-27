@@ -111,6 +111,7 @@ class ProductController extends Controller
     {
         $term = $request->get('term') ?? $request->get('q') ?? '';
         $warehouseId = $request->get('warehouse_id') ?: $request->get('header_warehouse_id');
+        $onlyInStock = $request->boolean('only_in_stock', false);
 
         $query = Product::query()
             ->select('id', 'item_name', 'tracking_type', 'item_code', 'barcode_path', 'size_mode', 'unit_id', 'height', 'width', 'pieces_per_box', 'purchase_price_per_box', 'purchase_price_per_m2', 'purchase_price_per_piece', 'pieces_per_m2', 'purchase_discount_percent', 'sale_discount_percent', 'color', 'model', 'sale_price_per_piece')
@@ -128,6 +129,32 @@ class ProductController extends Controller
                     ->orWhere('color', 'like', "%{$term}%")
                     ->orWhere('model', 'like', "%{$term}%");
             });
+
+        if ($onlyInStock) {
+            $query->where(function ($sq) use ($warehouseId) {
+                $sq->whereHas('warehouseStocks', function ($wq) use ($warehouseId) {
+                    if ($warehouseId && $warehouseId !== 'all') {
+                        $wq->where('warehouse_id', $warehouseId);
+                    }
+                    $wq->where(function ($w2) {
+                        $w2->where('total_pieces', '>', 0)
+                           ->orWhere('quantity', '>', 0);
+                    });
+                })
+                ->orWhereHas('serials', function ($srlQ) use ($warehouseId) {
+                    if ($warehouseId && $warehouseId !== 'all') {
+                        $srlQ->where('warehouse_id', $warehouseId);
+                    }
+                    $srlQ->where('status', 'available');
+                })
+                ->orWhereHas('batches', function ($bQ) use ($warehouseId) {
+                    if ($warehouseId && $warehouseId !== 'all') {
+                        $bQ->where('warehouse_id', $warehouseId);
+                    }
+                    $bQ->where('qty', '>', 0);
+                });
+            });
+        }
 
         $products = $query->paginate(10); // Lazy loading (10 per request)
 
@@ -430,6 +457,10 @@ class ProductController extends Controller
                 'tracking_type' => $p->tracking_type ?? 'simple'
             ]];
         });
+
+        if ($onlyInStock) {
+            $results = $results->filter(fn ($item) => (float) ($item['stock_pieces'] ?? 0) > 0)->values();
+        }
 
         return response()->json([
             'results' => $results,

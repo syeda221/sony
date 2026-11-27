@@ -73,7 +73,11 @@ class WarehouseStockController extends Controller
         app(WarehouseStockSyncService::class)->syncIfNeeded();
 
         $warehouses = Warehouse::orderBy('warehouse_name')->get();
-        $query = WarehouseStock::with('warehouse', 'product');
+        $query = WarehouseStock::with('warehouse', 'product')
+            ->where(function ($q) {
+                $q->where('total_pieces', '>', 0)
+                  ->orWhere('quantity', '>', 0);
+            });
 
         if ($request->filled('warehouse_id') && $request->warehouse_id !== 'all') {
             $query->where('warehouse_id', $request->warehouse_id);

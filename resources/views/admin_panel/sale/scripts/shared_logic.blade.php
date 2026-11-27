@@ -182,7 +182,8 @@
                     return {
                         term: params.term || '',
                         page: params.page || 1,
-                        warehouse_id: rowWh || headerWh || "{{ auth()->user()->warehouse_id ?? 1 }}"
+                        warehouse_id: rowWh || headerWh || "{{ auth()->user()->warehouse_id ?? 1 }}",
+                        only_in_stock: 1
                     };
                 },
                 processResults: function(data, params) {
