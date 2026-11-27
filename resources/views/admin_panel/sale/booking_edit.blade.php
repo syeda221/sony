@@ -1054,9 +1054,12 @@
                       dataType: 'json',
                       delay: 250, // Throttle searches
                       data: function(params) {
+                          const rowWh = $el.closest('tr').find('.warehouse').val();
+                          const headerWh = $('#headerWarehouseSelect').val();
                           return {
                               term: params.term, // search term
-                              page: params.page || 1
+                              page: params.page || 1,
+                              warehouse_id: rowWh || headerWh || "{{ auth()->user()->warehouse_id ?? 1 }}"
                           };
                       },
                       processResults: function(data, params) {

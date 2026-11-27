@@ -110,11 +110,16 @@ class ProductController extends Controller
     public function ajaxSearch(Request $request)
     {
         $term = $request->get('term') ?? $request->get('q') ?? '';
+        $warehouseId = $request->get('warehouse_id') ?: $request->get('header_warehouse_id');
 
         $query = Product::query()
             ->select('id', 'item_name', 'tracking_type', 'item_code', 'barcode_path', 'size_mode', 'unit_id', 'height', 'width', 'pieces_per_box', 'purchase_price_per_box', 'purchase_price_per_m2', 'purchase_price_per_piece', 'pieces_per_m2', 'purchase_discount_percent', 'sale_discount_percent', 'color', 'sale_price_per_piece')
             ->with(['unit'])
-            ->withSum('warehouseStocks', 'total_pieces') /* Sum PIECES, not boxes */
+            ->with(['warehouseStocks' => function ($q) use ($warehouseId) {
+                if ($warehouseId && $warehouseId !== 'all') {
+                    $q->where('warehouse_id', $warehouseId);
+                }
+            }])
             ->where('is_active', true) /* Only active products */
             ->where(function ($q) use ($term) {
                 $q->where('item_name', 'like', "%{$term}%")
@@ -124,9 +129,28 @@ class ProductController extends Controller
 
         $products = $query->paginate(10); // Lazy loading (10 per request)
 
-        $results = $products->getCollection()->flatMap(function ($p) {
-            $stockPieces = (float) ($p->warehouse_stocks_sum_total_pieces ?? 0);
-            $ppb = $p->pieces_per_box > 0 ? $p->pieces_per_box : 1;
+        $results = $products->getCollection()->flatMap(function ($p) use ($warehouseId) {
+            $ppb = $p->pieces_per_box > 0 ? (float) $p->pieces_per_box : 1.0;
+            $wsPieces = (float) $p->warehouseStocks->sum('total_pieces');
+            if ($wsPieces == 0.0 && (float) $p->warehouseStocks->sum('quantity') > 0) {
+                $wsPieces = (float) $p->warehouseStocks->sum('quantity') * $ppb;
+            }
+
+            if ($p->tracking_type === 'serial') {
+                $sQuery = \App\Models\ProductSerial::where('product_id', $p->id)->where('status', 'available');
+                if ($warehouseId && $warehouseId !== 'all') {
+                    $sQuery->where('warehouse_id', $warehouseId);
+                }
+                $stockPieces = max($wsPieces, (float) $sQuery->count());
+            } elseif ($p->tracking_type === 'batch') {
+                $bQuery = \App\Models\ProductBatch::where('product_id', $p->id)->where('qty', '>', 0);
+                if ($warehouseId && $warehouseId !== 'all') {
+                    $bQuery->where('warehouse_id', $warehouseId);
+                }
+                $stockPieces = max($wsPieces, (float) $bQuery->sum('qty'));
+            } else {
+                $stockPieces = $wsPieces;
+            }
 
             $unitName = $p->unit->name ?? match($p->size_mode) {
                 'by_kg' => 'Kg',
@@ -950,6 +974,18 @@ class ProductController extends Controller
                 'remarks' => 'Product Created',
             ]);
 
+            $otherWarehouses = \App\Models\Warehouse::where('id', '!=', $targetWh->id)->get();
+            foreach ($otherWarehouses as $owh) {
+                WarehouseStock::firstOrCreate([
+                    'warehouse_id' => $owh->id,
+                    'product_id' => $product->id,
+                ], [
+                    'quantity' => 0,
+                    'total_pieces' => 0,
+                    'remarks' => 'Product Created',
+                ]);
+            }
+
             // Log Stock Movement (Initial)
             if ($totalStockQty > 0) {
                 StockMovement::create([
@@ -1432,6 +1468,9 @@ class ProductController extends Controller
 
                 $this->upsertStocks($id, $adjQty, 1, 1);
             }
+
+            // Keep warehouse stocks accurately aligned with serials/batches
+            app(\App\Services\WarehouseStockSyncService::class)->syncProductStock($id);
         });
 
         if ($request->wantsJson()) {

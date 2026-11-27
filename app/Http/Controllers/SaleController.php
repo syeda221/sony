@@ -169,28 +169,46 @@ class SaleController extends Controller
         $q = $request->get('q');
         $warehouseId = $request->get('warehouse_id', 1);
 
-        $products = Product::with(['brand'])
-            ->leftJoin('warehouse_stocks', function ($join) use ($warehouseId) {
-                $join->on('products.id', '=', 'warehouse_stocks.product_id')
-                    ->where('warehouse_stocks.warehouse_id', $warehouseId);
-            })
-            ->where('products.is_active', true) /* Only active products */
-            ->where(function ($query) use ($q) {
-                $query->where('products.item_name', 'like', "%{$q}%")
-                    ->orWhere('products.item_code', 'like', "%{$q}%")
-                    ->orWhere('products.barcode_path', 'like', "%{$q}%");
-            })
-            ->select(
-                'products.*',
-                'warehouse_stocks.total_pieces as wh_stock',
-                'warehouse_stocks.quantity as wh_box_qty'
-            )
-            ->limit(50)
-            ->get()
-            ->map(function ($product) {
-                return $product;
-            });
+        $products = Product::with(['brand', 'warehouseStocks' => function ($wq) use ($warehouseId) {
+            if ($warehouseId && $warehouseId !== 'all') {
+                $wq->where('warehouse_id', $warehouseId);
+            }
+        }])
+        ->where('products.is_active', true) /* Only active products */
+        ->where(function ($query) use ($q) {
+            $query->where('products.item_name', 'like', "%{$q}%")
+                ->orWhere('products.item_code', 'like', "%{$q}%")
+                ->orWhere('products.barcode_path', 'like', "%{$q}%");
+        })
+        ->limit(50)
+        ->get()
+        ->map(function ($product) use ($warehouseId) {
+            $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
+            $wsPieces = (float) $product->warehouseStocks->sum('total_pieces');
+            if ($wsPieces == 0.0 && (float) $product->warehouseStocks->sum('quantity') > 0) {
+                $wsPieces = (float) $product->warehouseStocks->sum('quantity') * $ppb;
+            }
 
+            if ($product->tracking_type === 'serial') {
+                $sQuery = \App\Models\ProductSerial::where('product_id', $product->id)->where('status', 'available');
+                if ($warehouseId && $warehouseId !== 'all') {
+                    $sQuery->where('warehouse_id', $warehouseId);
+                }
+                $stockVal = max($wsPieces, (float) $sQuery->count());
+            } elseif ($product->tracking_type === 'batch') {
+                $bQuery = \App\Models\ProductBatch::where('product_id', $product->id)->where('qty', '>', 0);
+                if ($warehouseId && $warehouseId !== 'all') {
+                    $bQuery->where('warehouse_id', $warehouseId);
+                }
+                $stockVal = max($wsPieces, (float) $bQuery->sum('qty'));
+            } else {
+                $stockVal = $wsPieces;
+            }
+
+            $product->wh_stock = $stockVal;
+            $product->wh_box_qty = (int) floor($stockVal / $ppb);
+            return $product;
+        });
 
         return response()->json($products);
     }

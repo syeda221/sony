@@ -491,6 +491,15 @@ class ReportingController extends Controller
     // AJAX endpoint to fetch report rows
     public function fetchItemStock(Request $request)
     {
+        // Auto-heal if serials or batches exist with 0 total warehouse stock
+        if (WarehouseStock::sum('total_pieces') <= 0) {
+            $hasActiveSerials = \Illuminate\Support\Facades\Schema::hasTable('product_serials') && \App\Models\ProductSerial::where('status', 'available')->exists();
+            $hasActiveBatches = \Illuminate\Support\Facades\Schema::hasTable('product_batches') && \App\Models\ProductBatch::where('qty', '>', 0)->exists();
+            if ($hasActiveSerials || $hasActiveBatches) {
+                app(\App\Services\WarehouseStockSyncService::class)->syncAll();
+            }
+        }
+
         $productId   = $request->product_id;
         $variantKey  = $request->variant_key;
         $categoryId  = $request->category_id;
@@ -839,23 +848,7 @@ class ReportingController extends Controller
                         }
 
                         if ($vBatchStock !== null) {
-                            if (count($parsedVariants) <= 1) {
-                                // Respect physical warehouse stock if it exceeds batch stock (e.g. unbatched purchases or returns)
-                                $balance = max(0, max($whPieces, $vBatchStock));
-                            } else {
-                                $totalAllBatches = (float) \App\Models\ProductBatch::where('product_id', $product->id)
-                                    ->when($warehouseId && $warehouseId !== 'all', fn($q) => $q->where('warehouse_id', $warehouseId))
-                                    ->sum('qty');
-                                if ($whPieces > $totalAllBatches && $totalAllBatches > 0) {
-                                    $unallocated = $whPieces - $totalAllBatches;
-                                    $vRatio = $totalAllBatches > 0 ? ($vBatchStock / $totalAllBatches) : (1 / count($parsedVariants));
-                                    $balance = max(0, round($vBatchStock + ($unallocated * $vRatio), 2));
-                                } elseif ($whPieces > $totalAllBatches && $totalAllBatches == 0) {
-                                    $balance = max(0, round($whPieces / count($parsedVariants), 2));
-                                } else {
-                                    $balance = max(0, $vBatchStock);
-                                }
-                            }
+                            $balance = max(0, $vBatchStock);
                         } elseif (count($parsedVariants) === 1) {
                             $balance = max(0, $whPieces);
                         } else {
@@ -998,19 +991,20 @@ class ReportingController extends Controller
                     continue;
                 }
 
-                $balance = $this->getWarehouseStockPieces($product->warehouseStocks, $product, $warehouseId);
                 if ($product->tracking_type === 'serial') {
                     $sQuery = \App\Models\ProductSerial::where('product_id', $product->id)->where('status', 'available');
                     if ($warehouseId && $warehouseId !== 'all') {
                         $sQuery->where('warehouse_id', $warehouseId);
                     }
-                    $balance = max($balance, (float) $sQuery->count());
+                    $balance = (float) $sQuery->count();
                 } elseif ($product->tracking_type === 'batch') {
                     $bQuery = \App\Models\ProductBatch::where('product_id', $product->id)->where('qty', '>', 0);
                     if ($warehouseId && $warehouseId !== 'all') {
                         $bQuery->where('warehouse_id', $warehouseId);
                     }
-                    $balance = max($balance, (float) $bQuery->sum('qty'));
+                    $balance = (float) $bQuery->sum('qty');
+                } else {
+                    $balance = $this->getWarehouseStockPieces($product->warehouseStocks, $product, $warehouseId);
                 }
 
                 [$purchased, $purchaseAmount] = $this->getPurchasedQtyAndNetAmount($product->id, ['from' => $dateFrom, 'to' => $dateTo], $warehouseId);

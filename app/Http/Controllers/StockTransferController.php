@@ -77,17 +77,39 @@ class StockTransferController extends Controller
                     $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
 
                     // Check source stock for available pieces
-                    $sourceStock = WarehouseStock::where('warehouse_id', $fromWarehouse)
-                        ->where('product_id', $productId)
-                        ->lockForUpdate()
-                        ->first();
+                    $sourceStock = WarehouseStock::firstOrCreate(
+                        [
+                            'warehouse_id' => $fromWarehouse,
+                            'product_id' => $productId,
+                        ],
+                        [
+                            'quantity' => 0,
+                            'total_pieces' => 0,
+                        ]
+                    );
 
-                    $available = $sourceStock ? (float) $sourceStock->total_pieces : 0.0;
-                    if ($available <= 0 && $sourceStock && (float) $sourceStock->quantity > 0) {
+                    $sourceStock = WarehouseStock::where('id', $sourceStock->id)->lockForUpdate()->first();
+
+                    $available = (float) $sourceStock->total_pieces;
+                    if ($available <= 0 && (float) $sourceStock->quantity > 0) {
                         $available = (float) $sourceStock->quantity * $ppb;
                     }
 
-                    if (! $sourceStock || $available < $totalQty) {
+                    if ($product->tracking_type === 'serial') {
+                        $sCount = (float) ProductSerial::where('product_id', $productId)
+                            ->where('warehouse_id', $fromWarehouse)
+                            ->where('status', 'available')
+                            ->count();
+                        $available = max($available, $sCount);
+                    } elseif ($product->tracking_type === 'batch') {
+                        $bSum = (float) ProductBatch::where('product_id', $productId)
+                            ->where('warehouse_id', $fromWarehouse)
+                            ->where('qty', '>', 0)
+                            ->sum('qty');
+                        $available = max($available, $bSum);
+                    }
+
+                    if ($available < $totalQty) {
                         $availFormatted = number_format($available, 2);
                         throw new \Exception("Insufficient stock for {$product->item_name}. Requested: {$totalQty}, Available: {$availFormatted}");
                     }
@@ -124,56 +146,92 @@ class StockTransferController extends Controller
                         $destStock->save();
 
                         // Move available serials (if any) from source warehouse to destination warehouse
-                        $serialMoveCount = (int) round($totalQty);
-                        if ($serialMoveCount > 0) {
-                            $serialIds = ProductSerial::where('product_id', $productId)
-                                ->where('warehouse_id', $fromWarehouse)
-                                ->where('status', 'available')
-                                ->orderBy('id', 'asc')
-                                ->limit($serialMoveCount)
-                                ->pluck('id');
+                        if ($product->tracking_type === 'serial') {
+                            $serialMoveCount = (int) round($totalQty);
+                            if ($serialMoveCount > 0) {
+                                $serialIds = ProductSerial::where('product_id', $productId)
+                                    ->where('warehouse_id', $fromWarehouse)
+                                    ->where('status', 'available')
+                                    ->orderBy('id', 'asc')
+                                    ->limit($serialMoveCount)
+                                    ->pluck('id');
 
-                            if ($serialIds->isNotEmpty()) {
-                                ProductSerial::whereIn('id', $serialIds)->update(['warehouse_id' => $toWarehouse]);
+                                if ($serialIds->count() < $serialMoveCount) {
+                                    $fallbackIds = ProductSerial::where('product_id', $productId)
+                                        ->where('status', 'available')
+                                        ->whereNotIn('id', $serialIds)
+                                        ->orderBy('id', 'asc')
+                                        ->limit($serialMoveCount - $serialIds->count())
+                                        ->pluck('id');
+                                    $serialIds = $serialIds->merge($fallbackIds);
+                                }
+
+                                if ($serialIds->isNotEmpty()) {
+                                    ProductSerial::whereIn('id', $serialIds)->update(['warehouse_id' => $toWarehouse]);
+                                }
+
+                                // Align WarehouseStock pieces directly with available serial count for both warehouses
+                                $sourceCount = (float) ProductSerial::where('product_id', $productId)->where('warehouse_id', $fromWarehouse)->where('status', 'available')->count();
+                                $sourceStock->total_pieces = $sourceCount;
+                                $sourceStock->quantity = (int) floor($sourceCount / $ppb);
+                                $sourceStock->save();
+
+                                $destCount = (float) ProductSerial::where('product_id', $productId)->where('warehouse_id', $toWarehouse)->where('status', 'available')->count();
+                                $destStock->total_pieces = $destCount;
+                                $destStock->quantity = (int) floor($destCount / $ppb);
+                                $destStock->save();
                             }
                         }
 
                         // Move batch quantities (if any) FIFO from source warehouse to destination warehouse
-                        $remainingBatchQty = (float) $totalQty;
-                        $sourceBatches = ProductBatch::where('product_id', $productId)
-                            ->where('warehouse_id', $fromWarehouse)
-                            ->where('qty', '>', 0)
-                            ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC, id ASC')
-                            ->lockForUpdate()
-                            ->get();
+                        if ($product->tracking_type === 'batch') {
+                            $remainingBatchQty = (float) $totalQty;
+                            $sourceBatches = ProductBatch::where('product_id', $productId)
+                                ->where('warehouse_id', $fromWarehouse)
+                                ->where('qty', '>', 0)
+                                ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC, id ASC')
+                                ->lockForUpdate()
+                                ->get();
 
-                        foreach ($sourceBatches as $sBatch) {
-                            if ($remainingBatchQty <= 0) {
-                                break;
+                            foreach ($sourceBatches as $sBatch) {
+                                if ($remainingBatchQty <= 0) {
+                                    break;
+                                }
+                                $take = min((float) $sBatch->qty, $remainingBatchQty);
+                                $sBatch->qty = max(0, (float) $sBatch->qty - $take);
+                                $sBatch->save();
+
+                                $destBatch = ProductBatch::firstOrCreate(
+                                    [
+                                        'product_id' => $productId,
+                                        'warehouse_id' => $toWarehouse,
+                                        'batch_no' => $sBatch->batch_no,
+                                    ],
+                                    [
+                                        'variant_key' => $sBatch->variant_key,
+                                        'mfg_date' => $sBatch->mfg_date,
+                                        'expiry_date' => $sBatch->expiry_date,
+                                        'qty' => 0,
+                                        'cost_price' => $sBatch->cost_price,
+                                        'remarks' => $sBatch->remarks,
+                                    ]
+                                );
+                                $destBatch->qty = (float) $destBatch->qty + $take;
+                                $destBatch->save();
+
+                                $remainingBatchQty -= $take;
                             }
-                            $take = min((float) $sBatch->qty, $remainingBatchQty);
-                            $sBatch->qty = max(0, (float) $sBatch->qty - $take);
-                            $sBatch->save();
 
-                            $destBatch = ProductBatch::firstOrCreate(
-                                [
-                                    'product_id' => $productId,
-                                    'warehouse_id' => $toWarehouse,
-                                    'batch_no' => $sBatch->batch_no,
-                                ],
-                                [
-                                    'variant_key' => $sBatch->variant_key,
-                                    'mfg_date' => $sBatch->mfg_date,
-                                    'expiry_date' => $sBatch->expiry_date,
-                                    'qty' => 0,
-                                    'cost_price' => $sBatch->cost_price,
-                                    'remarks' => $sBatch->remarks,
-                                ]
-                            );
-                            $destBatch->qty = (float) $destBatch->qty + $take;
-                            $destBatch->save();
+                            // Align WarehouseStock with active batch sums
+                            $sBatchSum = (float) ProductBatch::where('product_id', $productId)->where('warehouse_id', $fromWarehouse)->where('qty', '>', 0)->sum('qty');
+                            $sourceStock->total_pieces = $sBatchSum;
+                            $sourceStock->quantity = (int) floor($sBatchSum / $ppb);
+                            $sourceStock->save();
 
-                            $remainingBatchQty -= $take;
+                            $dBatchSum = (float) ProductBatch::where('product_id', $productId)->where('warehouse_id', $toWarehouse)->where('qty', '>', 0)->sum('qty');
+                            $destStock->total_pieces = $dBatchSum;
+                            $destStock->quantity = (int) floor($dBatchSum / $ppb);
+                            $destStock->save();
                         }
                     }
 
@@ -241,20 +299,24 @@ class StockTransferController extends Controller
             return response()->json(['quantity' => 0, 'total_pieces' => 0]);
         }
 
+        $product = Product::find($productId);
+        $ppb = ($product && $product->pieces_per_box > 0) ? (float) $product->pieces_per_box : 1.0;
+
         $stock = WarehouseStock::where('warehouse_id', $warehouseId)
             ->where('product_id', $productId)
             ->first();
 
-        if (! $stock) {
-            return response()->json(['quantity' => 0, 'total_pieces' => 0]);
+        $avail = $stock ? (float) $stock->total_pieces : 0.0;
+        if ($avail <= 0 && $stock && (float) $stock->quantity > 0) {
+            $avail = (float) $stock->quantity * $ppb;
         }
 
-        $product = Product::find($productId);
-        $ppb = ($product && $product->pieces_per_box > 0) ? (float) $product->pieces_per_box : 1.0;
-
-        $avail = (float) $stock->total_pieces;
-        if ($avail <= 0 && (float) $stock->quantity > 0) {
-            $avail = (float) $stock->quantity * $ppb;
+        if ($product && $product->tracking_type === 'serial') {
+            $sCnt = (float) ProductSerial::where('product_id', $productId)->where('warehouse_id', $warehouseId)->where('status', 'available')->count();
+            $avail = max($avail, $sCnt);
+        } elseif ($product && $product->tracking_type === 'batch') {
+            $bSum = (float) ProductBatch::where('product_id', $productId)->where('warehouse_id', $warehouseId)->where('qty', '>', 0)->sum('qty');
+            $avail = max($avail, $bSum);
         }
 
         return response()->json([
@@ -272,31 +334,57 @@ class StockTransferController extends Controller
 
         $stocks = WarehouseStock::with('product')
             ->where('warehouse_id', $warehouseId)
-            ->where(function ($q) {
-                $q->where('total_pieces', '>', 0)
-                  ->orWhere('quantity', '>', 0);
-            })
             ->get();
 
-        $products = [];
-        foreach ($stocks as $stock) {
-            if ($stock->product) {
-                $ppb = $stock->product->pieces_per_box > 0 ? (float) $stock->product->pieces_per_box : 1.0;
-                $avail = (float) $stock->total_pieces;
-                if ($avail <= 0 && (float) $stock->quantity > 0) {
-                    $avail = (float) $stock->quantity * $ppb;
-                }
+        $serialProductIds = ProductSerial::where('warehouse_id', $warehouseId)
+            ->where('status', 'available')
+            ->distinct()
+            ->pluck('product_id')
+            ->toArray();
 
-                if ($avail > 0) {
-                    $code = $stock->product->item_code ? " ({$stock->product->item_code})" : '';
-                    $products[] = [
-                        'id' => $stock->product->id,
-                        'item_name' => $stock->product->item_name . $code,
-                        'available_stock' => $avail,
-                    ];
-                }
+        $batchProductIds = ProductBatch::where('warehouse_id', $warehouseId)
+            ->where('qty', '>', 0)
+            ->distinct()
+            ->pluck('product_id')
+            ->toArray();
+
+        $allProductIds = array_unique(array_merge(
+            $stocks->pluck('product_id')->toArray(),
+            $serialProductIds,
+            $batchProductIds
+        ));
+
+        $products = [];
+        foreach ($allProductIds as $pid) {
+            $product = Product::find($pid);
+            if (! $product) continue;
+
+            $stock = $stocks->firstWhere('product_id', $pid);
+            $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
+            $avail = $stock ? (float) $stock->total_pieces : 0.0;
+            if ($avail <= 0 && $stock && (float) $stock->quantity > 0) {
+                $avail = (float) $stock->quantity * $ppb;
+            }
+
+            if ($product->tracking_type === 'serial') {
+                $sCnt = (float) ProductSerial::where('product_id', $pid)->where('warehouse_id', $warehouseId)->where('status', 'available')->count();
+                $avail = max($avail, $sCnt);
+            } elseif ($product->tracking_type === 'batch') {
+                $bSum = (float) ProductBatch::where('product_id', $pid)->where('warehouse_id', $warehouseId)->where('qty', '>', 0)->sum('qty');
+                $avail = max($avail, $bSum);
+            }
+
+            if ($avail > 0) {
+                $code = $product->item_code ? " ({$product->item_code})" : '';
+                $products[] = [
+                    'id' => $product->id,
+                    'item_name' => $product->item_name . $code,
+                    'available_stock' => $avail,
+                ];
             }
         }
+
+        usort($products, fn($a, $b) => strcmp($a['item_name'], $b['item_name']));
 
         return response()->json($products);
     }

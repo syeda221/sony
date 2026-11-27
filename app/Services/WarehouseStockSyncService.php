@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\ProductSerial;
+use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
 class WarehouseStockSyncService
 {
     /**
-     * Reconcile warehouse_stocks (total_pieces & boxes quantity) with serials and batches.
+     * Reconcile warehouse_stocks (total_pieces & boxes quantity) with serials, batches, and movements.
      *
      * @return array<string, int>
      */
@@ -22,8 +23,8 @@ class WarehouseStockSyncService
             $stats = [
                 'fixed_box_to_pieces' => 0,
                 'synced_serial_rows' => 0,
-                'reassigned_serials' => 0,
                 'synced_batch_rows' => 0,
+                'synced_simple_rows' => 0,
                 'cleaned_draft_serials' => 0,
             ];
 
@@ -70,13 +71,114 @@ class WarehouseStockSyncService
                 }
             }
 
-            // 1. Normalize existing WarehouseStock rows (fix quantity > 0 with total_pieces == 0)
+            // Get all warehouses
+            $warehouses = Warehouse::all();
+            if ($warehouses->isEmpty()) {
+                return $stats;
+            }
+
+            $firstWarehouseId = $warehouses->first()->id;
+            $allWarehouseIds = $warehouses->pluck('id')->toArray();
+
+            // 1. Reconcile Serial Products (Exact count of available serials per warehouse)
+            if (Schema::hasTable('product_serials')) {
+                // Ensure no available serial has null or invalid warehouse_id
+                ProductSerial::where('status', 'available')
+                    ->where(function ($q) use ($allWarehouseIds) {
+                        $q->whereNull('warehouse_id')
+                          ->orWhereNotIn('warehouse_id', $allWarehouseIds);
+                    })
+                    ->update(['warehouse_id' => $firstWarehouseId]);
+
+                $serialProductIds = Product::where('tracking_type', 'serial')
+                    ->orWhereIn('id', ProductSerial::select('product_id'))
+                    ->distinct()
+                    ->pluck('id');
+
+                foreach ($serialProductIds as $pid) {
+                    $product = Product::find($pid);
+                    if (! $product) {
+                        continue;
+                    }
+                    $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
+
+                    $serialCountsByWh = ProductSerial::where('product_id', $pid)
+                        ->where('status', 'available')
+                        ->selectRaw('warehouse_id, COUNT(*) as cnt')
+                        ->groupBy('warehouse_id')
+                        ->pluck('cnt', 'warehouse_id')
+                        ->toArray();
+
+                    foreach ($warehouses as $wh) {
+                        $sCnt = (float) ($serialCountsByWh[$wh->id] ?? 0);
+                        $ws = WarehouseStock::firstOrNew([
+                            'warehouse_id' => $wh->id,
+                            'product_id' => $pid,
+                        ]);
+
+                        $ws->total_pieces = $sCnt;
+                        $ws->quantity = (int) floor($sCnt / $ppb);
+                        if (empty($ws->remarks)) {
+                            $ws->remarks = 'Synced with available serials';
+                        }
+                        $ws->save();
+                        $stats['synced_serial_rows']++;
+                    }
+                }
+            }
+
+            // 2. Reconcile Batch Products (Exact sum of active batch qty per warehouse)
+            if (Schema::hasTable('product_batches')) {
+                $batchProductIds = Product::where('tracking_type', 'batch')
+                    ->orWhereIn('id', ProductBatch::select('product_id'))
+                    ->distinct()
+                    ->pluck('id');
+
+                foreach ($batchProductIds as $pid) {
+                    $product = Product::find($pid);
+                    if (! $product) {
+                        continue;
+                    }
+                    $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
+
+                    $batchSumsByWh = ProductBatch::where('product_id', $pid)
+                        ->where('qty', '>', 0)
+                        ->selectRaw('warehouse_id, SUM(qty) as total_qty')
+                        ->groupBy('warehouse_id')
+                        ->pluck('total_qty', 'warehouse_id')
+                        ->toArray();
+
+                    foreach ($warehouses as $wh) {
+                        $bQty = (float) ($batchSumsByWh[$wh->id] ?? 0);
+                        $ws = WarehouseStock::firstOrNew([
+                            'warehouse_id' => $wh->id,
+                            'product_id' => $pid,
+                        ]);
+
+                        $ws->total_pieces = $bQty;
+                        $ws->quantity = (int) floor($bQty / $ppb);
+                        if (empty($ws->remarks)) {
+                            $ws->remarks = 'Synced with active batches';
+                        }
+                        $ws->save();
+                        $stats['synced_batch_rows']++;
+                    }
+                }
+            }
+
+            // 3. Normalize all existing WarehouseStock rows (fix quantity > 0 with total_pieces == 0)
             $allStocks = WarehouseStock::with('product')->get();
             foreach ($allStocks as $ws) {
-                $ppb = ($ws->product && $ws->product->pieces_per_box > 0)
-                    ? (float) $ws->product->pieces_per_box
-                    : 1.0;
+                if (! $ws->product) {
+                    continue;
+                }
 
+                // If serial or batch, already handled above
+                if (in_array($ws->product->tracking_type, ['serial', 'batch'])) {
+                    continue;
+                }
+
+                $ppb = $ws->product->pieces_per_box > 0 ? (float) $ws->product->pieces_per_box : 1.0;
                 $pieces = (float) $ws->total_pieces;
                 $boxes = (float) $ws->quantity;
                 $changed = false;
@@ -102,148 +204,87 @@ class WarehouseStockSyncService
 
                 if ($changed) {
                     $ws->save();
-                }
-            }
-
-            // 2. Reconcile Serial Products (ProductSerial available vs WarehouseStock)
-            if (Schema::hasTable('product_serials')) {
-                $serialProductIds = ProductSerial::where('status', 'available')
-                    ->distinct()
-                    ->pluck('product_id');
-
-                foreach ($serialProductIds as $pid) {
-                    $product = Product::find($pid);
-                    if (! $product) {
-                        continue;
-                    }
-                    $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
-
-                    $serialCountsByWh = ProductSerial::where('product_id', $pid)
-                        ->where('status', 'available')
-                        ->selectRaw('warehouse_id, COUNT(*) as cnt')
-                        ->groupBy('warehouse_id')
-                        ->pluck('cnt', 'warehouse_id')
-                        ->toArray();
-
-                    $totalAvailableSerials = array_sum($serialCountsByWh);
-                    $whStocks = WarehouseStock::where('product_id', $pid)->get()->keyBy('warehouse_id');
-                    $totalWhPieces = (float) $whStocks->sum('total_pieces');
-
-                    if ($totalWhPieces >= $totalAvailableSerials && $totalAvailableSerials > 0) {
-                        // Totals match or warehouse stock covers all serials: align any stale warehouse_id on serials
-                        $excessWarehouses = [];
-                        $deficitWarehouses = [];
-
-                        $allWhIds = array_unique(array_merge(array_keys($serialCountsByWh), $whStocks->keys()->toArray()));
-                        foreach ($allWhIds as $whId) {
-                            $sCnt = (int) ($serialCountsByWh[$whId] ?? 0);
-                            $wPcs = (int) floor((float) ($whStocks[$whId]->total_pieces ?? 0));
-                            if ($sCnt > $wPcs) {
-                                $excessWarehouses[$whId] = $sCnt - $wPcs;
-                            } elseif ($wPcs > $sCnt) {
-                                $deficitWarehouses[$whId] = $wPcs - $sCnt;
-                            }
-                        }
-
-                        foreach ($excessWarehouses as $fromWhId => $excessCount) {
-                            foreach ($deficitWarehouses as $toWhId => &$deficitCount) {
-                                if ($excessCount <= 0) {
-                                    break;
-                                }
-                                if ($deficitCount <= 0) {
-                                    continue;
-                                }
-                                $moveCount = min($excessCount, $deficitCount);
-                                $idsToMove = ProductSerial::where('product_id', $pid)
-                                    ->where('warehouse_id', $fromWhId)
-                                    ->where('status', 'available')
-                                    ->orderBy('id', 'asc')
-                                    ->limit($moveCount)
-                                    ->pluck('id');
-
-                                if ($idsToMove->isNotEmpty()) {
-                                    ProductSerial::whereIn('id', $idsToMove)->update(['warehouse_id' => $toWhId]);
-                                    $stats['reassigned_serials'] += $idsToMove->count();
-                                    $excessCount -= $idsToMove->count();
-                                    $deficitCount -= $idsToMove->count();
-                                }
-                            }
-                            unset($deficitCount);
-                        }
-                    } else {
-                        // WarehouseStock is missing stock for available serials (e.g. initial stock saved as 0)
-                        foreach ($serialCountsByWh as $whId => $sCnt) {
-                            if (! $whId || $sCnt <= 0) {
-                                continue;
-                            }
-                            $ws = WarehouseStock::firstOrNew([
-                                'warehouse_id' => $whId,
-                                'product_id' => $pid,
-                            ]);
-                            $current = (float) ($ws->total_pieces ?? 0);
-                            if ($current < $sCnt) {
-                                $ws->total_pieces = (float) $sCnt;
-                                $ws->quantity = (int) floor($ws->total_pieces / $ppb);
-                                if (empty($ws->remarks)) {
-                                    $ws->remarks = 'Synced from available serials';
-                                }
-                                $ws->save();
-                                $stats['synced_serial_rows']++;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 3. Reconcile Batch Products (ProductBatch qty > 0 vs WarehouseStock)
-            if (Schema::hasTable('product_batches')) {
-                $batchProductIds = ProductBatch::where('qty', '>', 0)
-                    ->distinct()
-                    ->pluck('product_id');
-
-                foreach ($batchProductIds as $pid) {
-                    $product = Product::find($pid);
-                    if (! $product) {
-                        continue;
-                    }
-                    $ppb = $product->pieces_per_box > 0 ? (float) $product->pieces_per_box : 1.0;
-
-                    $batchSumsByWh = ProductBatch::where('product_id', $pid)
-                        ->where('qty', '>', 0)
-                        ->selectRaw('warehouse_id, SUM(qty) as total_qty')
-                        ->groupBy('warehouse_id')
-                        ->pluck('total_qty', 'warehouse_id')
-                        ->toArray();
-
-                    $totalBatchQty = array_sum(array_map('floatval', $batchSumsByWh));
-                    $totalWhPieces = (float) WarehouseStock::where('product_id', $pid)->sum('total_pieces');
-
-                    if ($totalWhPieces < $totalBatchQty) {
-                        foreach ($batchSumsByWh as $whId => $bQty) {
-                            $bQty = (float) $bQty;
-                            if (! $whId || $bQty <= 0) {
-                                continue;
-                            }
-                            $ws = WarehouseStock::firstOrNew([
-                                'warehouse_id' => $whId,
-                                'product_id' => $pid,
-                            ]);
-                            $current = (float) ($ws->total_pieces ?? 0);
-                            if ($current < $bQty) {
-                                $ws->total_pieces = $bQty;
-                                $ws->quantity = (int) floor($bQty / $ppb);
-                                if (empty($ws->remarks)) {
-                                    $ws->remarks = 'Synced from active batches';
-                                }
-                                $ws->save();
-                                $stats['synced_batch_rows']++;
-                            }
-                        }
-                    }
+                    $stats['synced_simple_rows']++;
                 }
             }
 
             return $stats;
         });
+    }
+
+    /**
+     * Reconcile warehouse_stocks for a single product across all warehouses.
+     */
+    public function syncProductStock(int|Product $product): void
+    {
+        $p = is_numeric($product) ? Product::find($product) : $product;
+        if (! $p) {
+            return;
+        }
+
+        $warehouses = Warehouse::all();
+        if ($warehouses->isEmpty()) {
+            return;
+        }
+
+        $ppb = $p->pieces_per_box > 0 ? (float) $p->pieces_per_box : 1.0;
+
+        if ($p->tracking_type === 'serial') {
+            $serialCountsByWh = ProductSerial::where('product_id', $p->id)
+                ->where('status', 'available')
+                ->selectRaw('warehouse_id, COUNT(*) as cnt')
+                ->groupBy('warehouse_id')
+                ->pluck('cnt', 'warehouse_id')
+                ->toArray();
+
+            foreach ($warehouses as $wh) {
+                $sCnt = (float) ($serialCountsByWh[$wh->id] ?? 0);
+                $ws = WarehouseStock::firstOrNew([
+                    'warehouse_id' => $wh->id,
+                    'product_id' => $p->id,
+                ]);
+                $ws->total_pieces = $sCnt;
+                $ws->quantity = (int) floor($sCnt / $ppb);
+                $ws->save();
+            }
+        } elseif ($p->tracking_type === 'batch') {
+            $batchSumsByWh = ProductBatch::where('product_id', $p->id)
+                ->where('qty', '>', 0)
+                ->selectRaw('warehouse_id, SUM(qty) as total_qty')
+                ->groupBy('warehouse_id')
+                ->pluck('total_qty', 'warehouse_id')
+                ->toArray();
+
+            foreach ($warehouses as $wh) {
+                $bQty = (float) ($batchSumsByWh[$wh->id] ?? 0);
+                $ws = WarehouseStock::firstOrNew([
+                    'warehouse_id' => $wh->id,
+                    'product_id' => $p->id,
+                ]);
+                $ws->total_pieces = $bQty;
+                $ws->quantity = (int) floor($bQty / $ppb);
+                $ws->save();
+            }
+        } else {
+            // Simple product: ensure each WarehouseStock is valid
+            foreach ($warehouses as $wh) {
+                $ws = WarehouseStock::where('warehouse_id', $wh->id)
+                    ->where('product_id', $p->id)
+                    ->first();
+
+                if ($ws) {
+                    $pieces = (float) $ws->total_pieces;
+                    $boxes = (float) $ws->quantity;
+                    if ($pieces <= 0 && $boxes > 0) {
+                        $ws->total_pieces = round($boxes * $ppb, 4);
+                        $ws->quantity = (int) floor($ws->total_pieces / $ppb);
+                        $ws->save();
+                    } elseif ($pieces > 0) {
+                        $ws->quantity = (int) floor($pieces / $ppb);
+                        $ws->save();
+                    }
+                }
+            }
+        }
     }
 }

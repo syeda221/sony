@@ -32,11 +32,11 @@ class SyncWarehouseStockData extends Command
         $this->table(
             ['Metric', 'Count'],
             [
-                ['Boxes converted to pieces (total_pieces == 0)', $stats['fixed_box_to_pieces']],
-                ['Warehouse stock rows synced from serials', $stats['synced_serial_rows']],
-                ['Serial warehouse assignments realigned', $stats['reassigned_serials']],
-                ['Warehouse stock rows synced from batches', $stats['synced_batch_rows']],
-                ['Draft purchase phantom serials cleaned', $stats['cleaned_draft_serials']],
+                ['Boxes converted to pieces (total_pieces == 0)', $stats['fixed_box_to_pieces'] ?? 0],
+                ['Warehouse stock rows synced from serials', $stats['synced_serial_rows'] ?? 0],
+                ['Warehouse stock rows synced from batches', $stats['synced_batch_rows'] ?? 0],
+                ['Simple products normalized', $stats['synced_simple_rows'] ?? 0],
+                ['Draft purchase phantom serials cleaned', $stats['cleaned_draft_serials'] ?? 0],
             ]
         );
 

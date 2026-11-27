@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductBatch;
+use App\Models\ProductSerial;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 use App\Services\StockEntryService;
 use App\Services\WarehouseStockSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class WarehouseStockController extends Controller
 {
@@ -66,6 +69,15 @@ class WarehouseStockController extends Controller
 
     public function index(Request $request)
     {
+        // Auto-heal if serials or batches exist with 0 total warehouse stock
+        if (WarehouseStock::sum('total_pieces') <= 0) {
+            $hasActiveSerials = Schema::hasTable('product_serials') && ProductSerial::where('status', 'available')->exists();
+            $hasActiveBatches = Schema::hasTable('product_batches') && ProductBatch::where('qty', '>', 0)->exists();
+            if ($hasActiveSerials || $hasActiveBatches) {
+                app(WarehouseStockSyncService::class)->syncAll();
+            }
+        }
+
         $warehouses = Warehouse::orderBy('warehouse_name')->get();
         $query = WarehouseStock::with('warehouse', 'product');
 
@@ -253,12 +265,12 @@ class WarehouseStockController extends Controller
         try {
             $stats = $syncService->syncAll();
             $msg = sprintf(
-                'Stock synced! Fixed Boxes->Pcs: %d, Serial Stock Synced: %d, Serial Warehouses Realigned: %d, Batch Stock Synced: %d, Draft Serials Cleaned: %d.',
-                $stats['fixed_box_to_pieces'],
-                $stats['synced_serial_rows'],
-                $stats['reassigned_serials'],
-                $stats['synced_batch_rows'],
-                $stats['cleaned_draft_serials']
+                'Stock synced! Fixed Boxes->Pcs: %d, Serial Stock Synced: %d, Batch Stock Synced: %d, Simple Stock Synced: %d, Draft Serials Cleaned: %d.',
+                $stats['fixed_box_to_pieces'] ?? 0,
+                $stats['synced_serial_rows'] ?? 0,
+                $stats['synced_batch_rows'] ?? 0,
+                $stats['synced_simple_rows'] ?? 0,
+                $stats['cleaned_draft_serials'] ?? 0
             );
 
             if ($request->ajax() || $request->wantsJson()) {

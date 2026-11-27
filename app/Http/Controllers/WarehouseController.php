@@ -17,6 +17,7 @@ class WarehouseController extends Controller
     public function getWarehouses(Request $request)
     {
         $productId = $request->input('product_id');
+        $product = Product::find($productId);
 
         // Get all active warehouses first
         $allWarehouses = Warehouse::orderBy('warehouse_name')->get();
@@ -27,18 +28,21 @@ class WarehouseController extends Controller
             ->get()
             ->keyBy('warehouse_id');
 
-        $response = $allWarehouses->map(function ($warehouse) use ($warehouseStocks, $productId) {
+        $response = $allWarehouses->map(function ($warehouse) use ($warehouseStocks, $productId, $product) {
             $ws = $warehouseStocks->get($warehouse->id);
-            $stockVal = 0;
+            $ppb = ($product && $product->pieces_per_box > 0) ? (float) $product->pieces_per_box : 1.0;
+            $stockVal = $ws ? (float) $ws->total_pieces : 0.0;
 
-            if ($ws) {
-                $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
+            if ($stockVal == 0.0 && $ws && (float) $ws->quantity > 0) {
+                $stockVal = (float) $ws->quantity * $ppb;
+            }
 
-                if ($ws->total_pieces != 0) {
-                    $stockVal = $ws->total_pieces;
-                } else {
-                    $stockVal = $ws->quantity * $ppb;
-                }
+            if ($product && $product->tracking_type === 'serial') {
+                $sCnt = (float) \App\Models\ProductSerial::where('product_id', $productId)->where('warehouse_id', $warehouse->id)->where('status', 'available')->count();
+                $stockVal = max($stockVal, $sCnt);
+            } elseif ($product && $product->tracking_type === 'batch') {
+                $bSum = (float) \App\Models\ProductBatch::where('product_id', $productId)->where('warehouse_id', $warehouse->id)->where('qty', '>', 0)->sum('qty');
+                $stockVal = max($stockVal, $bSum);
             }
 
             return [
@@ -46,9 +50,9 @@ class WarehouseController extends Controller
                 'warehouse_name' => $warehouse->warehouse_name,
                 'location' => $warehouse->location ?? '',
                 'stock' => $stockVal, // Total pieces
-                'boxes' => $ws ? ($stockVal / $ppb) : 0,
-                'ppb' => $ws && $ws->product ? $ws->product->pieces_per_box : 1,
-                'size_mode' => $ws && $ws->product ? $ws->product->size_mode : 'std',
+                'boxes' => $ppb > 0 ? floor($stockVal / $ppb) : 0,
+                'ppb' => $ppb,
+                'size_mode' => $product ? $product->size_mode : ($ws && $ws->product ? $ws->product->size_mode : 'std'),
             ];
         });
 
@@ -59,6 +63,15 @@ class WarehouseController extends Controller
     {
         if (! auth()->user()->can('warehouse.view') && ! auth()->user()->hasRole('Super Admin') && ! auth()->user()->hasRole('Admin')) {
             abort(403, 'Unauthorized action.');
+        }
+
+        // Auto-heal if serials or batches exist with 0 total warehouse stock
+        if (WarehouseStock::sum('total_pieces') <= 0) {
+            $hasActiveSerials = \Illuminate\Support\Facades\Schema::hasTable('product_serials') && \App\Models\ProductSerial::where('status', 'available')->exists();
+            $hasActiveBatches = \Illuminate\Support\Facades\Schema::hasTable('product_batches') && \App\Models\ProductBatch::where('qty', '>', 0)->exists();
+            if ($hasActiveSerials || $hasActiveBatches) {
+                app(\App\Services\WarehouseStockSyncService::class)->syncAll();
+            }
         }
 
         $warehouses = Warehouse::with('user')

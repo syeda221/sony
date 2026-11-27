@@ -177,9 +177,12 @@
                 dataType: 'json',
                 delay: 200,
                 data: function(params) {
+                    const rowWh = $el.closest('tr').find('.warehouse').val();
+                    const headerWh = $('#headerWarehouseSelect').val();
                     return {
                         term: params.term || '',
-                        page: params.page || 1
+                        page: params.page || 1,
+                        warehouse_id: rowWh || headerWh || "{{ auth()->user()->warehouse_id ?? 1 }}"
                     };
                 },
                 processResults: function(data, params) {
@@ -191,7 +194,7 @@
                         }
                     };
                 },
-                cache: true
+                cache: false
             },
             minimumInputLength: 0,
             language: {
