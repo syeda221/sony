@@ -1685,7 +1685,7 @@
 
             function initProductSelect2($el) {
                 $el.select2({
-                    placeholder: 'Type Product Name or Code...',
+                    placeholder: 'Search Product (Name / SKU / Barcode / Color / Model)',
                     allowClear: true,
                     width: '100%',
                     ajax: {
@@ -1694,6 +1694,7 @@
                         delay: 200,
                         data: function(params) {
                             return {
+                                term: params.term || '',
                                 q: params.term || '',
                                 page: params.page || 1
                             };

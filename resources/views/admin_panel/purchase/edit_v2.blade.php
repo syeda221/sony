@@ -1000,7 +1000,7 @@
                     try { $el.select2('destroy'); } catch(e) {}
                 }
                 $el.select2({
-                    placeholder: 'Search Product (Name / SKU / Barcode)',
+                    placeholder: 'Search Product (Name / SKU / Barcode / Color / Model)',
                     allowClear: true,
                     width: '100%',
                     dropdownParent: $(document.body),
