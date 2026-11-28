@@ -373,7 +373,7 @@
                     <div class="d-flex align-items-center me-auto flex-wrap" style="gap: 16px !important;">
                         <div class="d-flex align-items-center gap-1">
                             <label for="start_date_desk" class="sale-filter-label mb-0 ms-1 me-1">Start:</label>
-                            <input type="date" name="start_date" id="start_date_desk" class="form-control form-control-sm fw-bold startDateInput" value="2000-01-01" style="height: 32px; width: 135px; font-size: .78rem; border-radius: 6px;">
+                            <input type="date" name="start_date" id="start_date_desk" class="form-control form-control-sm fw-bold startDateInput" value="{{ date('Y-m-d') }}" style="height: 32px; width: 135px; font-size: .78rem; border-radius: 6px;">
                         </div>
                         <div class="d-flex align-items-center gap-1">
                             <label for="end_date_desk" class="sale-filter-label mb-0 ms-2 me-1">End:</label>
@@ -537,7 +537,7 @@
                     {{-- 4. Start & End Date --}}
                     <div class="col-6 mb-1">
                         <label class="form-label mb-1 fw-bold text-secondary" style="font-size: 11px;">Start Date</label>
-                        <input type="date" name="start_date" id="start_date_mob" class="form-control form-control-sm startDateInput" value="2000-01-01" style="font-size: 11px;">
+                        <input type="date" name="start_date" id="start_date_mob" class="form-control form-control-sm startDateInput" value="{{ date('Y-m-d') }}" style="font-size: 11px;">
                     </div>
                     <div class="col-6 mb-1">
                         <label class="form-label mb-1 fw-bold text-secondary" style="font-size: 11px;">End Date</label>
@@ -820,7 +820,7 @@
             });
 
             $('.btnResetTrigger').on('click', function() {
-                $('.startDateInput').val('2000-01-01');
+                $('.startDateInput').val('{{ date("Y-m-d") }}');
                 $('.endDateInput').val('{{ date("Y-m-d") }}');
                 $('.zoneSelect').val('').trigger('change');
                 $('.customerSelect').val('all').trigger('change');
@@ -859,7 +859,7 @@
             function loadLedger() {
                 let zid = $(".zoneSelect").val();
                 let cid = $(".customerSelect").val();
-                let start = $(".startDateInput").val() || '2000-01-01';
+                let start = $(".startDateInput").val() || '{{ date("Y-m-d") }}';
                 let end = $(".endDateInput").val() || '{{ date("Y-m-d") }}';
 
                 $("#loader").show();
@@ -1333,7 +1333,7 @@
                 updateReportTitle(g.customer?.customer_name);
                 window.print();
                 setTimeout(function() {
-                    let start = $('.startDateInput').val() || '2000-01-01';
+                    let start = $('.startDateInput').val() || '{{ date("Y-m-d") }}';
                     let end = $('.endDateInput').val() || '{{ date("Y-m-d") }}';
                     populateAllCustomerGroupsPrintLayout(res, res.customer_groups, formatDisplayDate(start), formatDisplayDate(end));
                 }, 500);
@@ -1350,7 +1350,7 @@
                 $('#partyLedgerTabs button').removeClass('active');
                 $(this).addClass('active');
                 if (window.currentLedgerResponse) {
-                    let start = $('.startDateInput').val() || '2000-01-01';
+                    let start = $('.startDateInput').val() || '{{ date("Y-m-d") }}';
                     let end = $('.endDateInput').val() || '{{ date("Y-m-d") }}';
                     renderCustomerAccordionView(window.currentLedgerResponse, formatDisplayDate(start), formatDisplayDate(end));
                 }
