@@ -286,8 +286,9 @@ class TransactionService
             $schemeAmount = (float) ($purchase->total_scheme_amount ?? 0);
             $netPayable = (float) $purchase->net_amount;
 
-            // Gross product cost (Do NOT reduce product cost price by order discount!)
-            $purchaseExpense = $subtotal > 0 ? $subtotal : max(0, $netPayable + $orderDiscount - $extraCost + $schemeAmount);
+            // Gross product cost (Balance Dr Purchase Expense + Freight against Cr AP + Order Discount Received)
+            // Note: $subtotal is already net of inline scheme discount, while AP includes $schemeAmount until settled via claim.
+            $purchaseExpense = max(0, round(($netPayable + $schemeAmount + $orderDiscount) - $extraCost, 2));
 
             $lines = [];
 

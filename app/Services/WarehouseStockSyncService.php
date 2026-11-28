@@ -129,6 +129,9 @@ class WarehouseStockSyncService
                 $approvedSerialMap = [];
                 foreach ($approvedItems as $ai) {
                     $list = json_decode($ai->serials, true);
+                    if (is_string($list)) {
+                        $list = json_decode($list, true);
+                    }
                     if (is_array($list)) {
                         foreach ($list as $s) {
                             $approvedSerialMap[$ai->product_id . '|' . trim((string) $s)] = true;
@@ -138,6 +141,9 @@ class WarehouseStockSyncService
 
                 foreach ($draftItems as $di) {
                     $list = json_decode($di->serials, true);
+                    if (is_string($list)) {
+                        $list = json_decode($list, true);
+                    }
                     if (is_array($list)) {
                         foreach ($list as $s) {
                             $s = trim((string) $s);

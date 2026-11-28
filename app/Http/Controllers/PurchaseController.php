@@ -548,7 +548,7 @@ class PurchaseController extends Controller
                             }
                             $finalSerials[] = $cand;
                         }
-                        $item->update(['serials' => json_encode(array_values($finalSerials))]);
+                        $item->update(['serials' => array_values($finalSerials)]);
                     }
 
                     foreach ($finalSerials as $sNum) {
@@ -1083,7 +1083,7 @@ class PurchaseController extends Controller
                             }
                             $finalSerials[] = $cand;
                         }
-                        $purchaseItem->update(['serials' => json_encode(array_values($finalSerials))]);
+                        $purchaseItem->update(['serials' => array_values($finalSerials)]);
                     }
 
                     if ($purchase->status_purchase !== 'draft') {
@@ -1914,7 +1914,7 @@ class PurchaseController extends Controller
                             }
                             $finalSerials[] = $cand;
                         }
-                        $purchaseItem->update(['serials' => json_encode(array_values($finalSerials))]);
+                        $purchaseItem->update(['serials' => array_values($finalSerials)]);
                     }
 
                     if ($purchase->status_purchase !== 'draft') {

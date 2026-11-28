@@ -1267,6 +1267,9 @@ class ReportingController extends Controller
 
                 $sRaw = $pi->serials;
                 $sList = is_array($sRaw) ? $sRaw : json_decode($sRaw, true);
+                if (is_string($sList)) {
+                    $sList = json_decode($sList, true);
+                }
                 if (!is_array($sList) && is_string($sRaw)) {
                     $sList = preg_split('/[\r\n,]+/', $sRaw);
                 }
@@ -1362,21 +1365,22 @@ class ReportingController extends Controller
 
                         $bKey = !empty($b->batch_no) ? $b->batch_no : ('BATCH-' . $b->id);
                         $batchCost = null;
-                        if (!empty($b->batch_no) && isset($batchCostMap[$b->batch_no])) {
+                        $hasExactBatchCost = !empty($b->batch_no) && isset($batchCostMap[$b->batch_no]);
+                        if ($hasExactBatchCost) {
                             $batchCost = $batchCostMap[$b->batch_no];
                         } else {
                             $storedBCost = (float) ($b->cost_price ?? 0);
-                            if ($storedBCost > 0 && abs($storedBCost - $productPurchPrice) > 0.001) {
+                            if ($storedBCost > 0) {
                                 $batchCost = $storedBCost;
                             } elseif ($productAvgPurchCost > 0) {
                                 $batchCost = $productAvgPurchCost;
                             } else {
-                                $batchCost = $storedBCost > 0 ? $storedBCost : $productPurchPrice;
+                                $batchCost = $productPurchPrice;
                             }
                         }
 
-                        // Auto-sync product_batches cost price if outdated
-                        if ($batchCost > 0 && !empty($b->id) && abs((float)($b->cost_price ?? 0) - $batchCost) > 0.001) {
+                        // Sync product_batches cost_price only when missing or resolved from exact purchase batch cost
+                        if ($batchCost > 0 && !empty($b->id) && abs((float)($b->cost_price ?? 0) - $batchCost) > 0.001 && ($hasExactBatchCost || (float)($b->cost_price ?? 0) <= 0)) {
                             try {
                                 DB::table('product_batches')->where('id', $b->id)->update(['cost_price' => $batchCost]);
                             } catch (\Throwable $e) {}
@@ -1485,25 +1489,26 @@ class ReportingController extends Controller
                             $invNo = null;
 
                             // 1. Exact match from purchase invoices
-                            if ($cleanSn !== '' && isset($serialCostMap[$cleanSn])) {
+                            $hasExactSerialCost = $cleanSn !== '' && isset($serialCostMap[$cleanSn]);
+                            if ($hasExactSerialCost) {
                                 $cost = $serialCostMap[$cleanSn];
                                 $invNo = $serialInvoiceMap[$cleanSn] ?? null;
                             }
 
-                            // 2. Fallback to existing cost_price if custom or product average purchase cost
+                            // 2. Fallback to existing recorded cost_price before falling back to product average/default
                             if ($cost === null) {
                                 $storedCost = (float) ($s->cost_price ?? 0);
-                                if ($storedCost > 0 && abs($storedCost - $productPurchPrice) > 0.001) {
+                                if ($storedCost > 0) {
                                     $cost = $storedCost;
                                 } elseif ($productAvgPurchCost > 0) {
                                     $cost = $productAvgPurchCost;
                                 } else {
-                                    $cost = $storedCost > 0 ? $storedCost : $productPurchPrice;
+                                    $cost = $productPurchPrice;
                                 }
                             }
 
-                            // Auto-sync product_serials table in DB if outdated
-                            if ($cost > 0 && !empty($s->id) && abs((float)($s->cost_price ?? 0) - $cost) > 0.001) {
+                            // Sync product_serials cost_price only when missing or resolved from exact purchase invoice serial cost
+                            if ($cost > 0 && !empty($s->id) && abs((float)($s->cost_price ?? 0) - $cost) > 0.001 && ($hasExactSerialCost || (float)($s->cost_price ?? 0) <= 0)) {
                                 try {
                                     DB::table('product_serials')->where('id', $s->id)->update(['cost_price' => $cost]);
                                 } catch (\Throwable $e) {}
